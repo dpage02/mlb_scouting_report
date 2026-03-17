@@ -1,0 +1,46 @@
+# ============================================================
+# R
+# ============================================================
+.Rhistory
+.RData
+.Ruserdata
+.Rproj.user/
+*.Rproj.user
+
+# R environment / secrets
+.Renviron
+.env
+secrets.R
+config_local.R
+
+# ============================================================
+# Generated reports (HTML, PDF)
+# These go to the public reports repo, not here
+# ============================================================
+reports/
+*.html
+*.pdf
+
+# ============================================================
+# Cached / written data files
+# Pipeline pulls live from APIs — no large files needed
+# ============================================================
+data/
+cache/
+*.rds
+*.csv
+*.parquet
+*.feather
+
+# ============================================================
+# macOS
+# ============================================================
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# ============================================================
+# RStudio project artifacts
+# ============================================================
+*.Rproj
+rsconnect/

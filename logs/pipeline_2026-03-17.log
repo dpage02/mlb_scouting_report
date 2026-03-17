@@ -1,0 +1,10 @@
+[2026-03-17 11:08:17.456405] Pipeline configuration loaded 
+[2026-03-17 11:08:35.946908] park_ids built: 348 rows 
+[2026-03-17 11:08:36.172179] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-03-17 11:08:36.416952] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-03-17 11:08:36.66775] league_ids built: 47 rows 
+[2026-03-17 11:08:36.677188] Wrote team_ids to data/ids/team_ids.csv (30 rows) 
+[2026-03-17 11:08:36.688588] Wrote league_ids to data/ids/league_ids.csv (47 rows) 
+[2026-03-17 11:08:36.708689] Wrote park_ids to data/ids/park_ids.csv (348 rows) 
+[2026-03-17 11:08:36.722019] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-03-17 11:08:36.723193] Phase 01_ids complete: all ID tables written 

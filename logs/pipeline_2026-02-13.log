@@ -1,0 +1,5 @@
+[2026-02-13 11:42:13.602394] Pipeline configuration loaded 
+[2026-02-13 11:42:34.385574] park_ids built: 339 rows 
+[2026-02-13 11:42:34.554433] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-02-13 11:42:34.779487] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-02-13 11:42:34.987638] league_ids built: 48 rows 

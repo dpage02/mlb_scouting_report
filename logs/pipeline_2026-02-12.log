@@ -1,0 +1,33 @@
+[2026-02-12 09:27:43.705573] Pipeline configuration loaded 
+[2026-02-12 09:27:43.986244] team_ids built: 825 rows 
+[2026-02-12 09:28:01.474322] park_ids built: 342 rows 
+[2026-02-12 09:28:01.677617] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-02-12 09:28:01.943122] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-02-12 09:28:02.146371] league_ids built: 48 rows 
+[2026-02-12 09:28:02.179766] Wrote team_ids to data/ids/team_ids.csv (825 rows) 
+[2026-02-12 09:28:02.196016] Wrote league_ids to data/ids/league_ids.csv (48 rows) 
+[2026-02-12 09:28:02.212187] Wrote park_ids to data/ids/park_ids.csv (342 rows) 
+[2026-02-12 09:28:02.221616] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-02-12 09:28:02.22487] Phase 01_ids complete: all ID tables written 
+[2026-02-12 10:07:15.968579] Pipeline configuration loaded 
+[2026-02-12 10:07:16.385061] team_ids built: 825 rows 
+[2026-02-12 10:07:32.257189] park_ids built: 342 rows 
+[2026-02-12 10:07:32.408425] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-02-12 10:07:33.428623] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-02-12 10:07:33.690273] league_ids built: 48 rows 
+[2026-02-12 10:07:33.730266] Wrote team_ids to data/ids/team_ids.csv (825 rows) 
+[2026-02-12 10:07:33.872317] Wrote league_ids to data/ids/league_ids.csv (48 rows) 
+[2026-02-12 10:07:33.891009] Wrote park_ids to data/ids/park_ids.csv (342 rows) 
+[2026-02-12 10:07:33.906254] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-02-12 10:07:33.908251] Phase 01_ids complete: all ID tables written 
+[2026-02-12 10:09:34.338997] Pipeline configuration loaded 
+[2026-02-12 10:09:34.820131] team_ids built: 825 rows 
+[2026-02-12 10:09:51.178715] park_ids built: 342 rows 
+[2026-02-12 10:09:51.316007] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-02-12 10:09:51.770708] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-02-12 10:09:52.124364] league_ids built: 48 rows 
+[2026-02-12 10:09:52.175605] Wrote team_ids to data/ids/team_ids.csv (825 rows) 
+[2026-02-12 10:09:52.194246] Wrote league_ids to data/ids/league_ids.csv (48 rows) 
+[2026-02-12 10:09:52.219451] Wrote park_ids to data/ids/park_ids.csv (342 rows) 
+[2026-02-12 10:09:52.246934] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-02-12 10:09:52.251819] Phase 01_ids complete: all ID tables written 
