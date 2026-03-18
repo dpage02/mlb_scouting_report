@@ -12,27 +12,11 @@
 # DATA SOURCE:
 #   MLB Stats API (league leaderboard)
 #
-# DEFAULT BEHAVIOR:
-#   - Pulls entire MLB season leaderboard
-#   - No team filtering
-#
 # OUTPUT:
-#   - player_season_mlb_offense
-#
-# DESIGN:
-#   League-wide warehouse layer.
-#   Neutral.
-#   No team bias baked in.
+#   player_season_mlb_offense
 # ============================================================
 
-
-# ------------------------------------------------------------
-# Setup
-# ------------------------------------------------------------
-
 source("pipelines/05_performance/00_schema/00_grain_definition.R")
-
-
 
 # ------------------------------------------------------------
 # Pull League-Wide Season Hitting Leaderboard
@@ -40,83 +24,80 @@ source("pipelines/05_performance/00_schema/00_grain_definition.R")
 
 season_to_pull <- target_season
 
-# If preseason (no data yet), fall back one year for dev
 mlb_league_raw <- baseballr::mlb_stats(
-  stat_type = "season",
-  stat_group = "hitting",
+  stat_type   = "season",
+  stat_group  = "hitting",
   player_pool = "all",
-  season = season_to_pull,
-  limit = 3000
+  season      = season_to_pull,
+  limit       = 3000
 )
 
 if (!"player_id" %in% colnames(mlb_league_raw)) {
   message("No official stats found for ", season_to_pull,
           ". Falling back to ", season_to_pull - 1)
-  
   season_to_pull <- season_to_pull - 1
-  
+
   mlb_league_raw <- baseballr::mlb_stats(
-    stat_type = "season",
-    stat_group = "hitting",
+    stat_type   = "season",
+    stat_group  = "hitting",
     player_pool = "all",
-    season = season_to_pull,
-    limit = 3000
+    season      = season_to_pull,
+    limit       = 3000
   )
 }
 
 # ------------------------------------------------------------
-# Build League-Wide Fact Table
+# Build Fact Table
 # ------------------------------------------------------------
 
 player_season_mlb_offense <- mlb_league_raw %>%
   dplyr::transmute(
-    
-    # -------------------------
-    # Canonical Keys
-    # -------------------------
-    mlbam_id = player_id,
-    season = as.integer(season),
-    team_abbr = team_name,   # optional: use team_name or derive abbr separately
-    team_id = team_id,
-    
-    # -------------------------
-    # Counting Stats
-    # -------------------------
-    mlb_pa   = plate_appearances,
-    mlb_ab   = at_bats,
-    mlb_h    = hits,
-    mlb_2b   = doubles,
-    mlb_3b   = triples,
-    mlb_hr   = home_runs,
-    mlb_bb   = base_on_balls,
-    mlb_ibb  = intentional_walks,
-    mlb_so   = strike_outs,
-    mlb_hbp  = hit_by_pitch,
-    mlb_sf   = sac_flies,
-    mlb_sh   = sac_bunts,
-    mlb_gidp = ground_into_double_play,
-    mlb_r    = runs,
-    mlb_rbi  = rbi,
-    mlb_tb   = total_bases,
-    
-    # -------------------------
-    # Rate Stats
-    # -------------------------
+    mlbam_id = as.integer(player_id),
+    season   = as.integer(season),
+    team_id  = as.integer(team_id),
+
+    # Counting stats
+    mlb_pa   = as.integer(plate_appearances),
+    mlb_ab   = as.integer(at_bats),
+    mlb_h    = as.integer(hits),
+    mlb_2b   = as.integer(doubles),
+    mlb_3b   = as.integer(triples),
+    mlb_hr   = as.integer(home_runs),
+    mlb_bb   = as.integer(base_on_balls),
+    mlb_ibb  = as.integer(intentional_walks),
+    mlb_so   = as.integer(strike_outs),
+    mlb_hbp  = as.integer(hit_by_pitch),
+    mlb_sf   = as.integer(sac_flies),
+    mlb_sh   = as.integer(sac_bunts),
+    mlb_gidp = as.integer(ground_into_double_play),
+    mlb_r    = as.integer(runs),
+    mlb_rbi  = as.integer(rbi),
+    mlb_tb   = as.integer(total_bases),
+
+    # Rate stats
     mlb_avg   = as.numeric(avg),
     mlb_obp   = as.numeric(obp),
     mlb_slg   = as.numeric(slg),
     mlb_ops   = as.numeric(ops),
     mlb_babip = as.numeric(babip),
-    
-    # -------------------------
-    # Baserunning
-    # -------------------------
-    mlb_sb     = stolen_bases,
-    mlb_cs     = caught_stealing,
-    mlb_sb_pct = as.numeric(stolen_base_percentage)
-    
-  )
 
+    # Baserunning
+    mlb_sb     = as.integer(stolen_bases),
+    mlb_cs     = as.integer(caught_stealing),
+    mlb_sb_pct = as.numeric(stolen_base_percentage)
+  ) %>%
+
+  # Normalize team_abbr via team_ids
+  # team_name from MLB Stats API = full name (e.g. "Atlanta Braves"), not abbr
+  dplyr::left_join(
+    team_ids %>% dplyr::select(mlbam_team_id, team_abbr),
+    by = c("team_id" = "mlbam_team_id")
+  ) %>%
+  dplyr::mutate(
+    team_abbr = dplyr::coalesce(team_abbr, as.character(team_id))
+  ) %>%
+  dplyr::select(-team_id) %>%
+  dplyr::select(mlbam_id, season, team_abbr, dplyr::everything())
 
 # ------------------------------------------------------------
 # Validate Grain
@@ -124,11 +105,6 @@ player_season_mlb_offense <- mlb_league_raw %>%
 
 validate_performance_table(player_season_mlb_offense)
 
-
-# ------------------------------------------------------------
-# Completion Message
-# ------------------------------------------------------------
-
 message("01_mlb_offense_season complete: ",
         nrow(player_season_mlb_offense),
-        " league-wide player-season rows created.")
+        " league-wide player-season rows for season ", season_to_pull)

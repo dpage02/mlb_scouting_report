@@ -32,7 +32,9 @@ required_packages <- c(
   "readr",
   "stringr",
   "glue",
-  "here"
+  "here",
+  "gt",
+  "quarto"
 )
 
 installed <- rownames(installed.packages())

@@ -1,0 +1,115 @@
+---
+title: "MLB Daily Scouting Report"
+date: today
+format:
+  html:
+    self-contained: true
+    embed-resources: true
+    theme: cosmo
+    toc: true
+    toc-depth: 2
+    toc-title: "Games"
+    toc-location: left
+    smooth-scroll: true
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+# Set working directory to project root if rendering from 09_reporting/
+if (basename(getwd()) == "09_reporting") setwd("..")
+
+library(gt)
+library(dplyr)
+library(stringr)
+
+# Run the full pipeline (builds all objects in this session)
+source("run_pipeline_phase01.R")
+
+# Load report helpers
+source("09_reporting/_report_helpers.R")
+```
+
+```{r report-date}
+#| output: asis
+
+# Determine which seasons stats are drawn from
+mlb_stats_season <- if (exists("player_season_mlb_offense") && nrow(player_season_mlb_offense) > 0)
+  unique(player_season_mlb_offense$season)[1] else NA
+
+fg_stats_season  <- if (exists("player_season_fg_offense") && nrow(player_season_fg_offense) > 0)
+  unique(player_season_fg_offense$season)[1] else NA
+
+stats_note <- if (!is.na(mlb_stats_season) && !is.na(fg_stats_season) &&
+                  mlb_stats_season != fg_stats_season) {
+  paste0(" *(MLB stats: ", mlb_stats_season,
+         " · FanGraphs stats: ", fg_stats_season, ")*")
+} else if (!is.na(mlb_stats_season)) {
+  paste0(" *(", mlb_stats_season, " season stats)*")
+} else ""
+
+cat(paste0(
+  "> **", format(target_date, "%A, %B %d, %Y"), "** — ",
+  nrow(game_context), " games", stats_note
+))
+```
+
+---
+
+```{r games}
+#| output: asis
+
+for (gpk in game_context$game_pk) {
+
+  game    <- game_context %>% dplyr::filter(game_pk == gpk)
+  matchup <- sprintf("%s @ %s", game$away_team_name, game$home_team_name)
+
+  # ── Game heading ──────────────────────────────────────────
+  cat(sprintf("\n## %s\n\n", matchup))
+
+  # ── Game header table ─────────────────────────────────────
+  cat(gt::as_raw_html(make_game_header_gt(gpk)))
+  cat("\n\n")
+
+  # ── Starters ──────────────────────────────────────────────
+  cat("### Starting Pitchers\n\n")
+  cat(gt::as_raw_html(make_starter_gt(gpk)))
+  cat("\n\n")
+
+  # ── Lineups (side by side) ────────────────────────────────
+  cat("### Lineups\n\n")
+  cat('<div style="display:flex; gap:1.5rem; flex-wrap:wrap; align-items:flex-start;">\n')
+  cat('<div style="flex:1; min-width:320px;">\n')
+  cat(gt::as_raw_html(make_lineup_gt(gpk, "away")))
+  cat('\n</div>\n')
+  cat('<div style="flex:1; min-width:320px;">\n')
+  cat(gt::as_raw_html(make_lineup_gt(gpk, "home")))
+  cat('\n</div>\n')
+  cat('</div>\n\n')
+
+  # ── Bullpen (side by side) ────────────────────────────────
+  cat("### Bullpen\n\n")
+
+  # Availability legend
+  cat('<p style="font-size:12px; margin-bottom:6px;">',
+      '<span style="background:#27ae60;color:white;padding:2px 6px;border-radius:3px;">Fresh</span> &nbsp;',
+      '<span style="background:#a9dfbf;color:#1a5276;padding:2px 6px;border-radius:3px;">Available</span> &nbsp;',
+      '<span style="background:#f39c12;color:white;padding:2px 6px;border-radius:3px;">Limited</span> &nbsp;',
+      '<span style="background:#e74c3c;color:white;padding:2px 6px;border-radius:3px;">Unavailable</span> &nbsp;',
+      '<span style="background:#d5d8dc;color:#7f8c8d;padding:2px 6px;border-radius:3px;">Injured</span>',
+      '</p>\n\n')
+
+  cat('<div style="display:flex; gap:1.5rem; flex-wrap:wrap; align-items:flex-start;">\n')
+  cat('<div style="flex:1; min-width:340px;">\n')
+  cat(gt::as_raw_html(make_bullpen_gt(gpk, "away")))
+  cat('\n</div>\n')
+  cat('<div style="flex:1; min-width:340px;">\n')
+  cat(gt::as_raw_html(make_bullpen_gt(gpk, "home")))
+  cat('\n</div>\n')
+  cat('</div>\n\n')
+
+  cat('<hr style="border:none; border-top:2px solid #dee2e6; margin:2rem 0;">\n\n')
+}
+```

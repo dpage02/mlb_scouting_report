@@ -29,7 +29,7 @@
 #   bullpen_grid
 # ============================================================
 
-required_objects <- c("game_context", "bullpen_context", "team_ids")
+required_objects <- c("game_context", "bullpen_context", "team_ids", "starter_matchup")
 missing_objects  <- required_objects[!required_objects %in% ls()]
 if (length(missing_objects) > 0) {
   stop("Missing required objects: ", paste(missing_objects, collapse = ", "))
@@ -66,11 +66,10 @@ team_game_bridge <- dplyr::bind_rows(home_games, away_games) %>%
 # ------------------------------------------------------------
 
 role_order <- c(
-  "CL"   = 1,
-  "SU8"  = 2, "SU7" = 3, "SU6" = 4, "SU" = 5,
-  "MID"  = 6,
-  "LR"   = 7,
-  "SP1"  = 8, "SP2" = 9, "SP3" = 10, "SP4" = 11, "SP5" = 12
+  "CL"  = 1,
+  "SU8" = 2, "SU7" = 3, "SU6" = 4, "SU" = 5,
+  "MID" = 6,
+  "LR"  = 7
 )
 
 # ------------------------------------------------------------
@@ -83,13 +82,20 @@ bullpen_grid <- team_game_bridge %>%
   dplyr::left_join(
     bullpen_context %>%
       dplyr::filter(
-        # Include all relievers + openers/swingmen
-        fg_position %in% c("RP", "SP/RP") |
-          (fg_position == "SP" & fg_role %in% c("SP4", "SP5", "LR"))
+        # Relief corps only: pure relievers + swingmen/openers
+        # Exclude all SP roles — rotation covered in starter_matchup
+        fg_position %in% c("RP", "SP/RP")
       ),
     by = "team_abbr"
   ) %>%
   dplyr::filter(!is.na(mlbam_id)) %>%
+
+  # Exclude the probable starter for each game
+  # (covers SP/RP swingmen who are starting today)
+  dplyr::anti_join(
+    starter_matchup %>% dplyr::select(game_pk, mlbam_id),
+    by = c("game_pk", "mlbam_id")
+  ) %>%
   dplyr::mutate(
     role_sort = dplyr::coalesce(role_order[fg_role], 99L)
   ) %>%
