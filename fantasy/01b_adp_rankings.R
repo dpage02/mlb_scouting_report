@@ -97,14 +97,14 @@ fetch_fantasypros_adp <- function() {
 
   message("  FantasyPros ADP (HTML): table columns = ", paste(names(tbl), collapse=", "))
 
-  rank_col <- intersect(c("Rank", "RK", "#", "Rk", "rank"),     names(tbl))[1]
-  name_col <- intersect(c("Player", "Name", "PLAYER", "player"), names(tbl))[1]
-  adp_col  <- intersect(c("AVG", "ADP", "Avg", "Average"),       names(tbl))[1]
+  rank_col <- intersect(c("Rank", "RK", "#", "Rk", "rank"),                    names(tbl))[1]
+  name_col <- intersect(c("Player", "Name", "PLAYER", "player",
+                           "Player (Team)", "Player Name", "PLAYER NAME"),      names(tbl))[1]
+  adp_col  <- intersect(c("AVG", "ADP", "Avg", "Average"),                     names(tbl))[1]
 
   if (is.na(name_col)) {
-    # Last resort: use the first text column that looks like player names
+    # Last resort: pick the character column with longest average string length
     chr_cols <- names(tbl)[sapply(tbl, is.character)]
-    # Pick the column with longest average strings (likely names)
     if (length(chr_cols) > 0) {
       avg_len <- sapply(chr_cols, function(col) mean(nchar(tbl[[col]]), na.rm=TRUE))
       name_col <- chr_cols[which.max(avg_len)]
@@ -121,12 +121,19 @@ fetch_fantasypros_adp <- function() {
     adp_fantasypros = if (!is.na(adp_col))  suppressWarnings(as.numeric(tbl[[adp_col]]))  else as.numeric(seq_len(nrow(tbl)))
   ) %>%
     dplyr::mutate(
+      # Strip team/position info — handles multiple formats:
+      #   "Aaron Judge (NYY)"          → "Aaron Judge"
+      #   "Aaron Judge (NYY, OF)"      → "Aaron Judge"
+      #   "Aaron Judge (OF - NYY)"     → "Aaron Judge"
       player_name_fp = stringr::str_trim(
-        stringr::str_remove(player_name_fp, "\\s*\\([A-Z]{2,3}\\)\\s*$")
+        stringr::str_remove(player_name_fp, "\\s*\\(.*\\)\\s*$")
       )
     ) %>%
     dplyr::filter(!is.na(player_name_fp), nchar(player_name_fp) > 2) %>%
     dplyr::distinct(player_name_fp, .keep_all = TRUE)
+
+  # Show a sample so we can verify names look right
+  message("  Sample names: ", paste(head(result$player_name_fp, 5), collapse=" | "))
 
   message("  FantasyPros ADP (HTML): ", nrow(result), " players")
   result

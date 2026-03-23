@@ -65,28 +65,31 @@ tryCatch(
   error = function(e) message("  ADP pull failed (", e$message, ") — continuing without ADP")
 )
 
-# Re-run big board if ADP was added after initial build
-adp_available <- exists("adp_master") && is.data.frame(adp_master) &&
-                 nrow(adp_master) > 0 && "adp" %in% names(adp_master)
-board_has_adp  <- "adp" %in% names(big_board) && sum(!is.na(big_board$adp)) > 0
+# Re-merge ADP only if we got actual non-NA ADP values from scraping
+adp_has_data  <- exists("adp_master") && is.data.frame(adp_master) &&
+                 "adp" %in% names(adp_master) && sum(!is.na(adp_master$adp)) > 0
+board_has_adp <- "adp" %in% names(big_board) && sum(!is.na(big_board$adp)) > 0
 
-if (adp_available && !board_has_adp) {
+if (adp_has_data && !board_has_adp) {
   message("  Merging ADP into big board...")
   adp_clean <- adp_master %>%
-    dplyr::filter(!is.na(fg_id)) %>%
+    dplyr::filter(!is.na(fg_id), !is.na(adp)) %>%
     dplyr::arrange(adp) %>%
-    dplyr::distinct(fg_id, .keep_all = TRUE) %>%   # prevent many-to-many
+    dplyr::distinct(fg_id, .keep_all = TRUE) %>%
     dplyr::select(fg_id, adp, adp_fantasypros, adp_yahoo, fp_rank)
 
+  # Drop any existing adp columns that were set to NA in step 3 to avoid suffix conflicts
+  adp_cols <- c("adp","adp_fantasypros","adp_yahoo","fp_rank","value_vs_adp")
   big_board <- big_board %>%
+    dplyr::select(-dplyr::any_of(adp_cols)) %>%
     dplyr::left_join(adp_clean, by = "fg_id") %>%
     dplyr::mutate(
       value_vs_adp = dplyr::if_else(!is.na(adp), round(adp - overall_rank), NA_integer_)
     )
   saveRDS(big_board, "fantasy/draft_app/data/big_board.rds")
   message("  ADP merged: ", sum(!is.na(big_board$adp)), " players matched")
-} else if (!adp_available) {
-  message("  No ADP data available — board saved without ADP")
+} else {
+  message("  ADP: no new data to merge (scraping returned 0 matches — using VOR rankings)")
 }
 
 # ── Step 5: Printable cheat sheet ────────────────────────────
