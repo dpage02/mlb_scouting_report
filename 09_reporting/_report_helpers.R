@@ -110,22 +110,47 @@ make_starter_gt <- function(gpk) {
     dplyr::mutate(side = factor(side, levels = c("away", "home"))) %>%
     dplyr::arrange(side)
 
-  # Build display tibble with human-readable column names
   display <- dplyr::tibble(
     Side    = dplyr::if_else(raw$side == "away", "Away SP", "Home SP"),
     Pitcher = dplyr::coalesce(raw$pitcher_name, "TBD"),
-    Team    = dplyr::coalesce(raw$team_name, "—")
+    Hand    = dplyr::coalesce(raw$pitch_hand,   "—"),
+    Team    = dplyr::coalesce(raw$team_name,    "—")
   )
 
-  if ("mlb_gs"   %in% names(raw)) display$GS    <- raw$mlb_gs
-  if ("mlb_ip"   %in% names(raw)) display$IP    <- raw$mlb_ip
-  if ("mlb_era"  %in% names(raw)) display$ERA   <- raw$mlb_era
-  if ("mlb_whip" %in% names(raw)) display$WHIP  <- raw$mlb_whip
+  # Volume
+  if ("mlb_gs" %in% names(raw)) display$GS <- raw$mlb_gs
+  if ("mlb_ip" %in% names(raw)) display$IP <- raw$mlb_ip
+
+  # Classic rates
+  if ("mlb_era"  %in% names(raw)) display$ERA  <- raw$mlb_era
+  if ("mlb_whip" %in% names(raw)) display$WHIP <- raw$mlb_whip
+
+  # ERA context
+  if ("bbref_ERA_plus" %in% names(raw)) display$`ERA+` <- raw$bbref_ERA_plus
+
+  # ERA estimators
   if ("fg_FIP"   %in% names(raw)) display$FIP   <- raw$fg_FIP
   if ("fg_xFIP"  %in% names(raw)) display$xFIP  <- raw$fg_xFIP
-  if ("fg_K_9"   %in% names(raw)) display$`K/9` <- raw$fg_K_9
-  if ("fg_BB_9"  %in% names(raw)) display$`BB/9`<- raw$fg_BB_9
-  if ("fg_WAR"   %in% names(raw)) display$WAR   <- raw$fg_WAR
+  if ("fg_xERA"  %in% names(raw)) display$xERA  <- raw$fg_xERA
+  if ("fg_SIERA" %in% names(raw)) display$SIERA <- raw$fg_SIERA
+
+  # Batted ball / strand
+  if ("fg_BABIP"   %in% names(raw)) display$BABIP   <- raw$fg_BABIP
+  if ("fg_LOB_pct" %in% names(raw)) display$`LOB%`  <- raw$fg_LOB_pct
+
+  # Per-9
+  if ("fg_K_9"  %in% names(raw)) display$`K/9`  <- raw$fg_K_9
+  if ("fg_BB_9" %in% names(raw)) display$`BB/9` <- raw$fg_BB_9
+  if ("fg_HR_9" %in% names(raw)) display$`HR/9` <- raw$fg_HR_9
+
+  # Rate %
+  if ("fg_K_pct"    %in% names(raw)) display$`K%`    <- raw$fg_K_pct
+  if ("fg_BB_pct"   %in% names(raw)) display$`BB%`   <- raw$fg_BB_pct
+  if ("fg_K_BB_pct" %in% names(raw)) display$`K-BB%` <- raw$fg_K_BB_pct
+
+  # Value
+  if ("fg_WAR"    %in% names(raw)) display$fWAR <- raw$fg_WAR
+  if ("bbref_WAR" %in% names(raw)) display$bWAR <- raw$bbref_WAR
 
   tbl <- display %>%
     gt::gt() %>%
@@ -134,20 +159,53 @@ make_starter_gt <- function(gpk) {
       decimals = 1
     ) %>%
     gt::fmt_number(
-      columns  = dplyr::any_of(c("ERA", "WHIP", "FIP", "xFIP", "K/9", "BB/9")),
+      columns  = dplyr::any_of(c("ERA", "WHIP", "FIP", "xFIP", "xERA", "SIERA",
+                                  "BABIP", "K/9", "BB/9", "HR/9")),
       decimals = 2
     ) %>%
+    gt::fmt_percent(
+      columns  = dplyr::any_of(c("LOB%", "K%", "BB%", "K-BB%")),
+      decimals = 1
+    ) %>%
     gt::fmt_number(
-      columns  = dplyr::any_of(c("WAR")),
+      columns  = dplyr::any_of(c("ERA+", "GS")),
+      decimals = 0
+    ) %>%
+    gt::fmt_number(
+      columns  = dplyr::any_of(c("fWAR", "bWAR")),
       decimals = 1
     ) %>%
     gt::fmt_missing(columns = dplyr::everything(), missing_text = "—") %>%
+    gt::tab_spanner(
+      label   = "Volume",
+      columns = dplyr::any_of(c("GS", "IP"))
+    ) %>%
+    gt::tab_spanner(
+      label   = "Results",
+      columns = dplyr::any_of(c("ERA", "ERA+", "WHIP"))
+    ) %>%
+    gt::tab_spanner(
+      label   = "Estimators",
+      columns = dplyr::any_of(c("FIP", "xFIP", "xERA", "SIERA"))
+    ) %>%
+    gt::tab_spanner(
+      label   = "Batted Ball",
+      columns = dplyr::any_of(c("BABIP", "LOB%", "HR/9"))
+    ) %>%
+    gt::tab_spanner(
+      label   = "Discipline",
+      columns = dplyr::any_of(c("K/9", "BB/9", "K%", "BB%", "K-BB%"))
+    ) %>%
+    gt::tab_spanner(
+      label   = "Value",
+      columns = dplyr::any_of(c("fWAR", "bWAR"))
+    ) %>%
     gt::tab_style(
       style     = gt::cell_fill(color = "#eaf2ff"),
       locations = gt::cells_body(rows = Side == "Home SP")
     ) %>%
     gt::tab_options(
-      table.font.size  = 13,
+      table.font.size  = 12,
       heading.align    = "left",
       data_row.padding = gt::px(5)
     ) %>%
@@ -238,6 +296,14 @@ make_bullpen_gt <- function(gpk, side_filter) {
     gt::fmt_number(columns = dplyr::any_of(c("ERA", "WHIP")), decimals = 2) %>%
     gt::fmt_number(columns = dplyr::any_of(c("IP", "WAR")),  decimals = 1) %>%
     gt::fmt_missing(columns = dplyr::everything(), missing_text = "—") %>%
+    gt::tab_spanner(
+      label   = "Current",
+      columns = dplyr::any_of(c("Status", "Rest", "P/Y", "P/3", "App"))
+    ) %>%
+    gt::tab_spanner(
+      label   = "2025 Season",
+      columns = dplyr::any_of(c("IP", "ERA", "WHIP", "SV", "HLD", "WAR"))
+    ) %>%
     gt::cols_width(Role ~ gt::px(45), Status ~ gt::px(85)) %>%
     gt::tab_options(
       table.font.size  = 12,

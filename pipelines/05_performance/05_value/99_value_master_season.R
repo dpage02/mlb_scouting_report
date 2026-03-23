@@ -51,8 +51,7 @@ if (length(missing_objects) > 0) {
 # ------------------------------------------------------------
 
 bbref_batter_stats <- player_season_bbref_batting_value %>%
-  dplyr::select(mlbam_id, season,
-                dplyr::any_of(c("bbref_PA", "bbref_OPS", "bbref_SB", "bbref_CS"))) %>%
+  dplyr::select(mlbam_id, season, dplyr::starts_with("bbref_"), -dplyr::any_of("bbref_id")) %>%
   dplyr::distinct(mlbam_id, season, .keep_all = TRUE)
 
 fg_batters <- player_season_fg_batting_value %>%

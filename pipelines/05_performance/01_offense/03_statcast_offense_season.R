@@ -14,7 +14,8 @@ test_sc <- tryCatch(
   baseballr::statcast_leaderboards(
     leaderboard = "exit_velocity_barrels",
     year = season_to_pull,
-    player_type = "batter"
+    player_type = "batter",
+    min_pa = 1
   ),
   error = function(e) NULL
 )
@@ -33,13 +34,15 @@ if (is.null(test_sc) || nrow(test_sc) == 0) {
 sc_ev <- baseballr::statcast_leaderboards(
   leaderboard = "exit_velocity_barrels",
   year = season_to_pull,
-  player_type = "batter"
+  player_type = "batter",
+  min_pa = 1
 )
 
 sc_expected <- baseballr::statcast_leaderboards(
   leaderboard = "expected_statistics",
   year = season_to_pull,
-  player_type = "batter"
+  player_type = "batter",
+  min_pa = 1
 )
 
 
@@ -57,9 +60,29 @@ clean_sc <- function(df) {
 }
 
 
-sc_ev_clean <- clean_sc(sc_ev)
+sc_ev_clean       <- clean_sc(sc_ev)
 sc_expected_clean <- clean_sc(sc_expected)
 
+# Sprint speed — ft/sec, competitive runs
+sc_sprint <- tryCatch(
+  baseballr::statcast_leaderboards(
+    leaderboard = "sprint_speed",
+    year        = season_to_pull,
+    player_type = "batter",
+    min_pa      = 1
+  ),
+  error = function(e) {
+    message("Sprint speed leaderboard failed: ", e$message)
+    NULL
+  }
+)
+
+sc_sprint_clean <- if (!is.null(sc_sprint) && nrow(sc_sprint) > 0) {
+  clean_sc(sc_sprint)
+} else {
+  message("Sprint speed: no data for ", season_to_pull)
+  NULL
+}
 
 # ------------------------------------------------------------
 # Join
@@ -68,15 +91,19 @@ sc_expected_clean <- clean_sc(sc_expected)
 player_season_statcast_offense <- sc_ev_clean %>%
   dplyr::left_join(sc_expected_clean, by = "mlbam_id") %>%
   dplyr::mutate(
-    season = season_to_pull,
+    season    = season_to_pull,
     team_abbr = "TOT"
   ) %>%
-  dplyr::select(
-    mlbam_id,
-    season,
-    team_abbr,
-    dplyr::everything()
-  )
+  dplyr::select(mlbam_id, season, team_abbr, dplyr::everything())
+
+if (!is.null(sc_sprint_clean)) {
+  player_season_statcast_offense <- player_season_statcast_offense %>%
+    dplyr::left_join(sc_sprint_clean, by = "mlbam_id", suffix = c("", "_dup")) %>%
+    dplyr::select(-dplyr::ends_with("_dup"))
+  message("Sprint speed joined: ",
+          sum(!is.na(player_season_statcast_offense$sc_sprint_speed)),
+          " players with data")
+}
 
 
 # ------------------------------------------------------------

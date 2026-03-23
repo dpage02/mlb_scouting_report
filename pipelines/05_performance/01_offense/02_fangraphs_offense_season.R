@@ -106,6 +106,70 @@ player_season_fg_offense <- fg_raw %>%
 # Validate Grain
 # ------------------------------------------------------------
 
+# ------------------------------------------------------------
+# Additional FanGraphs type pulls
+# Each type returns columns the type 8 dashboard doesn't include.
+# We strip identity/duplicate columns and join on mlbam_id.
+# ------------------------------------------------------------
+
+pull_fg_batter_extra <- function(type_num, season_val) {
+  raw <- tryCatch(
+    baseballr::fg_batter_leaders(
+      qual        = "0",
+      startseason = as.character(season_val),
+      endseason   = as.character(season_val),
+      type        = as.character(type_num),
+      pageitems   = "10000"
+    ),
+    error = function(e) {
+      message("FG batter type ", type_num, " failed: ", e$message)
+      NULL
+    }
+  )
+
+  if (is.null(raw) || nrow(raw) == 0) {
+    message("FG batter type ", type_num, ": no data")
+    return(NULL)
+  }
+
+  # Drop identity columns and columns already carried from type 8
+  drop_cols <- c(
+    "playerid", "xMLBAMID", "team_name_abb", "team_name", "Season",
+    "Name", "PlayerName", "G", "PA", "AB",
+    "AVG", "OBP", "SLG", "OPS", "HR", "R", "RBI", "SB",
+    "BB.", "K.", "ISO", "BABIP", "wOBA", "wRC.", "WAR",
+    "BsR", "Off", "Def", "xwOBA"
+  )
+
+  result <- raw %>%
+    dplyr::mutate(mlbam_id = suppressWarnings(as.integer(xMLBAMID))) %>%
+    dplyr::filter(!is.na(mlbam_id)) %>%
+    dplyr::select(-dplyr::any_of(drop_cols)) %>%
+    dplyr::rename_with(~ paste0("fg_", .x), -mlbam_id) %>%
+    dplyr::distinct(mlbam_id, .keep_all = TRUE)
+
+  message("FG batter type ", type_num, ": ", ncol(result) - 1,
+          " new columns for ", nrow(result), " players")
+  result
+}
+
+extra_types_offense <- list(
+  t1 = pull_fg_batter_extra(1, season_to_pull),   # Advanced: Spd, UBR, wSB, wRC, wRAA
+  t2 = pull_fg_batter_extra(2, season_to_pull),   # Batted Ball: Hard%, Soft%, Med%, IFFB%, HR/FB
+  t3 = pull_fg_batter_extra(3, season_to_pull),   # Win Probability: WPA, RE24, Clutch, pLI
+  t5 = pull_fg_batter_extra(5, season_to_pull),   # Plate Discipline: O-Swing%, Z-Contact%, CSW%
+  t6 = pull_fg_batter_extra(6, season_to_pull),   # Value breakdown: RAR, Dollars, Positional
+  t7 = pull_fg_batter_extra(7, season_to_pull)    # Pitch values: wFB, wSL, wCB, wCH, etc.
+)
+
+for (extra in extra_types_offense) {
+  if (!is.null(extra)) {
+    player_season_fg_offense <- player_season_fg_offense %>%
+      dplyr::left_join(extra, by = "mlbam_id", suffix = c("", "_dup")) %>%
+      dplyr::select(-dplyr::ends_with("_dup"))
+  }
+}
+
 validate_performance_table(player_season_fg_offense)
 
 # ------------------------------------------------------------

@@ -90,12 +90,24 @@ message("40-man count: ", nrow(rosters_40man))
 
 message("Pulling Statcast participation")
 
-season_games <- suppressMessages(
-  baseballr::statcast_search(
-    start_date = paste0(season, "-03-01"),
-    end_date   = paste0(season, "-11-30")
-  )
+season_games <- tryCatch(
+  withTimeout(
+    suppressMessages(
+      baseballr::statcast_search(
+        start_date = paste0(season, "-03-01"),
+        end_date   = paste0(season, "-11-30")
+      )
+    ),
+    timeout = 60,
+    onTimeout = "warning"
+  ),
+  error   = function(e) { message("Statcast search error: ", e$message);   NULL },
+  warning = function(w) { message("Statcast search timed out after 60s — skipping"); NULL }
 )
+
+if (is.null(season_games)) {
+  season_games <- dplyr::tibble(batter = numeric(), pitcher = numeric())
+}
 
 if (nrow(season_games) == 0) {
   message("No Statcast games found for season ", season)

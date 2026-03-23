@@ -42,7 +42,7 @@ quarto::quarto_render(
 )
 
 # Move rendered file to reports/
-# Quarto renders relative to QMD dir, so output lands one level up (project root)
+# Quarto writes output_file relative to QMD dir, so "../name.html" lands at project root
 rendered_path <- output_filename
 final_path    <- file.path("reports", output_filename)
 if (!dir.exists("reports")) dir.create("reports")

@@ -20,7 +20,8 @@ required_objects <- c(
   "player_season_mlb_pitching",
   "player_season_fg_pitching",
   "player_season_statcast_pitching",
-  "player_season_lahman_pitching"
+  "player_season_lahman_pitching",
+  "player_season_bbref_pitching_advanced"
 )
 
 missing_objects <- required_objects[!required_objects %in% ls()]
@@ -34,22 +35,28 @@ if (length(missing_objects) > 0) {
 # ------------------------------------------------------------
 
 pitching_master_season <- player_season_mlb_pitching %>%
-  
-  # Fangraphs (team-split)
+
+  # FanGraphs — advanced metrics (FIP, xFIP, xERA, BABIP, LOB%, SIERA, fWAR, etc.)
   dplyr::left_join(
     player_season_fg_pitching,
     by = c("mlbam_id", "season", "team_abbr")
   ) %>%
-  
+
   # Statcast (no team split)
   dplyr::left_join(
     player_season_statcast_pitching,
     by = c("mlbam_id", "season")
   ) %>%
-  
+
   # Lahman (no team split)
   dplyr::left_join(
     player_season_lahman_pitching,
+    by = c("mlbam_id", "season")
+  ) %>%
+
+  # BBRef advanced — ERA+, bWAR, H9, HR9, BB9, SO9, SO/W (no team split)
+  dplyr::left_join(
+    player_season_bbref_pitching_advanced,
     by = c("mlbam_id", "season")
   )
 

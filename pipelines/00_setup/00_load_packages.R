@@ -34,7 +34,11 @@ required_packages <- c(
   "glue",
   "here",
   "gt",
-  "quarto"
+  "quarto",
+  "R.utils",
+  "rvest",
+  "shiny",
+  "DT"
 )
 
 installed <- rownames(installed.packages())

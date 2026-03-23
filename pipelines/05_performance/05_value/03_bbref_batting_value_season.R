@@ -14,9 +14,11 @@
 #   player gives the final season-total bWAR.
 #
 # KEY METRICS:
-#   bbref_PA  — plate appearances (season total, crosscheck)
-#   bbref_OPS — OPS (crosscheck vs FanGraphs/MLB)
-#   bbref_SB, bbref_CS — stolen bases
+#   bbref_PA, bbref_AB, bbref_G, bbref_R
+#   bbref_H, bbref_1B, bbref_2B, bbref_3B, bbref_HR, bbref_TB
+#   bbref_RBI, bbref_SB, bbref_CS
+#   bbref_BB, bbref_IBB, bbref_SO, bbref_HBP, bbref_SF, bbref_SH, bbref_GDP
+#   bbref_BA, bbref_OBP, bbref_SLG, bbref_OPS, bbref_BAbip
 #   NOTE: bWAR is not available through bref_daily_batter().
 #         WAR for batters comes from FanGraphs (fg_WAR).
 #
@@ -85,12 +87,18 @@ message("BBRef daily batter columns: ", paste(names(bbref_raw), collapse = ", ")
 # bref_daily_batter returns cumulative stats; last row = season total
 # ------------------------------------------------------------
 
-bbref_value_cols <- c(
-  "bbref_id", "PA", "OPS", "SB", "CS"
+# All stat columns available from bref_daily_batter()
+# X1B = singles (bRef names it X1B due to R's column name rules)
+bbref_stat_cols <- c(
+  "PA", "AB", "G", "R",
+  "H", "X1B", "X2B", "X3B", "HR", "TB",
+  "RBI", "SB", "CS",
+  "BB", "IBB", "SO", "HBP", "SF", "SH", "GDP",
+  "BA", "OBP", "SLG", "OPS", "BAbip"
 )
 
 player_season_bbref_batting_value <- bbref_raw %>%
-  dplyr::select(dplyr::any_of(bbref_value_cols)) %>%
+  dplyr::select(bbref_id, dplyr::any_of(bbref_stat_cols)) %>%
   # Last row per player = season-total cumulative stats
   dplyr::group_by(bbref_id) %>%
   dplyr::slice_tail(n = 1) %>%
@@ -109,14 +117,15 @@ player_season_bbref_batting_value <- bbref_raw %>%
     team_abbr   = "TOT",
     player_type = "batter"
   ) %>%
-  (\(df) {
-    cols_to_rename <- intersect(names(df), c("PA", "OPS", "SB", "CS"))
-    if (length(cols_to_rename) > 0) {
-      df <- dplyr::rename_with(df, ~ paste0("bbref_", .x),
-                               dplyr::all_of(cols_to_rename))
-    }
-    df
-  })() %>%
+  # Prefix all stat columns with bbref_, rename X1B -> 1B for clarity
+  dplyr::rename_with(
+    ~ paste0("bbref_", .x),
+    dplyr::any_of(bbref_stat_cols)
+  ) %>%
+  dplyr::rename_with(
+    ~ sub("bbref_X1B", "bbref_1B", .x),
+    dplyr::any_of("bbref_X1B")
+  ) %>%
   dplyr::filter(!is.na(mlbam_id)) %>%
   dplyr::distinct(mlbam_id, season, team_abbr, .keep_all = TRUE) %>%
   dplyr::select(mlbam_id, season, team_abbr, bbref_id, player_type,
@@ -128,6 +137,11 @@ player_season_bbref_batting_value <- bbref_raw %>%
 
 validate_performance_table(player_season_bbref_batting_value)
 
+bbref_cols_pulled <- names(player_season_bbref_batting_value)[
+  grepl("^bbref_", names(player_season_bbref_batting_value)) &
+  !names(player_season_bbref_batting_value) %in% c("bbref_id")
+]
 message("03_bbref_batting_value_season complete: ",
         nrow(player_season_bbref_batting_value),
-        " batter-season rows for season ", season_complete)
+        " batter-season rows for season ", season_complete,
+        " | bbref stat cols: ", paste(bbref_cols_pulled, collapse = ", "))

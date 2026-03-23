@@ -44,7 +44,11 @@ required_objects <- c(
   "player_season_statcast_offense", "offense_master_season",
   "player_season_mlb_pitching", "pitching_master_season",
   "depth_charts", "bullpen_context",
-  "starter_matchup", "lineup_context", "bullpen_grid"
+  "starter_matchup", "lineup_context", "bullpen_grid",
+  # Splits + career history
+  "player_season_mlb_offense_splits", "player_season_mlb_pitching_splits",
+  "lineup_context_splits", "starter_splits",
+  "player_career_offense", "player_career_pitching"
 )
 
 for (obj in required_objects) {
@@ -114,6 +118,13 @@ count_check("bullpen_context",             50)
 count_check("starter_matchup",              1)
 count_check("lineup_context",               9)
 count_check("bullpen_grid",                10)
+# Splits + career
+count_check("player_season_mlb_offense_splits",  100)
+count_check("player_season_mlb_pitching_splits", 100)
+count_check("lineup_context_splits",               1)
+count_check("starter_splits",                      1)
+count_check("player_career_offense",             100)
+count_check("player_career_pitching",             50)
 
 # ============================================================
 # SECTION 4: Key Column Checks
@@ -193,6 +204,37 @@ coverage_check("pitching_master_season",   "mlb_era",      0.80)
 coverage_check("pitching_master_season",   "mlb_whip",     0.80)
 coverage_check("starter_matchup",          "pitcher_name", 0.50)
 coverage_check("game_context",             "venue_name",   0.80)
+# Splits coverage
+coverage_check("player_season_mlb_offense_splits",  "mlb_ops",    0.50)
+coverage_check("player_season_mlb_pitching_splits", "mlb_era",    0.50)
+coverage_check("lineup_context_splits",             "sp_ops",     0.40)
+# Career history coverage
+coverage_check("player_career_offense",    "hist_avg",     0.80)
+coverage_check("player_career_offense",    "hist_ops",     0.80)
+coverage_check("player_career_pitching",   "hist_era",     0.70)
+coverage_check("player_career_pitching",   "hist_whip",    0.70)
+
+# ============================================================
+# SECTION 5.5: Splits + Career Key Columns
+# ============================================================
+cat("\n--- Splits & Career Columns ---\n")
+
+col_check("player_season_mlb_offense_splits",  "mlbam_id")
+col_check("player_season_mlb_offense_splits",  "split_code")
+col_check("player_season_mlb_offense_splits",  "mlb_ops")
+col_check("player_season_mlb_pitching_splits", "mlbam_id")
+col_check("player_season_mlb_pitching_splits", "split_code")
+col_check("player_season_mlb_pitching_splits", "mlb_era")
+col_check("lineup_context_splits",             "split_label")
+col_check("lineup_context_splits",             "sp_ops")
+col_check("starter_splits",                    "ps_era_vr")
+col_check("starter_splits",                    "ps_era_vl")
+col_check("player_career_offense",             "hist_avg")
+col_check("player_career_offense",             "hist_ops")
+col_check("player_career_offense",             "season")
+col_check("player_career_pitching",            "hist_era")
+col_check("player_career_pitching",            "hist_ip")
+col_check("player_career_pitching",            "season")
 
 # ============================================================
 # SECTION 6: Game Model Coverage

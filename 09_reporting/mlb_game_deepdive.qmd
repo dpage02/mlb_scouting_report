@@ -1,0 +1,242 @@
+---
+title: "Game Deep Dive"
+date: today
+params:
+  game_pk: null
+  game_date: null
+format:
+  html:
+    self-contained: true
+    embed-resources: true
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    toc-title: "Sections"
+    toc-location: left
+    smooth-scroll: true
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+#| output: false
+if (basename(getwd()) == "09_reporting") setwd("..")
+
+library(gt)
+library(dplyr)
+library(stringr)
+
+# Load from pipeline cache written by render_report.R (fast path).
+# Falls back to running the full pipeline if cache is missing or stale.
+cache_path <- "data/pipeline_cache.rds"
+cache_ok   <- file.exists(cache_path) &&
+              difftime(Sys.time(), file.mtime(cache_path), units = "hours") < 12
+
+if (cache_ok) {
+  cache <- readRDS(cache_path)
+  list2env(cache, envir = .GlobalEnv)
+  rm(cache)
+} else {
+  invisible(capture.output(source("run_pipeline_phase01.R")))
+}
+
+source("09_reporting/_report_helpers.R")
+source("09_reporting/_deepdive_helpers.R")
+
+# Scope to this game
+gpk  <- as.integer(params$game_pk)
+game <- game_context %>% dplyr::filter(game_pk == gpk)
+
+away_team <- game$away_team_name
+home_team <- game$home_team_name
+matchup   <- sprintf("%s @ %s", away_team, home_team)
+```
+
+```{r header}
+#| output: asis
+cat(sprintf("# %s\n\n", matchup))
+
+stats_season <- if (exists("player_season_mlb_offense") && nrow(player_season_mlb_offense) > 0)
+  unique(player_season_mlb_offense$season)[1] else "—"
+
+cat(paste0(
+  "> **", format(as.Date(params$game_date), "%A, %B %d, %Y"), "**",
+  " · ", game$venue_name,
+  " · ", stats_season, " season stats\n\n"
+))
+```
+
+---
+
+## Game Info
+
+```{r game-header}
+#| output: asis
+cat(gt::as_raw_html(make_game_header_gt(gpk)))
+```
+
+---
+
+## Starting Pitchers
+
+```{r starters}
+#| output: asis
+cat(gt::as_raw_html(make_starter_gt(gpk)))
+cat("\n\n")
+sp_splits <- make_starter_splits_gt(gpk)
+if (!is.null(sp_splits)) cat(gt::as_raw_html(sp_splits))
+cat("\n\n")
+sp_career <- make_career_pitching_gt(gpk)
+if (!is.null(sp_career)) cat(gt::as_raw_html(sp_career))
+```
+
+---
+
+## Lineup — Analytical Breakdown
+
+*Current season stats from MLB API, FanGraphs (all leaderboard types), and Statcast. Each section focuses on a different dimension of hitting.*
+
+### `r away_team`
+
+```{r lineup-away-full}
+#| output: asis
+tables_away <- make_lineup_full_gt(gpk, "away")
+for (nm in names(tables_away)) {
+  cat(sprintf('\n\n<h4 style="margin-top:1.4rem; margin-bottom:0.3rem; color:#2c3e50;">%s</h4>\n\n', nm))
+  cat(gt::as_raw_html(tables_away[[nm]]))
+  cat("\n\n")
+}
+```
+
+### `r home_team`
+
+```{r lineup-home-full}
+#| output: asis
+tables_home <- make_lineup_full_gt(gpk, "home")
+for (nm in names(tables_home)) {
+  cat(sprintf('\n\n<h4 style="margin-top:1.4rem; margin-bottom:0.3rem; color:#2c3e50;">%s</h4>\n\n', nm))
+  cat(gt::as_raw_html(tables_home[[nm]]))
+  cat("\n\n")
+}
+```
+
+---
+
+## Lineup — Career History
+
+*Last 5 seasons + current season, totals aggregated across teams.*
+
+### `r away_team`
+
+```{r career-away}
+#| output: asis
+cat(gt::as_raw_html(make_career_offense_gt(gpk, "away")))
+```
+
+### `r home_team`
+
+```{r career-home}
+#| output: asis
+cat(gt::as_raw_html(make_career_offense_gt(gpk, "home")))
+```
+
+---
+
+## Lineup — Matchup Splits
+
+*Stats split by opposing starter's handedness. Shows how each batter performs against this type of pitcher.*
+
+```{r splits-label}
+#| output: asis
+# Show which split applies to each team
+# pitch_hand lives in starter_splits (from 04_matchup_splits.R)
+away_sp <- starter_splits %>%
+  dplyr::filter(game_pk == gpk, side == "away")
+home_sp <- starter_splits %>%
+  dplyr::filter(game_pk == gpk, side == "home")
+
+away_hand <- if (nrow(away_sp) > 0 && "pitch_hand" %in% names(away_sp) &&
+                 !is.na(away_sp$pitch_hand[1]))
+  away_sp$pitch_hand[1] else "?"
+home_hand <- if (nrow(home_sp) > 0 && "pitch_hand" %in% names(home_sp) &&
+                 !is.na(home_sp$pitch_hand[1]))
+  home_sp$pitch_hand[1] else "?"
+
+cat(sprintf(
+  "> **%s** batters face a **%sHP** starter · showing **vs %sHP** splits  \n",
+  home_team,
+  away_hand,
+  away_hand
+))
+cat(sprintf(
+  "> **%s** batters face a **%sHP** starter · showing **vs %sHP** splits\n\n",
+  away_team,
+  home_hand,
+  home_hand
+))
+```
+
+### `r away_team` — Matchup Splits
+
+```{r splits-away}
+#| output: asis
+cat(gt::as_raw_html(make_lineup_splits_gt(gpk, "away")))
+```
+
+### `r home_team` — Matchup Splits
+
+```{r splits-home}
+#| output: asis
+cat(gt::as_raw_html(make_lineup_splits_gt(gpk, "home")))
+```
+
+---
+
+## Lineup — Defense
+
+*Prior season defensive metrics. Traditional (innings, errors, fielding%), Advanced (FanGraphs UZR/DRS), Statcast (OAA).*
+
+### `r away_team`
+
+```{r defense-away}
+#| output: asis
+cat(gt::as_raw_html(make_lineup_defense_gt(gpk, "away")))
+```
+
+### `r home_team`
+
+```{r defense-home}
+#| output: asis
+cat(gt::as_raw_html(make_lineup_defense_gt(gpk, "home")))
+```
+
+---
+
+## Bullpen
+
+```{r bullpen-legend}
+#| output: asis
+cat('<p style="font-size:12px; margin-bottom:6px;">',
+    '<span style="background:#27ae60;color:white;padding:2px 6px;border-radius:3px;">Fresh</span> &nbsp;',
+    '<span style="background:#a9dfbf;color:#1a5276;padding:2px 6px;border-radius:3px;">Available</span> &nbsp;',
+    '<span style="background:#f39c12;color:white;padding:2px 6px;border-radius:3px;">Limited</span> &nbsp;',
+    '<span style="background:#e74c3c;color:white;padding:2px 6px;border-radius:3px;">Unavailable</span> &nbsp;',
+    '<span style="background:#d5d8dc;color:#7f8c8d;padding:2px 6px;border-radius:3px;">Injured</span>',
+    '</p>\n\n')
+```
+
+### `r away_team` Bullpen
+
+```{r bullpen-away}
+#| output: asis
+cat(gt::as_raw_html(make_bullpen_gt(gpk, "away")))
+```
+
+### `r home_team` Bullpen
+
+```{r bullpen-home}
+#| output: asis
+cat(gt::as_raw_html(make_bullpen_gt(gpk, "home")))
+```

@@ -18,6 +18,7 @@ execute:
 ---
 
 ```{r setup}
+#| output: false
 # Set working directory to project root if rendering from 09_reporting/
 if (basename(getwd()) == "09_reporting") setwd("..")
 
@@ -26,7 +27,21 @@ library(dplyr)
 library(stringr)
 
 # Run the full pipeline (builds all objects in this session)
-source("run_pipeline_phase01.R")
+# capture.output suppresses cat() log messages from leaking into the HTML
+invisible(capture.output(source("run_pipeline_phase01.R")))
+
+# Cache key pipeline objects so deep dive renders don't re-run the pipeline
+pipeline_cache_objects <- c(
+  "target_date", "target_season", "team_ids",
+  "game_context", "lineup_context", "starter_matchup", "bullpen_grid",
+  "offense_master_season", "player_career_offense", "player_career_pitching",
+  "defense_master_season", "lineup_context_splits", "starter_splits"
+)
+pipeline_cache <- mget(
+  pipeline_cache_objects[pipeline_cache_objects %in% ls()],
+  envir = .GlobalEnv
+)
+saveRDS(pipeline_cache, "data/pipeline_cache.rds")
 
 # Load report helpers
 source("09_reporting/_report_helpers.R")
@@ -56,60 +71,177 @@ cat(paste0(
 ))
 ```
 
+```{r game-summary}
+#| output: asis
+
+summary_date_str <- tryCatch(
+  as.character(target_date),
+  error = function(e) as.character(Sys.Date())
+)
+
+summary_rows <- game_context %>%
+  dplyr::left_join(
+    team_ids %>% dplyr::select(mlbam_team_id, away_abbr = team_abbr),
+    by = c("away_team_id" = "mlbam_team_id")
+  ) %>%
+  dplyr::left_join(
+    team_ids %>% dplyr::select(mlbam_team_id, home_abbr = team_abbr),
+    by = c("home_team_id" = "mlbam_team_id")
+  ) %>%
+  dplyr::mutate(
+    away_abbr     = dplyr::coalesce(away_abbr, as.character(away_team_id)),
+    home_abbr     = dplyr::coalesce(home_abbr, as.character(home_team_id)),
+    deepdive_file = paste0("deepdive_", summary_date_str, "_",
+                           away_abbr, "_", home_abbr, ".html"),
+    away_sp       = dplyr::coalesce(away_pitcher_name, "TBD"),
+    home_sp       = dplyr::coalesce(home_pitcher_name, "TBD"),
+    time_flag     = dplyr::case_when(
+      tolower(day_night) == "day"   ~ "Day",
+      tolower(day_night) == "night" ~ "Night",
+      TRUE                          ~ "—"
+    ),
+    game_flag     = dplyr::case_when(
+      isTRUE(is_division_game) ~ " &middot; <em>Div</em>",
+      isTRUE(is_interleague)   ~ " &middot; <em>IL</em>",
+      TRUE                     ~ ""
+    )
+  )
+
+# Use seq_len row indexing — apply() coerces to matrix and drops rows
+rows_html <- paste0(
+  vapply(seq_len(nrow(summary_rows)), function(i) {
+    r <- summary_rows[i, ]
+    paste0(
+      '<tr>',
+      '<td style="white-space:nowrap; font-weight:600; padding:5px 10px;">',
+        r$away_team_name, ' <span style="color:#888;">@</span> ', r$home_team_name,
+        r$game_flag,
+      '</td>',
+      '<td style="white-space:nowrap; color:#555; font-size:13px; padding:5px 10px;">',
+        r$away_sp, ' <span style="color:#bbb;">vs</span> ', r$home_sp,
+      '</td>',
+      '<td style="white-space:nowrap; color:#555; font-size:13px; padding:5px 10px;">',
+        r$venue_name,
+      '</td>',
+      '<td style="font-size:12px; color:#777; text-align:center; padding:5px 8px;">',
+        r$time_flag,
+      '</td>',
+      '<td style="text-align:center; padding:5px 8px;">',
+        '<a href="', r$deepdive_file, '" style="font-size:12px; font-weight:600; ',
+        'background:#1a73e8; color:white; padding:2px 9px; border-radius:3px; ',
+        'text-decoration:none; white-space:nowrap;">Deep Dive</a>',
+      '</td>',
+      '</tr>'
+    )
+  }, character(1)),
+  collapse = "\n"
+)
+
+cat(paste0(
+  '<table style="width:100%; border-collapse:collapse; margin-bottom:1.5rem; font-size:14px;">',
+  '<thead><tr style="border-bottom:2px solid #dee2e6; color:#444;">',
+  '<th style="text-align:left; padding:5px 10px;">Matchup</th>',
+  '<th style="text-align:left; padding:5px 10px;">Probable SPs</th>',
+  '<th style="text-align:left; padding:5px 10px;">Venue</th>',
+  '<th style="text-align:center; padding:5px 8px;">D/N</th>',
+  '<th style="padding:5px 8px;"></th>',
+  '</tr></thead>',
+  '<tbody>', rows_html, '</tbody>',
+  '</table>'
+))
+```
+
 ---
 
 ```{r games}
 #| output: asis
 
-for (gpk in game_context$game_pk) {
+report_date_str <- tryCatch(
+  as.character(target_date),
+  error = function(e) as.character(Sys.Date())
+)
+
+# Build game → deep dive filename lookup
+game_links <- game_context %>%
+  dplyr::left_join(
+    team_ids %>% dplyr::select(mlbam_team_id, away_abbr = team_abbr),
+    by = c("away_team_id" = "mlbam_team_id")
+  ) %>%
+  dplyr::left_join(
+    team_ids %>% dplyr::select(mlbam_team_id, home_abbr = team_abbr),
+    by = c("home_team_id" = "mlbam_team_id")
+  ) %>%
+  dplyr::mutate(
+    away_abbr   = dplyr::coalesce(away_abbr, as.character(away_team_id)),
+    home_abbr   = dplyr::coalesce(home_abbr, as.character(home_team_id)),
+    deepdive_file = paste0("deepdive_", report_date_str, "_",
+                           away_abbr, "_", home_abbr, ".html")
+  )
+
+# knit_child() ensures each ## heading is processed as a top-level
+# document section so pandoc's TOC builder captures all games.
+# HTML is pre-built in the parent env; child text stays minimal.
+game_sections <- lapply(game_context$game_pk, function(gpk) {
 
   game    <- game_context %>% dplyr::filter(game_pk == gpk)
-  matchup <- sprintf("%s @ %s", game$away_team_name, game$home_team_name)
+  matchup <- paste0(game$away_team_name, " @ ", game$home_team_name)
+  dd_file <- game_links %>% dplyr::filter(game_pk == gpk) %>% dplyr::pull(deepdive_file)
 
-  # ── Game heading ──────────────────────────────────────────
-  cat(sprintf("\n## %s\n\n", matchup))
+  # Pre-build all HTML in the parent env to keep child template simple
+  btn_html <- paste0(
+    '<p style="margin-top:-8px; margin-bottom:12px;">',
+    '<a href="', dd_file, '" style="font-size:13px; font-weight:600; ',
+    'background:#1a73e8; color:white; padding:4px 12px; ',
+    'border-radius:4px; text-decoration:none;">',
+    '&#128269; Full Deep Dive</a></p>'
+  )
+  game_hdr_html  <- gt::as_raw_html(make_game_header_gt(gpk))
+  starters_html  <- gt::as_raw_html(make_starter_gt(gpk))
+  lineup_a_html  <- gt::as_raw_html(make_lineup_gt(gpk, "away"))
+  lineup_h_html  <- gt::as_raw_html(make_lineup_gt(gpk, "home"))
+  bullpen_a_html <- gt::as_raw_html(make_bullpen_gt(gpk, "away"))
+  bullpen_h_html <- gt::as_raw_html(make_bullpen_gt(gpk, "home"))
+  legend_html <- paste0(
+    '<p style="font-size:12px; margin-bottom:6px;">',
+    '<span style="background:#27ae60;color:white;padding:2px 6px;border-radius:3px;">Fresh</span> &nbsp;',
+    '<span style="background:#a9dfbf;color:#1a5276;padding:2px 6px;border-radius:3px;">Available</span> &nbsp;',
+    '<span style="background:#f39c12;color:white;padding:2px 6px;border-radius:3px;">Limited</span> &nbsp;',
+    '<span style="background:#e74c3c;color:white;padding:2px 6px;border-radius:3px;">Unavailable</span> &nbsp;',
+    '<span style="background:#d5d8dc;color:#7f8c8d;padding:2px 6px;border-radius:3px;">Injured</span>',
+    '</p>'
+  )
 
-  # ── Game header table ─────────────────────────────────────
-  cat(gt::as_raw_html(make_game_header_gt(gpk)))
-  cat("\n\n")
+  knitr::knit_child(
+    text = c(
+      "## `r matchup`",
+      "",
+      "```{r, echo=FALSE, results='asis'}",
+      "cat(btn_html, '\n\n')",
+      "cat(game_hdr_html, '\n\n')",
+      "cat('### Starting Pitchers\n\n')",
+      "cat(starters_html, '\n\n')",
+      "cat('### Lineups\n\n')",
+      "cat('<div style=\"display:flex; gap:1.5rem; flex-wrap:wrap; align-items:flex-start;\">\n')",
+      "cat('<div style=\"flex:1; min-width:320px;\">\n')",
+      "cat(lineup_a_html, '\n</div>\n')",
+      "cat('<div style=\"flex:1; min-width:320px;\">\n')",
+      "cat(lineup_h_html, '\n</div>\n')",
+      "cat('</div>\n\n')",
+      "cat('### Bullpen\n\n')",
+      "cat(legend_html, '\n\n')",
+      "cat('<div style=\"display:flex; gap:1.5rem; flex-wrap:wrap; align-items:flex-start;\">\n')",
+      "cat('<div style=\"flex:1; min-width:340px;\">\n')",
+      "cat(bullpen_a_html, '\n</div>\n')",
+      "cat('<div style=\"flex:1; min-width:340px;\">\n')",
+      "cat(bullpen_h_html, '\n</div>\n')",
+      "cat('</div>\n\n')",
+      "cat('<hr style=\"border:none; border-top:2px solid #dee2e6; margin:2rem 0;\">\n\n')",
+      "```"
+    ),
+    envir = environment(),
+    quiet = TRUE
+  )
+})
 
-  # ── Starters ──────────────────────────────────────────────
-  cat("### Starting Pitchers\n\n")
-  cat(gt::as_raw_html(make_starter_gt(gpk)))
-  cat("\n\n")
-
-  # ── Lineups (side by side) ────────────────────────────────
-  cat("### Lineups\n\n")
-  cat('<div style="display:flex; gap:1.5rem; flex-wrap:wrap; align-items:flex-start;">\n')
-  cat('<div style="flex:1; min-width:320px;">\n')
-  cat(gt::as_raw_html(make_lineup_gt(gpk, "away")))
-  cat('\n</div>\n')
-  cat('<div style="flex:1; min-width:320px;">\n')
-  cat(gt::as_raw_html(make_lineup_gt(gpk, "home")))
-  cat('\n</div>\n')
-  cat('</div>\n\n')
-
-  # ── Bullpen (side by side) ────────────────────────────────
-  cat("### Bullpen\n\n")
-
-  # Availability legend
-  cat('<p style="font-size:12px; margin-bottom:6px;">',
-      '<span style="background:#27ae60;color:white;padding:2px 6px;border-radius:3px;">Fresh</span> &nbsp;',
-      '<span style="background:#a9dfbf;color:#1a5276;padding:2px 6px;border-radius:3px;">Available</span> &nbsp;',
-      '<span style="background:#f39c12;color:white;padding:2px 6px;border-radius:3px;">Limited</span> &nbsp;',
-      '<span style="background:#e74c3c;color:white;padding:2px 6px;border-radius:3px;">Unavailable</span> &nbsp;',
-      '<span style="background:#d5d8dc;color:#7f8c8d;padding:2px 6px;border-radius:3px;">Injured</span>',
-      '</p>\n\n')
-
-  cat('<div style="display:flex; gap:1.5rem; flex-wrap:wrap; align-items:flex-start;">\n')
-  cat('<div style="flex:1; min-width:340px;">\n')
-  cat(gt::as_raw_html(make_bullpen_gt(gpk, "away")))
-  cat('\n</div>\n')
-  cat('<div style="flex:1; min-width:340px;">\n')
-  cat(gt::as_raw_html(make_bullpen_gt(gpk, "home")))
-  cat('\n</div>\n')
-  cat('</div>\n\n')
-
-  cat('<hr style="border:none; border-top:2px solid #dee2e6; margin:2rem 0;">\n\n')
-}
+cat(unlist(game_sections), sep = "\n")
 ```

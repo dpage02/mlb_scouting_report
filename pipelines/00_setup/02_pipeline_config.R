@@ -32,7 +32,7 @@ LOG_FILE <- file.path("logs", paste0("pipeline_", RUN_DATE, ".log"))
 log_message <- function(msg) {
   timestamped <- paste0("[", Sys.time(), "] ", msg)
   cat(timestamped, "\n", file = LOG_FILE, append = TRUE)
-  message(timestamped)
+  cat(timestamped, "\n")
 }
 
 log_message("Pipeline configuration loaded")
