@@ -90,7 +90,7 @@ build_roster_html <- function(my_players, team_name) {
 
   for (slot in slots) {
     eligible <- if (slot == "Util") {
-      my_players %>% dplyr::filter(player_type == "batter", !fg_id %in% used_ids)
+      my_players %>% dplyr::filter(player_type %in% c("batter","two-way"), !fg_id %in% used_ids)
     } else if (slot %in% c("SP","RP")) {
       my_players %>% dplyr::filter(pos_label(primary_pos) == slot, !fg_id %in% used_ids)
     } else {
@@ -232,7 +232,7 @@ ui <- fluidPage(
                                 c("All","C","1B","2B","3B","SS","OF","SP","RP"),
                                 selected="All")),
           column(2, selectInput("filter_type", "Type:",
-                                c("All","Batters","Pitchers"), selected="All")),
+                                c("All","Batters","Pitchers","Two-Way"), selected="All")),
           column(2, selectInput("filter_status", "Status:",
                                 c("Available","All","My Teams","Drafted"),
                                 selected="Available")),
@@ -429,8 +429,9 @@ server <- function(input, output, session) {
     if (input$filter_status == "Drafted")    b <- b %>% dplyr::filter(status == "Drafted")
     if (input$filter_pos != "All")
       b <- b %>% dplyr::filter(pos_label(primary_pos) == input$filter_pos)
-    if (input$filter_type == "Batters")  b <- b %>% dplyr::filter(player_type == "batter")
+    if (input$filter_type == "Batters")  b <- b %>% dplyr::filter(player_type %in% c("batter","two-way"))
     if (input$filter_type == "Pitchers") b <- b %>% dplyr::filter(player_type == "pitcher")
+    if (input$filter_type == "Two-Way")  b <- b %>% dplyr::filter(player_type == "two-way")
     if (input$filter_team_mlb != "All")
       b <- b %>% dplyr::filter(team_abbr == input$filter_team_mlb)
     b

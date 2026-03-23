@@ -49,8 +49,42 @@ parse_positions <- function(pos_str) {
   paste(mapped, collapse = "/")
 }
 
+
+# Diagnostic: show what position strings look like
+pos_sample <- head(na.omit(unique(proj_bat$proj_pos_raw)), 10)
+message("Position sample from projections: ", paste(pos_sample, collapse=" | "))
+pct_na_pos <- mean(is.na(proj_bat$proj_pos_raw)) * 100
+message("proj_pos_raw NA rate: ", round(pct_na_pos), "%")
+
+# If >80% of position strings are NA, fall back to offense_master_season fg_position
+if (pct_na_pos > 80) {
+  # Try offense_master_season first (broadest coverage — all players who appeared last season)
+  pos_source <- NULL
+  if (exists("offense_master_season") && "fg_position" %in% names(offense_master_season)) {
+    message("  Using offense_master_season fg_position as fallback")
+    pos_source <- offense_master_season %>%
+      dplyr::arrange(mlbam_id, dplyr::desc(dplyr::coalesce(mlb_pa, 0L))) %>%
+      dplyr::distinct(mlbam_id, .keep_all = TRUE) %>%
+      dplyr::select(mlbam_id, pos_fallback = fg_position)
+  } else if (exists("player_season_fg_offense") && "fg_position" %in% names(player_season_fg_offense)) {
+    message("  Using player_season_fg_offense fg_position as fallback")
+    pos_source <- player_season_fg_offense %>%
+      dplyr::distinct(mlbam_id, .keep_all = TRUE) %>%
+      dplyr::select(mlbam_id, pos_fallback = fg_position)
+  }
+  if (!is.null(pos_source)) {
+    proj_bat <- proj_bat %>%
+      dplyr::left_join(pos_source, by = "mlbam_id") %>%
+      dplyr::mutate(proj_pos_raw = dplyr::coalesce(proj_pos_raw, pos_fallback)) %>%
+      dplyr::select(-pos_fallback)
+    pct_na_after <- mean(is.na(proj_bat$proj_pos_raw)) * 100
+    message("  Position NA rate after fallback: ", round(pct_na_after), "%")
+  }
+}
+
 bat_pts <- bat_pts %>%
   dplyr::mutate(
+    proj_pos_raw       = proj_bat$proj_pos_raw[match(fg_id, proj_bat$fg_id)],
     eligible_positions = vapply(proj_pos_raw, parse_positions, character(1)),
     primary_pos = dplyr::case_when(
       grepl("C",  eligible_positions) ~ "C",
@@ -62,6 +96,9 @@ bat_pts <- bat_pts %>%
       TRUE                             ~ "Util"
     )
   )
+
+message("Position breakdown: ", paste(names(table(bat_pts$primary_pos)),
+        table(bat_pts$primary_pos), sep="=", collapse=" | "))
 
 # ============================================================
 # PART 2 — PITCHER FANTASY POINTS
@@ -149,8 +186,11 @@ batter_board <- bat_pts %>%
     proj_cs    = final_cs,  proj_bb  = final_bb,
     proj_avg   = round(final_avg, 3),
     proj_wrc_plus,
-    dplyr::any_of(c("sc_brl_percent","sc_est_woba","sc_sprint_speed",
-                    "sc_avg_hit_speed","n_systems"))
+    sc_brl_percent  = if ("sc_brl_percent"  %in% names(bat_pts)) sc_brl_percent  else NA_real_,
+    sc_est_woba     = if ("sc_est_woba"     %in% names(bat_pts)) sc_est_woba     else NA_real_,
+    sc_sprint_speed = if ("sc_sprint_speed" %in% names(bat_pts)) sc_sprint_speed else NA_real_,
+    sc_avg_hit_speed= if ("sc_avg_hit_speed"%in% names(bat_pts)) sc_avg_hit_speed else NA_real_,
+    n_systems       = if ("n_systems"       %in% names(bat_pts)) n_systems       else NA_integer_
   )
 
 pitcher_board <- pit_pts %>%
@@ -163,18 +203,68 @@ pitcher_board <- pit_pts %>%
     proj_w     = final_w,  proj_sv  = final_sv,
     proj_k     = final_k,  proj_er  = round(final_er, 1),
     proj_era   = round(final_era, 2), proj_qs = round(final_qs),
-    dplyr::any_of(c("fg_FIP","fg_xFIP","n_systems"))
+    fg_FIP     = if ("fg_FIP"  %in% names(pit_pts)) fg_FIP  else NA_real_,
+    fg_xFIP    = if ("fg_xFIP" %in% names(pit_pts)) fg_xFIP else NA_real_,
+    n_systems  = if ("n_systems" %in% names(pit_pts)) n_systems else NA_integer_
   )
 
-big_board <- dplyr::bind_rows(batter_board, pitcher_board) %>%
+filtered <- dplyr::bind_rows(batter_board, pitcher_board) %>%
   dplyr::filter(
-    (player_type == "batter"  & dplyr::coalesce(proj_pa, 0L) >= 10) |
-    (player_type == "pitcher" & dplyr::coalesce(proj_ip, 0)  >= 1)
-  ) %>%
+    # Batters: at least 50 projected PA (eliminates fringe guys)
+    (player_type == "batter"  & dplyr::coalesce(proj_pa, 0L) >= 50) |
+    # SP: at least 30 IP; RP: at least 10 IP
+    (player_type == "pitcher" & primary_pos == "SP" &
+       dplyr::coalesce(proj_ip, 0) >= 30) |
+    (player_type == "pitcher" & primary_pos %in% c("RP","RP_closer") &
+       dplyr::coalesce(proj_ip, 0) >= 10)
+  )
+
+# ── Two-way players (Ohtani): combine batter + pitcher points ──────────────
+# In Yahoo H2H points leagues, a two-way player scores BOTH batting and
+# pitching stats — so we sum proj_fpts and vor from both sides.
+twoway_ids <- filtered %>%
+  dplyr::count(fg_id) %>%
+  dplyr::filter(n > 1) %>%
+  dplyr::pull(fg_id)
+
+if (length(twoway_ids) > 0) {
+  twoway_bat <- filtered %>% dplyr::filter(fg_id %in% twoway_ids, player_type == "batter")
+  twoway_pit <- filtered %>% dplyr::filter(fg_id %in% twoway_ids, player_type == "pitcher")
+
+  message("Two-way players (combined bat+pitch): ",
+          paste(twoway_bat$player_name, collapse = ", "))
+
+  # Start with batter row, then add pitcher fpts+VOR on top.
+  # batter_board has NA for pitcher cols (from bind_rows); drop them before join.
+  pit_cols <- c("proj_ip","proj_gs","proj_w","proj_sv","proj_k","proj_er","proj_era","proj_qs")
+
+  pit_pts_only <- twoway_pit %>%
+    dplyr::select(fg_id, pit_fpts = proj_fpts, pit_vor = vor,
+                  dplyr::any_of(pit_cols))
+
+  twoway_combined <- twoway_bat %>%
+    dplyr::select(-dplyr::any_of(pit_cols)) %>%   # drop NA pitcher cols from batter row
+    dplyr::left_join(pit_pts_only, by = "fg_id") %>%
+    dplyr::mutate(
+      proj_fpts   = proj_fpts + dplyr::coalesce(pit_fpts, 0),
+      vor         = vor       + dplyr::coalesce(pit_vor,  0),
+      player_type = "two-way"
+    ) %>%
+    dplyr::select(-pit_fpts, -pit_vor)
+
+  big_board <- dplyr::bind_rows(
+    filtered %>% dplyr::filter(!fg_id %in% twoway_ids),
+    twoway_combined
+  )
+} else {
+  big_board <- filtered
+}
+
+big_board <- big_board %>%
   dplyr::arrange(dplyr::desc(vor)) %>%
   dplyr::mutate(
     overall_rank = dplyr::row_number(),
-    pos_rank     = as.integer(dplyr::ave(
+    pos_rank     = as.integer(ave(
       vor, primary_pos, FUN = function(x) rank(-x, ties.method = "min")
     ))
   )
@@ -183,12 +273,15 @@ big_board <- dplyr::bind_rows(batter_board, pitcher_board) %>%
 # PART 5 — JOIN ADP & CALCULATE VALUE VS ADP
 # ============================================================
 
-if (exists("adp_master") && nrow(adp_master) > 0) {
+if (exists("adp_master") && nrow(adp_master) > 0 && "adp" %in% names(adp_master)) {
+  adp_clean <- adp_master %>%
+    dplyr::filter(!is.na(fg_id)) %>%
+    dplyr::arrange(adp) %>%
+    dplyr::distinct(fg_id, .keep_all = TRUE) %>%
+    dplyr::select(fg_id, adp, adp_fantasypros, adp_yahoo, fp_rank)
+
   big_board <- big_board %>%
-    dplyr::left_join(
-      adp_master %>% dplyr::select(fg_id, adp, adp_fantasypros, adp_yahoo, fp_rank),
-      by = "fg_id"
-    ) %>%
+    dplyr::left_join(adp_clean, by = "fg_id") %>%
     dplyr::mutate(
       # value_vs_adp: positive = being drafted LATER than their rank suggests (value)
       # negative = being drafted EARLIER (overdrafted)
@@ -210,7 +303,8 @@ big_board <- big_board %>%
 
 message("Big board: ", nrow(big_board), " players | ",
         sum(big_board$player_type=="batter"), " batters | ",
-        sum(big_board$player_type=="pitcher"), " pitchers")
+        sum(big_board$player_type=="pitcher"), " pitchers | ",
+        sum(big_board$player_type=="two-way"), " two-way")
 message("Top 10:")
 print(big_board %>%
   dplyr::select(overall_rank, player_name, primary_pos,

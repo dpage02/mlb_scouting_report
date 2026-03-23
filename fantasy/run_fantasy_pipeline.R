@@ -66,18 +66,27 @@ tryCatch(
 )
 
 # Re-run big board if ADP was added after initial build
-if (exists("adp_master") && nrow(adp_master) > 0 &&
-    sum(!is.na(big_board$adp)) == 0) {
+adp_available <- exists("adp_master") && is.data.frame(adp_master) &&
+                 nrow(adp_master) > 0 && "adp" %in% names(adp_master)
+board_has_adp  <- "adp" %in% names(big_board) && sum(!is.na(big_board$adp)) > 0
+
+if (adp_available && !board_has_adp) {
   message("  Merging ADP into big board...")
+  adp_clean <- adp_master %>%
+    dplyr::filter(!is.na(fg_id)) %>%
+    dplyr::arrange(adp) %>%
+    dplyr::distinct(fg_id, .keep_all = TRUE) %>%   # prevent many-to-many
+    dplyr::select(fg_id, adp, adp_fantasypros, adp_yahoo, fp_rank)
+
   big_board <- big_board %>%
-    dplyr::left_join(
-      adp_master %>% dplyr::select(fg_id, adp, adp_fantasypros, adp_yahoo, fp_rank),
-      by = "fg_id"
-    ) %>%
+    dplyr::left_join(adp_clean, by = "fg_id") %>%
     dplyr::mutate(
       value_vs_adp = dplyr::if_else(!is.na(adp), round(adp - overall_rank), NA_integer_)
     )
   saveRDS(big_board, "fantasy/draft_app/data/big_board.rds")
+  message("  ADP merged: ", sum(!is.na(big_board$adp)), " players matched")
+} else if (!adp_available) {
+  message("  No ADP data available — board saved without ADP")
 }
 
 # ── Step 5: Printable cheat sheet ────────────────────────────

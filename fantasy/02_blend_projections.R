@@ -147,6 +147,14 @@ LEAGUE_AVG_ERA <- 4.20
 
 proj_pit <- steamer_pit %>%
   dplyr::left_join(sc_pit_master, by = "mlbam_id") %>%
+  # Add any FIP columns that may be missing after the join (any_of silently drops them)
+  dplyr::mutate(
+    fg_xFIP  = if ("fg_xFIP"  %in% names(.)) fg_xFIP  else NA_real_,
+    fg_FIP   = if ("fg_FIP"   %in% names(.)) fg_FIP   else NA_real_,
+    fg_SIERA = if ("fg_SIERA" %in% names(.)) fg_SIERA else NA_real_,
+    fg_K_9   = if ("fg_K_9"   %in% names(.)) fg_K_9   else NA_real_,
+    mlb_k9   = if ("mlb_k9"   %in% names(.)) mlb_k9   else NA_real_
+  ) %>%
   dplyr::mutate(
 
     # ── ERA adjustment via FIP/xFIP ───────────────────────

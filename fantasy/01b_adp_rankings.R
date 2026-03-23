@@ -2,92 +2,133 @@
 # FANTASY BASEBALL — ADP & Consensus Rankings
 # ============================================================
 # Pulls average draft position from:
-#   1. FantasyPros MLB consensus (primary)
-#   2. Yahoo Baseball ADP (secondary)
+#   1. FantasyPros JSON API (primary — more reliable than HTML scrape)
+#   2. FantasyPros HTML table fallback
+#   3. Yahoo Baseball ADP (secondary)
 #
 # OUTPUT:
 #   adp_master  — player name, fg_id, adp (avg across sources),
-#                 adp_fantasypros, adp_yahoo
+#                 adp_fantasypros, adp_yahoo, fp_rank
 # ============================================================
 
 source("fantasy/00_fantasy_config.R")
 
 # ------------------------------------------------------------
-# Source 1: FantasyPros Consensus Rankings
+# Source 1: FantasyPros — try JSON API first, then HTML
 # ------------------------------------------------------------
 
 fetch_fantasypros_adp <- function() {
-  # FantasyPros overall MLB consensus rankings
-  url <- "https://www.fantasypros.com/mlb/adp/overall.php"
 
+  # ── Attempt 1: JSON endpoint ──────────────────────────────
+  json_url <- paste0(
+    "https://www.fantasypros.com/api/v2/json/mlb/",
+    format(Sys.Date(), "%Y"),
+    "/consensus-rankings?type=overall&scoring=H2H&position=ALL"
+  )
+  resp_json <- tryCatch(
+    httr::GET(json_url,
+              httr::add_headers(`User-Agent` = "Mozilla/5.0",
+                                `Accept` = "application/json"),
+              httr::timeout(15)),
+    error = function(e) NULL
+  )
+
+  if (!is.null(resp_json) && httr::status_code(resp_json) == 200) {
+    raw <- tryCatch(
+      jsonlite::fromJSON(httr::content(resp_json, as = "text", encoding = "UTF-8"),
+                         flatten = TRUE),
+      error = function(e) NULL
+    )
+    if (!is.null(raw)) {
+      players <- if (is.data.frame(raw)) raw else raw$players
+      if (!is.null(players) && nrow(players) > 10) {
+        name_col <- intersect(c("player_name", "name", "PlayerName"), names(players))[1]
+        rank_col <- intersect(c("rank", "overall_rank", "rk"),         names(players))[1]
+        adp_col  <- intersect(c("avg", "adp", "average_pick"),         names(players))[1]
+        if (!is.na(name_col)) {
+          result <- dplyr::tibble(
+            player_name_fp  = as.character(players[[name_col]]),
+            fp_rank         = if (!is.na(rank_col)) suppressWarnings(as.integer(players[[rank_col]])) else seq_len(nrow(players)),
+            adp_fantasypros = if (!is.na(adp_col))  suppressWarnings(as.numeric(players[[adp_col]]))  else as.numeric(seq_len(nrow(players)))
+          ) %>%
+            dplyr::filter(!is.na(player_name_fp), nchar(player_name_fp) > 2) %>%
+            dplyr::distinct(player_name_fp, .keep_all = TRUE)
+          message("  FantasyPros ADP (JSON): ", nrow(result), " players")
+          return(result)
+        }
+      }
+    }
+  }
+
+  # ── Attempt 2: HTML page ──────────────────────────────────
+  html_url <- "https://www.fantasypros.com/mlb/adp/overall.php"
   resp <- tryCatch(
-    httr::GET(url,
-              httr::add_headers(`User-Agent` = "Mozilla/5.0"),
+    httr::GET(html_url,
+              httr::add_headers(`User-Agent` = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"),
               httr::timeout(20)),
     error = function(e) NULL
   )
 
   if (is.null(resp) || httr::status_code(resp) != 200) {
-    message("  FantasyPros ADP: failed (", httr::status_code(resp), ")")
+    message("  FantasyPros ADP: HTTP failed (status ",
+            if (!is.null(resp)) httr::status_code(resp) else "NA", ")")
     return(NULL)
   }
 
   page <- rvest::read_html(httr::content(resp, as = "text", encoding = "UTF-8"))
 
+  # Try specific table ID first, then any large table
   tbl <- tryCatch(
-    page %>%
-      rvest::html_element("table#data") %>%
-      rvest::html_table(fill = TRUE),
+    page %>% rvest::html_element("table#data") %>% rvest::html_table(fill = TRUE),
     error = function(e) NULL
   )
-
   if (is.null(tbl) || nrow(tbl) == 0) {
-    # Try any table
-    tbl <- tryCatch(
-      page %>% rvest::html_elements("table") %>%
-        purrr::map(rvest::html_table) %>%
-        purrr::keep(~ nrow(.x) > 20) %>%
-        purrr::pluck(1),
-      error = function(e) NULL
+    all_tbls <- tryCatch(
+      page %>% rvest::html_elements("table") %>% purrr::map(rvest::html_table),
+      error = function(e) list()
     )
+    tbl <- purrr::keep(all_tbls, ~ nrow(.x) > 20) %>% purrr::pluck(1)
   }
 
   if (is.null(tbl) || nrow(tbl) == 0) {
-    message("  FantasyPros ADP: could not parse table")
+    message("  FantasyPros ADP (HTML): could not parse table")
     return(NULL)
   }
 
-  # Find rank and name columns
-  rank_col <- intersect(c("Rank", "RK", "#"), names(tbl))[1]
-  name_col <- intersect(c("Player", "Name", "PLAYER"), names(tbl))[1]
-  pos_col  <- intersect(c("Position", "POS", "Pos"), names(tbl))[1]
-  adp_col  <- intersect(c("AVG", "ADP", "Avg"), names(tbl))[1]
+  message("  FantasyPros ADP (HTML): table columns = ", paste(names(tbl), collapse=", "))
+
+  rank_col <- intersect(c("Rank", "RK", "#", "Rk", "rank"),     names(tbl))[1]
+  name_col <- intersect(c("Player", "Name", "PLAYER", "player"), names(tbl))[1]
+  adp_col  <- intersect(c("AVG", "ADP", "Avg", "Average"),       names(tbl))[1]
 
   if (is.na(name_col)) {
-    message("  FantasyPros ADP: could not identify name column")
-    return(NULL)
+    # Last resort: use the first text column that looks like player names
+    chr_cols <- names(tbl)[sapply(tbl, is.character)]
+    # Pick the column with longest average strings (likely names)
+    if (length(chr_cols) > 0) {
+      avg_len <- sapply(chr_cols, function(col) mean(nchar(tbl[[col]]), na.rm=TRUE))
+      name_col <- chr_cols[which.max(avg_len)]
+      message("  FantasyPros ADP: guessing name column = '", name_col, "'")
+    } else {
+      message("  FantasyPros ADP: could not identify name column")
+      return(NULL)
+    }
   }
 
-  result <- tbl %>%
-    dplyr::select(
-      player_name_fp = dplyr::all_of(name_col),
-      dplyr::any_of(setNames(c(rank_col, pos_col, adp_col),
-                             c("fp_rank", "fp_pos", "adp_fantasypros")))
-    ) %>%
+  result <- dplyr::tibble(
+    player_name_fp  = as.character(tbl[[name_col]]),
+    fp_rank         = if (!is.na(rank_col)) suppressWarnings(as.integer(tbl[[rank_col]])) else seq_len(nrow(tbl)),
+    adp_fantasypros = if (!is.na(adp_col))  suppressWarnings(as.numeric(tbl[[adp_col]]))  else as.numeric(seq_len(nrow(tbl)))
+  ) %>%
     dplyr::mutate(
-      # Strip team from name (FP often has "Name (TEAM)")
       player_name_fp = stringr::str_trim(
         stringr::str_remove(player_name_fp, "\\s*\\([A-Z]{2,3}\\)\\s*$")
-      ),
-      adp_fantasypros = suppressWarnings(as.numeric(
-        dplyr::coalesce(as.character(adp_fantasypros), as.character(fp_rank))
-      )),
-      fp_rank = suppressWarnings(as.integer(fp_rank))
+      )
     ) %>%
     dplyr::filter(!is.na(player_name_fp), nchar(player_name_fp) > 2) %>%
     dplyr::distinct(player_name_fp, .keep_all = TRUE)
 
-  message("  FantasyPros ADP: ", nrow(result), " players")
+  message("  FantasyPros ADP (HTML): ", nrow(result), " players")
   result
 }
 
@@ -100,49 +141,47 @@ fetch_yahoo_adp <- function() {
 
   resp <- tryCatch(
     httr::GET(url,
-              httr::add_headers(`User-Agent` = "Mozilla/5.0"),
+              httr::add_headers(
+                `User-Agent` = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+                `Accept` = "text/html,application/xhtml+xml"
+              ),
               httr::timeout(20)),
     error = function(e) NULL
   )
 
   if (is.null(resp) || httr::status_code(resp) != 200) {
-    message("  Yahoo ADP: failed")
+    message("  Yahoo ADP: HTTP failed")
     return(NULL)
   }
 
   page <- rvest::read_html(httr::content(resp, as = "text", encoding = "UTF-8"))
 
-  tbl <- tryCatch(
-    page %>%
-      rvest::html_elements("table") %>%
-      purrr::map(rvest::html_table) %>%
-      purrr::keep(~ nrow(.x) > 20) %>%
-      purrr::pluck(1),
-    error = function(e) NULL
+  all_tbls <- tryCatch(
+    page %>% rvest::html_elements("table") %>% purrr::map(rvest::html_table),
+    error = function(e) list()
   )
+  tbl <- purrr::keep(all_tbls, ~ nrow(.x) > 20) %>% purrr::pluck(1)
 
   if (is.null(tbl) || nrow(tbl) == 0) {
-    message("  Yahoo ADP: could not parse table")
+    message("  Yahoo ADP: could not parse table (page may be JS-rendered)")
     return(NULL)
   }
 
+  message("  Yahoo ADP: table columns = ", paste(names(tbl), collapse=", "))
+
   name_col <- intersect(c("Name", "Player", "PLAYER"), names(tbl))[1]
-  adp_col  <- intersect(c("ADP", "Avg Pick", "AVG PICK"), names(tbl))[1]
+  adp_col  <- intersect(c("ADP", "Avg Pick", "AVG PICK", "Average"), names(tbl))[1]
 
   if (is.na(name_col)) {
     message("  Yahoo ADP: could not identify name column")
     return(NULL)
   }
 
-  result <- tbl %>%
-    dplyr::select(
-      player_name_yh = dplyr::all_of(name_col),
-      dplyr::any_of(setNames(adp_col, "adp_yahoo"))
-    ) %>%
-    dplyr::mutate(
-      player_name_yh = stringr::str_trim(player_name_yh),
-      adp_yahoo = suppressWarnings(as.numeric(adp_yahoo))
-    ) %>%
+  result <- dplyr::tibble(
+    player_name_yh = as.character(tbl[[name_col]]),
+    adp_yahoo = if (!is.na(adp_col)) suppressWarnings(as.numeric(tbl[[adp_col]])) else as.numeric(seq_len(nrow(tbl)))
+  ) %>%
+    dplyr::mutate(player_name_yh = stringr::str_trim(player_name_yh)) %>%
     dplyr::filter(!is.na(player_name_yh), nchar(player_name_yh) > 2) %>%
     dplyr::distinct(player_name_yh, .keep_all = TRUE)
 
@@ -166,19 +205,19 @@ normalize_name <- function(x) {
 # ------------------------------------------------------------
 
 message("Fetching ADP rankings...")
-fp_adp  <- fetch_fantasypros_adp()
-yh_adp  <- fetch_yahoo_adp()
+fp_adp <- fetch_fantasypros_adp()
+yh_adp <- fetch_yahoo_adp()
 
 # ------------------------------------------------------------
 # Build adp_master joined to big_board player names
 # ------------------------------------------------------------
 
-# Use big_board player names as the canonical reference
 if (!exists("big_board")) {
   message("big_board not found — run 03_big_board.R first. Skipping ADP join.")
   adp_master <- dplyr::tibble(
-    player_name = character(), adp_fantasypros = numeric(),
-    adp_yahoo = numeric(), adp = numeric()
+    fg_id = character(), player_name = character(),
+    adp = numeric(), adp_fantasypros = numeric(),
+    adp_yahoo = numeric(), fp_rank = integer()
   )
 } else {
 
@@ -187,24 +226,28 @@ if (!exists("big_board")) {
     dplyr::mutate(name_key = normalize_name(player_name))
 
   # Join FantasyPros
-  if (!is.null(fp_adp)) {
+  if (!is.null(fp_adp) && nrow(fp_adp) > 0) {
     fp_adp <- fp_adp %>%
       dplyr::mutate(name_key = normalize_name(player_name_fp))
     adp_master <- adp_master %>%
-      dplyr::left_join(fp_adp %>% dplyr::select(name_key, adp_fantasypros, fp_rank),
-                       by = "name_key")
+      dplyr::left_join(
+        fp_adp %>% dplyr::select(name_key, adp_fantasypros, fp_rank),
+        by = "name_key"
+      )
   } else {
     adp_master$adp_fantasypros <- NA_real_
     adp_master$fp_rank         <- NA_integer_
   }
 
   # Join Yahoo
-  if (!is.null(yh_adp)) {
+  if (!is.null(yh_adp) && nrow(yh_adp) > 0) {
     yh_adp <- yh_adp %>%
       dplyr::mutate(name_key = normalize_name(player_name_yh))
     adp_master <- adp_master %>%
-      dplyr::left_join(yh_adp %>% dplyr::select(name_key, adp_yahoo),
-                       by = "name_key")
+      dplyr::left_join(
+        yh_adp %>% dplyr::select(name_key, adp_yahoo),
+        by = "name_key"
+      )
   } else {
     adp_master$adp_yahoo <- NA_real_
   }
@@ -225,6 +268,12 @@ if (!exists("big_board")) {
 
   adp_matched <- sum(!is.na(adp_master$adp))
   message("ADP matched: ", adp_matched, " / ", nrow(adp_master), " players")
+
+  if (adp_matched == 0) {
+    message("  NOTE: ADP scraping returned 0 matches.")
+    message("  VOR rankings will still be used for draft guidance.")
+    message("  If you need ADP, manually download from fantasypros.com/mlb/adp")
+  }
 }
 
 message("01b_adp_rankings complete.")

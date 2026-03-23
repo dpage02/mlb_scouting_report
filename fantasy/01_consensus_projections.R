@@ -56,31 +56,46 @@ extract_bat_system <- function(raw, system_name) {
 
   if (is.na(id_col)) return(NULL)
 
-  safe <- function(col) suppressWarnings(as.numeric(tryCatch(raw[[col]], error = function(e) NA_real_)))
-  safe_int <- function(col) suppressWarnings(as.integer(tryCatch(raw[[col]], error = function(e) NA_integer_)))
+  n <- nrow(raw)
+  # Return NA vector of correct length when column is absent (avoids numeric(0) size mismatch)
+  safe <- function(col) {
+    if (is.na(col) || !col %in% names(raw)) return(rep(NA_real_, n))
+    suppressWarnings(as.numeric(raw[[col]]))
+  }
+  safe_int <- function(col) {
+    if (is.na(col) || !col %in% names(raw)) return(rep(NA_integer_, n))
+    suppressWarnings(as.integer(raw[[col]]))
+  }
+  safe_chr <- function(col) {
+    if (is.na(col) || !col %in% names(raw)) return(rep(NA_character_, n))
+    as.character(raw[[col]])
+  }
+
+  wrc_col <- intersect(c("wRC+", "wRC."), names(raw))
+  wrc_col <- if (length(wrc_col) > 0) wrc_col[1] else NA_character_
 
   dplyr::tibble(
-    fg_id       = as.character(raw[[id_col]]),
-    player_name = if (!is.na(name_col)) as.character(raw[[name_col]]) else NA_character_,
-    team_abbr   = if (!is.na(team_col)) as.character(raw[[team_col]]) else NA_character_,
-    proj_pos_raw= if (!is.na(pos_col))  as.character(raw[[pos_col]])  else NA_character_,
-    pa  = safe_int("PA"),
-    ab  = safe_int("AB"),
-    h   = safe_int("H"),
-    d2b = safe_int("2B"),
-    d3b = safe_int("3B"),
-    hr  = safe_int("HR"),
-    r   = safe_int("R"),
-    rbi = safe_int("RBI"),
-    sb  = safe_int("SB"),
-    cs  = safe_int("CS"),
-    bb  = safe_int("BB"),
-    hbp = safe_int("HBP"),
-    avg = safe("AVG"),
-    obp = safe("OBP"),
-    slg = safe("SLG"),
-    woba= safe("wOBA"),
-    wrc_plus = safe(intersect(c("wRC+", "wRC."), names(raw))[1])
+    fg_id        = as.character(raw[[id_col]]),
+    player_name  = safe_chr(name_col),
+    team_abbr    = safe_chr(team_col),
+    proj_pos_raw = safe_chr(pos_col),
+    pa   = safe_int("PA"),
+    ab   = safe_int("AB"),
+    h    = safe_int("H"),
+    d2b  = safe_int("2B"),
+    d3b  = safe_int("3B"),
+    hr   = safe_int("HR"),
+    r    = safe_int("R"),
+    rbi  = safe_int("RBI"),
+    sb   = safe_int("SB"),
+    cs   = safe_int("CS"),
+    bb   = safe_int("BB"),
+    hbp  = safe_int("HBP"),
+    avg  = safe("AVG"),
+    obp  = safe("OBP"),
+    slg  = safe("SLG"),
+    woba = safe("wOBA"),
+    wrc_plus = safe(wrc_col)
   ) %>%
     dplyr::filter(!is.na(fg_id), !is.na(player_name))
 }
@@ -94,27 +109,41 @@ extract_pit_system <- function(raw, system_name) {
 
   if (is.na(id_col)) return(NULL)
 
-  safe     <- function(col) suppressWarnings(as.numeric(tryCatch(raw[[col]],  error = function(e) NA_real_)))
-  safe_int <- function(col) suppressWarnings(as.integer(tryCatch(raw[[col]], error = function(e) NA_integer_)))
+  n <- nrow(raw)
+  safe <- function(col) {
+    if (is.na(col) || !col %in% names(raw)) return(rep(NA_real_, n))
+    suppressWarnings(as.numeric(raw[[col]]))
+  }
+  safe_int <- function(col) {
+    if (is.na(col) || !col %in% names(raw)) return(rep(NA_integer_, n))
+    suppressWarnings(as.integer(raw[[col]]))
+  }
+  safe_chr <- function(col) {
+    if (is.na(col) || !col %in% names(raw)) return(rep(NA_character_, n))
+    as.character(raw[[col]])
+  }
 
-  k_col  <- intersect(c("SO", "K"), names(raw))[1]
+  k_col  <- intersect(c("SO", "K"),          names(raw))
+  k9_col <- intersect(c("K.9", "K9", "SO9"), names(raw))
+  k_col  <- if (length(k_col)  > 0) k_col[1]  else NA_character_
+  k9_col <- if (length(k9_col) > 0) k9_col[1] else NA_character_
 
   dplyr::tibble(
     fg_id       = as.character(raw[[id_col]]),
-    player_name = if (!is.na(name_col)) as.character(raw[[name_col]]) else NA_character_,
-    team_abbr   = if (!is.na(team_col)) as.character(raw[[team_col]]) else NA_character_,
-    ip  = safe("IP"),
-    gs  = safe_int("GS"),
-    g   = safe_int("G"),
-    w   = safe_int("W"),
-    sv  = safe_int("SV"),
-    k   = if (!is.na(k_col)) safe_int(k_col) else NA_integer_,
-    bb  = safe_int("BB"),
-    era = safe("ERA"),
-    whip= safe("WHIP"),
-    fip = safe("FIP"),
-    xfip= safe("xFIP"),
-    k9  = safe(intersect(c("K.9", "K9", "SO9"), names(raw))[1])
+    player_name = safe_chr(name_col),
+    team_abbr   = safe_chr(team_col),
+    ip   = safe("IP"),
+    gs   = safe_int("GS"),
+    g    = safe_int("G"),
+    w    = safe_int("W"),
+    sv   = safe_int("SV"),
+    k    = safe_int(k_col),
+    bb   = safe_int("BB"),
+    era  = safe("ERA"),
+    whip = safe("WHIP"),
+    fip  = safe("FIP"),
+    xfip = safe("xFIP"),
+    k9   = safe(k9_col)
   ) %>%
     dplyr::filter(!is.na(fg_id), !is.na(player_name))
 }
