@@ -3,17 +3,11 @@
 # ============================================================
 # USAGE:
 #   shiny::runApp("fantasy/draft_app")
-#   — or run via fantasy/run_fantasy_pipeline.R
 #
-# FEATURES:
-#   - Manage TWO teams simultaneously (you have 2 in the league)
-#   - Big board ranked by VOR with ADP value column
-#   - One-click draft to Team 1, Team 2, or any opponent
-#   - Two roster trackers side by side
-#   - Smart recommendation for EACH team based on their specific needs
-#   - Pick counter with snake draft round tracking
-#   - Undo last pick, full draft log
-#   - Filter by position, type, status, MLB team
+# DRAFT FLOW:
+#   1. Click any player row in the board to select them
+#   2. Click "→ Team 1", "→ Team 2", or "Opponent Drafted"
+#   3. Or click "✓ Draft" inside either recommendation box
 # ============================================================
 
 library(shiny)
@@ -32,6 +26,12 @@ BIG_BOARD_ORIG <- readRDS(board_path) %>%
     drafted_by   = NA_character_
   )
 
+# Ensure adp columns exist (handle boards built before ADP scraping)
+for (col in c("adp","adp_fantasypros","adp_yahoo","fp_rank","value_vs_adp")) {
+  if (!col %in% names(BIG_BOARD_ORIG))
+    BIG_BOARD_ORIG[[col]] <- NA_real_
+}
+
 # ── League settings ──────────────────────────────────────────
 LEAGUE_TEAMS  <- 10
 MY_TEAM_1     <- "My Team 1"
@@ -41,9 +41,6 @@ MY_TEAMS      <- c(MY_TEAM_1, MY_TEAM_2)
 ROSTER_REQS <- c(C=1, `1B`=1, `2B`=1, `3B`=1, SS=1, OF=3, SP=5, RP=3)
 UTIL_SLOTS  <- 4
 
-opp_teams <- paste("Opp", 1:(LEAGUE_TEAMS - 2))
-all_teams <- c(MY_TEAM_1, MY_TEAM_2, opp_teams)
-
 pos_label <- function(p) dplyr::case_when(
   p == "C"  ~ "C",  p == "1B" ~ "1B", p == "2B" ~ "2B",
   p == "3B" ~ "3B", p == "SS" ~ "SS", p == "OF" ~ "OF",
@@ -51,20 +48,23 @@ pos_label <- function(p) dplyr::case_when(
   TRUE ~ p
 )
 
-`%||%` <- function(a, b) if (!is.null(a)) a else b
+safe_val <- function(x) { v <- tryCatch(x, error=function(e) NULL); if (is.null(v) || length(v)==0) NA else v[1] }
 
 # ── Roster checker ───────────────────────────────────────────
 check_roster <- function(my_players) {
-  if (nrow(my_players) == 0) return(list(filled=character(0), needed=names(ROSTER_REQS)))
+  if (nrow(my_players) == 0) return(list(needed = names(ROSTER_REQS)))
   pos_counts <- table(pos_label(my_players$primary_pos))
   needed <- character(0)
   for (slot in names(ROSTER_REQS)) {
     have <- as.integer(pos_counts[slot] %||% 0L)
+    if (is.na(have)) have <- 0L
     need <- ROSTER_REQS[slot]
     if (have < need) needed <- c(needed, rep(slot, need - have))
   }
   list(needed = needed)
 }
+
+`%||%` <- function(a, b) if (!is.null(a)) a else b
 
 # ── Recommendation engine ─────────────────────────────────────
 recommend_pick <- function(board, my_players) {
@@ -72,12 +72,13 @@ recommend_pick <- function(board, my_players) {
   if (nrow(available) == 0) return(NULL)
   needed_pos <- check_roster(my_players)$needed
   if (length(needed_pos) == 0) return(available %>% dplyr::slice(1))
-  pos_short <- names(sort(table(needed_pos), decreasing = TRUE))[1:min(3, length(needed_pos))]
+  pos_short <- names(sort(table(needed_pos), decreasing = TRUE))[seq_len(min(3, length(needed_pos)))]
   available %>%
     dplyr::mutate(
-      score = vor + dplyr::if_else(pos_label(primary_pos) %in% pos_short, 50, 0)
+      .score = dplyr::coalesce(vor, 0) +
+               dplyr::if_else(pos_label(primary_pos) %in% pos_short, 50, 0, missing = 0)
     ) %>%
-    dplyr::arrange(dplyr::desc(score)) %>%
+    dplyr::arrange(dplyr::desc(.score)) %>%
     dplyr::slice(1)
 }
 
@@ -104,7 +105,7 @@ build_roster_html <- function(my_players, team_name) {
           <td style="padding:2px 6px; font-weight:600; color:#2c3e50; width:40px;">%s</td>
           <td style="padding:2px 6px; font-size:11px;">%s</td>
           <td style="padding:2px 6px; text-align:right; font-size:10px; color:#555;">%s</td>
-        </tr>', slot, pick$player_name, dplyr::coalesce(pick$proj_fpts, NA_real_)
+        </tr>', slot, pick$player_name, round(dplyr::coalesce(pick$proj_fpts, 0))
       ))
     } else {
       rows_html <- paste0(rows_html, sprintf(
@@ -119,9 +120,9 @@ build_roster_html <- function(my_players, team_name) {
 
   total_pts <- sum(my_players$proj_fpts, na.rm=TRUE)
   player_ct <- nrow(my_players)
-
   paste0(
-    sprintf('<div style="font-size:11px; font-weight:700; color:#1a3a5c; padding:4px 0;">%s (%d players · %s pts)</div>', team_name, player_ct, round(total_pts)),
+    sprintf('<div style="font-size:11px; font-weight:700; color:#1a3a5c; padding:4px 0;">%s (%d players · %s pts)</div>',
+            team_name, player_ct, round(total_pts)),
     '<table style="width:100%; border-collapse:collapse; font-size:11px;">',
     rows_html,
     sprintf('<tr style="background:#2c3e50; color:white;">
@@ -147,45 +148,47 @@ ui <- fluidPage(
     .panel { background:white; border-radius:6px; padding:10px;
              box-shadow:0 1px 4px rgba(0,0,0,.1); margin-bottom:8px; }
     .rec-box { background:#eaf4fb; border:2px solid #1a73e8; border-radius:6px; padding:8px; }
+    .rec-box-t1 { background:#f0fff4; border:2px solid #27ae60; border-radius:6px; padding:8px; }
     .stat-tag {
       display:inline-block; background:#e8f0fe; color:#1a73e8;
       border-radius:3px; padding:1px 5px; font-size:11px; margin:1px;
     }
     .pick-big { font-size:24px; font-weight:800; color:#1a3a5c; text-align:center; }
     .round-txt { text-align:center; color:#888; font-size:11px; }
-    .team1-bg { background:#e8f5e9 !important; }
-    .team2-bg { background:#e3f2fd !important; }
     .btn-team1 { background:#27ae60 !important; color:white !important; border:none !important; }
     .btn-team2 { background:#1a73e8 !important; color:white !important; border:none !important; }
     .btn-opp   { background:#95a5a6 !important; color:white !important; border:none !important; }
-    .value-pos { color:#27ae60; font-weight:bold; }
-    .value-neg { color:#e74c3c; }
+    .selected-player-box {
+      background:#fffde7; border:2px solid #f39c12; border-radius:6px;
+      padding:8px; min-height:52px;
+    }
+    .selected-hint { color:#aaa; font-style:italic; font-size:12px; padding:4px; }
+    table.dataTable tbody tr.selected { background-color:#fff9c4 !important; }
+    table.dataTable tbody tr:hover { cursor:pointer; }
   "))),
 
-  # ── Header ────────────────────────────────────────────────
   tags$div(class="header-bar",
-    tags$h3(style="margin:0; font-size:20px;", "⚾ Fantasy Draft — Two Team Manager"),
+    tags$h3(style="margin:0; font-size:20px;", "\u26be Fantasy Draft \u2014 Two Team Manager"),
     tags$div(style="font-size:11px; opacity:.85;",
-      "H2H Points · 10 Teams · You manage: Team 1 (green) + Team 2 (blue)")
+      "H2H Points \u00b7 10 Teams \u00b7 Click a row to select \u00b7 Team 1 (green) + Team 2 (blue)")
   ),
 
   fluidRow(
-    # ── Left column: controls + rosters ───────────────────
+    # ── Left column ───────────────────────────────────────────
     column(3,
 
-      # Pick tracker
+      # Pick counter
       tags$div(class="panel",
         tags$div(class="pick-big", textOutput("pick_counter", inline=TRUE)),
         tags$div(class="round-txt", textOutput("round_info", inline=TRUE))
       ),
 
-      # Recommendations — one per team
+      # Recommendations
       tags$div(class="panel",
-        tags$div(style="font-weight:700; color:#1a3a5c; margin-bottom:6px;", "🎯 Recommendations"),
+        tags$div(style="font-weight:700; color:#1a3a5c; margin-bottom:6px;", "\U0001f3af Recommendations"),
         tags$div(style="margin-bottom:8px;",
           tags$div(style="font-size:11px; font-weight:600; color:#27ae60;", "TEAM 1"),
-          tags$div(class="rec-box", style="border-color:#27ae60; background:#f0fff4;",
-                   uiOutput("rec_team1"))
+          tags$div(class="rec-box-t1", uiOutput("rec_team1"))
         ),
         tags$div(
           tags$div(style="font-size:11px; font-weight:600; color:#1a73e8;", "TEAM 2"),
@@ -193,29 +196,26 @@ ui <- fluidPage(
         )
       ),
 
-      # Draft controls
+      # Selected player + draft buttons
       tags$div(class="panel",
-        tags$div(style="font-weight:700; color:#1a3a5c; margin-bottom:6px;", "Draft a Player"),
-        selectizeInput("draft_player", label=NULL, choices=NULL, selected=NULL,
-                       options=list(placeholder="Search player name...", maxOptions=20)),
+        tags$div(style="font-weight:700; color:#1a3a5c; margin-bottom:4px;", "Selected Player"),
+        tags$div(class="selected-player-box", uiOutput("selected_player_ui")),
         tags$div(style="display:flex; gap:6px; margin-top:6px;",
-          actionButton("draft_t1", "→ Team 1", class="btn-team1 btn-sm", style="flex:1;"),
-          actionButton("draft_t2", "→ Team 2", class="btn-team2 btn-sm", style="flex:1;")
+          actionButton("draft_t1", "\u2192 Team 1", class="btn-team1 btn-sm", style="flex:1;"),
+          actionButton("draft_t2", "\u2192 Team 2", class="btn-team2 btn-sm", style="flex:1;")
         ),
-        tags$div(style="margin-top:6px;",
-          tags$div(style="font-size:11px; color:#888; margin-bottom:3px;", "Draft for opponent:"),
-          tags$div(style="display:flex; gap:4px; flex-wrap:wrap;",
-            actionButton("draft_opp", "Opponent Drafted", class="btn-opp btn-sm btn-block")
-          )
+        tags$div(style="margin-top:4px;",
+          actionButton("draft_opp", "Opponent Drafted", class="btn-opp btn-sm",
+                       style="width:100%;")
         ),
-        tags$div(style="margin-top:8px; display:flex; gap:6px;",
-          actionButton("undo_btn", "↩ Undo", class="btn-warning btn-sm", style="flex:1;"),
-          actionButton("reset_btn", "↺ Reset", class="btn-danger btn-sm", style="flex:1;",
+        tags$div(style="margin-top:6px; display:flex; gap:6px;",
+          actionButton("undo_btn", "\u21a9 Undo", class="btn-warning btn-sm", style="flex:1;"),
+          actionButton("reset_btn", "\u21ba Reset", class="btn-danger btn-sm", style="flex:1;",
                        onclick="if(!confirm('Reset entire draft?')) event.stopPropagation();")
         )
       ),
 
-      # Rosters side by side (stacked on narrow)
+      # Rosters
       tags$div(class="panel",
         htmlOutput("roster_t1"),
         tags$hr(style="margin:8px 0;"),
@@ -225,7 +225,6 @@ ui <- fluidPage(
 
     # ── Right column: big board ────────────────────────────
     column(9,
-
       tags$div(class="panel",
         fluidRow(
           column(2, selectInput("filter_pos", "Position:",
@@ -244,11 +243,12 @@ ui <- fluidPage(
           ))
         )
       ),
-
+      tags$p(style="font-size:11px; color:#888; margin:2px 0 4px 4px;",
+             "\u2190 Click any row to select a player, then use the draft buttons on the left"),
       DTOutput("board_table"),
 
       tags$div(class="panel", style="margin-top:8px;",
-        tags$div(style="font-weight:700; color:#1a3a5c; margin-bottom:4px;", "📝 Draft Log"),
+        tags$div(style="font-weight:700; color:#1a3a5c; margin-bottom:4px;", "\U0001f4dd Draft Log"),
         DTOutput("draft_log_table")
       )
     )
@@ -277,19 +277,7 @@ server <- function(input, output, session) {
                       choices=c("All", teams), selected="All")
   })
 
-  # ── Player search ─────────────────────────────────────────
-  observe({
-    avail   <- board() %>% dplyr::filter(status == "Available")
-    choices <- setNames(
-      avail$fg_id,
-      paste0(avail$player_name, " (", pos_label(avail$primary_pos),
-             " – ", dplyr::coalesce(avail$team_abbr,"?"),
-             " | Rank #", avail$overall_rank, ")")
-    )
-    updateSelectizeInput(session, "draft_player", choices=choices, server=TRUE)
-  })
-
-  # ── Derived: per-team rosters ─────────────────────────────
+  # ── Per-team rosters ──────────────────────────────────────
   t1_players <- reactive({ board() %>% dplyr::filter(drafted_by == MY_TEAM_1) })
   t2_players <- reactive({ board() %>% dplyr::filter(drafted_by == MY_TEAM_2) })
 
@@ -301,55 +289,103 @@ server <- function(input, output, session) {
     pn  <- pick_num()
     rnd <- ceiling(pn / LEAGUE_TEAMS)
     pk  <- ((pn-1) %% LEAGUE_TEAMS) + 1
-    paste0("Round ", rnd, " · Pick ", pk, " of ", LEAGUE_TEAMS,
-           " · ", sum(board()$status=="Available"), " players left")
+    paste0("Round ", rnd, " \u00b7 Pick ", pk, " of ", LEAGUE_TEAMS,
+           " \u00b7 ", sum(board()$status=="Available"), " left")
   })
-
   output$board_summary <- renderText({
     b <- board()
-    paste0(sum(b$status=="Available"), " available · ",
-           sum(b$drafted_by==MY_TEAM_1, na.rm=TRUE), " on T1 · ",
+    paste0(sum(b$status=="Available"), " available \u00b7 ",
+           sum(b$drafted_by==MY_TEAM_1, na.rm=TRUE), " on T1 \u00b7 ",
            sum(b$drafted_by==MY_TEAM_2, na.rm=TRUE), " on T2")
   })
 
+  # ── Filtered board for table ──────────────────────────────
+  filtered_board <- reactive({
+    b <- board()
+    if (input$filter_status == "Available")  b <- b %>% dplyr::filter(status == "Available")
+    if (input$filter_status == "My Teams")   b <- b %>% dplyr::filter(status %in% MY_TEAMS)
+    if (input$filter_status == "Drafted")    b <- b %>% dplyr::filter(status == "Drafted")
+    if (input$filter_pos != "All")
+      b <- b %>% dplyr::filter(pos_label(primary_pos) == input$filter_pos)
+    if (input$filter_type == "Batters")  b <- b %>% dplyr::filter(player_type %in% c("batter","two-way"))
+    if (input$filter_type == "Pitchers") b <- b %>% dplyr::filter(player_type == "pitcher")
+    if (input$filter_type == "Two-Way")  b <- b %>% dplyr::filter(player_type == "two-way")
+    if (input$filter_team_mlb != "All")
+      b <- b %>% dplyr::filter(team_abbr == input$filter_team_mlb)
+    b
+  })
+
+  # ── Selected player from row click ───────────────────────
+  selected_player <- reactive({
+    sel <- input$board_table_rows_selected
+    if (is.null(sel) || length(sel) == 0) return(NULL)
+    fb <- filtered_board()
+    if (sel > nrow(fb)) return(NULL)
+    fb[sel, ]
+  })
+
+  output$selected_player_ui <- renderUI({
+    p <- selected_player()
+    if (is.null(p)) {
+      tags$div(class="selected-hint", "\u2190 Click a player in the board to select them")
+    } else {
+      adp_v <- safe_val(p$adp)
+      adp_str <- if (isTRUE(!is.na(adp_v))) paste0("  ADP: ", adp_v) else ""
+      tags$div(
+        tags$div(style="font-size:14px; font-weight:700;", p$player_name),
+        tags$div(style="font-size:11px; color:#555;",
+                 pos_label(p$primary_pos), "\u00b7",
+                 dplyr::coalesce(p$team_abbr, "?"),
+                 "\u00b7 Rank #", p$overall_rank, adp_str),
+        tags$div(style="margin-top:3px;",
+          tags$span(class="stat-tag", paste("Pts:", round(dplyr::coalesce(p$proj_fpts, 0)))),
+          tags$span(class="stat-tag", paste("VOR:", round(dplyr::coalesce(p$vor, 0))))
+        )
+      )
+    }
+  })
+
   # ── Recommendations ───────────────────────────────────────
-  rec_ui <- function(rec, team_label, btn_id, btn_color) {
+  rec1 <- reactive({ recommend_pick(board(), t1_players()) })
+  rec2 <- reactive({ recommend_pick(board(), t2_players()) })
+
+  rec_ui <- function(rec, quick_btn_id, btn_class) {
     if (is.null(rec)) return(tags$em("No players available"))
-    pos  <- pos_label(rec$primary_pos)
-    fpts <- round(dplyr::coalesce(rec$proj_fpts, 0))
-    vor  <- round(dplyr::coalesce(rec$vor, 0), 1)
-    adp_txt <- if (!is.na(rec$adp)) paste0(" · ADP: ", rec$adp) else ""
-    val_txt <- if (!is.na(rec$value_vs_adp) && rec$value_vs_adp > 0)
-      paste0(" (⬆ +", rec$value_vs_adp, " value)") else ""
+    pos   <- pos_label(rec$primary_pos)
+    fpts  <- round(dplyr::coalesce(rec$proj_fpts, 0))
+    vor_v <- round(dplyr::coalesce(rec$vor, 0), 1)
+    adp_v <- safe_val(rec$adp)
+    val_v <- safe_val(rec$value_vs_adp)
+    adp_txt <- if (isTRUE(!is.na(adp_v))) paste0(" \u00b7 ADP: ", adp_v) else ""
+    val_txt <- if (isTRUE(!is.na(val_v)) && isTRUE(val_v > 0))
+                 paste0(" (\u2b06 +", val_v, ")") else ""
     tags$div(
       tags$div(style="font-size:13px; font-weight:700;", rec$player_name),
       tags$div(style="font-size:11px; color:#555;",
-               pos, "·", dplyr::coalesce(rec$team_abbr,"?"),
-               "· #", rec$overall_rank, adp_txt, val_txt),
-      tags$div(
+               pos, "\u00b7", dplyr::coalesce(rec$team_abbr,"?"),
+               "\u00b7 #", rec$overall_rank, adp_txt, val_txt),
+      tags$div(style="margin:3px 0;",
         tags$span(class="stat-tag", paste("Pts:", fpts)),
-        tags$span(class="stat-tag", paste("VOR:", vor)),
-        if (!is.na(rec$proj_hr))  tags$span(class="stat-tag", paste("HR:",  rec$proj_hr))  else NULL,
-        if (!is.na(rec$proj_sb))  tags$span(class="stat-tag", paste("SB:",  rec$proj_sb))  else NULL,
-        if (!is.na(rec$proj_era)) tags$span(class="stat-tag", paste("ERA:", rec$proj_era)) else NULL,
-        if (!is.na(rec$proj_k))   tags$span(class="stat-tag", paste("K:",   rec$proj_k))   else NULL
-      )
+        tags$span(class="stat-tag", paste("VOR:", vor_v)),
+        if (isTRUE(!is.na(safe_val(rec$proj_hr))))  tags$span(class="stat-tag", paste("HR:", safe_val(rec$proj_hr)))  else NULL,
+        if (isTRUE(!is.na(safe_val(rec$proj_sb))))  tags$span(class="stat-tag", paste("SB:", safe_val(rec$proj_sb)))  else NULL,
+        if (isTRUE(!is.na(safe_val(rec$proj_era)))) tags$span(class="stat-tag", paste("ERA:", safe_val(rec$proj_era))) else NULL,
+        if (isTRUE(!is.na(safe_val(rec$proj_k))))   tags$span(class="stat-tag", paste("K:", safe_val(rec$proj_k)))    else NULL
+      ),
+      actionButton(quick_btn_id, "\u2713 Draft This Pick",
+                   class=paste(btn_class, "btn-sm"), style="width:100%; margin-top:4px;")
     )
   }
 
-  output$rec_team1 <- renderUI({
-    rec <- recommend_pick(board(), t1_players())
-    rec_ui(rec, MY_TEAM_1, "draft_rec_t1", "#27ae60")
-  })
-  output$rec_team2 <- renderUI({
-    rec <- recommend_pick(board(), t2_players())
-    rec_ui(rec, MY_TEAM_2, "draft_rec_t2", "#1a73e8")
-  })
+  output$rec_team1 <- renderUI({ rec_ui(rec1(), "quick_draft_t1", "btn-team1") })
+  output$rec_team2 <- renderUI({ rec_ui(rec2(), "quick_draft_t2", "btn-team2") })
 
   # ── Draft helpers ─────────────────────────────────────────
   save_undo <- function() {
-    undo_stack(c(undo_stack(), list(list(board=board(), log=draft_log()))))
-    if (length(undo_stack()) > 50) undo_stack(undo_stack()[-1])  # cap history
+    stk <- undo_stack()
+    stk <- c(stk, list(list(board=board(), log=draft_log())))
+    if (length(stk) > 50) stk <- stk[-1]
+    undo_stack(stk)
   }
 
   do_draft <- function(fg_id_val, team_name) {
@@ -374,26 +410,27 @@ server <- function(input, output, session) {
       pos         = pos_label(player$primary_pos[1]),
       proj_fpts   = dplyr::coalesce(player$proj_fpts[1], 0),
       vor         = dplyr::coalesce(player$vor[1], 0),
-      adp         = dplyr::coalesce(player$adp[1], NA_real_)
+      adp         = dplyr::coalesce(safe_val(player$adp), NA_real_)
     )))
   }
 
-  # Draft selected player to team 1
+  # Draft via row selection
   observeEvent(input$draft_t1, {
-    req(input$draft_player)
-    do_draft(input$draft_player, MY_TEAM_1)
+    p <- selected_player(); req(!is.null(p)); do_draft(p$fg_id, MY_TEAM_1)
   })
-
-  # Draft selected player to team 2
   observeEvent(input$draft_t2, {
-    req(input$draft_player)
-    do_draft(input$draft_player, MY_TEAM_2)
+    p <- selected_player(); req(!is.null(p)); do_draft(p$fg_id, MY_TEAM_2)
+  })
+  observeEvent(input$draft_opp, {
+    p <- selected_player(); req(!is.null(p)); do_draft(p$fg_id, "Opponent")
   })
 
-  # Mark as drafted by opponent
-  observeEvent(input$draft_opp, {
-    req(input$draft_player)
-    do_draft(input$draft_player, "Opponent")
+  # Draft via recommendation quick buttons
+  observeEvent(input$quick_draft_t1, {
+    r <- rec1(); req(!is.null(r)); do_draft(r$fg_id, MY_TEAM_1)
+  })
+  observeEvent(input$quick_draft_t2, {
+    r <- rec2(); req(!is.null(r)); do_draft(r$fg_id, MY_TEAM_2)
   })
 
   # Undo
@@ -401,8 +438,7 @@ server <- function(input, output, session) {
     stk <- undo_stack()
     if (length(stk) == 0) return()
     last <- stk[[length(stk)]]
-    board(last$board)
-    draft_log(last$log)
+    board(last$board); draft_log(last$log)
     undo_stack(stk[-length(stk)])
   })
 
@@ -422,66 +458,49 @@ server <- function(input, output, session) {
   output$roster_t2 <- renderUI({ HTML(build_roster_html(t2_players(), MY_TEAM_2)) })
 
   # ── Big board table ───────────────────────────────────────
-  filtered_board <- reactive({
-    b <- board()
-    if (input$filter_status == "Available")  b <- b %>% dplyr::filter(status == "Available")
-    if (input$filter_status == "My Teams")   b <- b %>% dplyr::filter(status %in% MY_TEAMS)
-    if (input$filter_status == "Drafted")    b <- b %>% dplyr::filter(status == "Drafted")
-    if (input$filter_pos != "All")
-      b <- b %>% dplyr::filter(pos_label(primary_pos) == input$filter_pos)
-    if (input$filter_type == "Batters")  b <- b %>% dplyr::filter(player_type %in% c("batter","two-way"))
-    if (input$filter_type == "Pitchers") b <- b %>% dplyr::filter(player_type == "pitcher")
-    if (input$filter_type == "Two-Way")  b <- b %>% dplyr::filter(player_type == "two-way")
-    if (input$filter_team_mlb != "All")
-      b <- b %>% dplyr::filter(team_abbr == input$filter_team_mlb)
-    b
-  })
-
   output$board_table <- renderDT({
     b <- filtered_board()
     display <- b %>%
       dplyr::transmute(
-        `#`      = overall_rank,
-        `Pos#`   = pos_rank,
-        Player   = player_name,
-        Pos      = pos_label(primary_pos),
-        Team     = dplyr::coalesce(team_abbr, "?"),
-        Pts      = proj_fpts,
-        VOR      = round(vor),
-        ADP      = round(dplyr::coalesce(adp, NA_real_), 1),
-        Val      = dplyr::coalesce(value_vs_adp, NA_integer_),
-        # Batter
-        PA       = dplyr::coalesce(proj_pa,  NA_integer_),
-        HR       = dplyr::coalesce(proj_hr,  NA_integer_),
-        R        = dplyr::coalesce(proj_r,   NA_integer_),
-        RBI      = dplyr::coalesce(proj_rbi, NA_integer_),
-        SB       = dplyr::coalesce(proj_sb,  NA_integer_),
-        AVG      = dplyr::coalesce(proj_avg, NA_real_),
-        `wRC+`   = round(dplyr::coalesce(proj_wrc_plus, NA_real_)),
-        `Brl%`   = dplyr::coalesce(sc_brl_percent, NA_real_),
-        # Pitcher
-        IP       = dplyr::coalesce(proj_ip,  NA_real_),
-        W        = dplyr::coalesce(proj_w,   NA_integer_),
-        SV       = dplyr::coalesce(proj_sv,  NA_integer_),
-        K        = dplyr::coalesce(proj_k,   NA_integer_),
-        ERA      = dplyr::coalesce(proj_era, NA_real_),
-        QS       = dplyr::coalesce(proj_qs,  NA_real_),
-        Status   = status,
-        By       = dplyr::coalesce(drafted_by, "")
+        `#`    = overall_rank,
+        `P#`   = pos_rank,
+        Player = player_name,
+        Pos    = pos_label(primary_pos),
+        Team   = dplyr::coalesce(team_abbr, "?"),
+        Pts    = proj_fpts,
+        VOR    = round(vor),
+        ADP    = round(dplyr::coalesce(adp, NA_real_), 1),
+        Val    = dplyr::coalesce(value_vs_adp, NA_real_),
+        PA     = dplyr::coalesce(proj_pa,  NA_integer_),
+        HR     = dplyr::coalesce(proj_hr,  NA_integer_),
+        R      = dplyr::coalesce(proj_r,   NA_integer_),
+        RBI    = dplyr::coalesce(proj_rbi, NA_integer_),
+        SB     = dplyr::coalesce(proj_sb,  NA_integer_),
+        AVG    = dplyr::coalesce(proj_avg, NA_real_),
+        `wRC+` = round(dplyr::coalesce(proj_wrc_plus, NA_real_)),
+        `Brl%` = dplyr::coalesce(sc_brl_percent, NA_real_),
+        IP     = dplyr::coalesce(proj_ip,  NA_real_),
+        W      = dplyr::coalesce(proj_w,   NA_integer_),
+        SV     = dplyr::coalesce(proj_sv,  NA_integer_),
+        K      = dplyr::coalesce(proj_k,   NA_integer_),
+        ERA    = dplyr::coalesce(proj_era, NA_real_),
+        QS     = dplyr::coalesce(proj_qs,  NA_real_),
+        Status = status,
+        By     = dplyr::coalesce(drafted_by, "")
       )
 
     datatable(
-      display, rownames=FALSE, selection="none",
+      display, rownames=FALSE, selection="single",
       options=list(
-        pageLength = 30, scrollX=TRUE,
-        order      = list(list(5, "desc")),
-        dom        = "ftip",
-        columnDefs = list(
-          list(width="130px", targets=2),
-          list(width="38px",  targets=c(0,1,3,4))
+        pageLength=30, scrollX=TRUE,
+        order=list(list(5,"desc")),
+        dom="ftip",
+        columnDefs=list(
+          list(width="120px", targets=2),
+          list(width="34px",  targets=c(0,1,3,4))
         )
       ),
-      class = "cell-border stripe compact hover"
+      class="cell-border stripe compact hover"
     ) %>%
       formatStyle("Status",
         backgroundColor = styleEqual(
@@ -494,31 +513,28 @@ server <- function(input, output, session) {
         fontWeight = "bold"
       ) %>%
       formatStyle("VOR",
-        background         = styleColorBar(c(min(display$VOR, na.rm=TRUE), max(display$VOR, na.rm=TRUE)), "#cce5ff"),
+        background         = styleColorBar(range(display$VOR, na.rm=TRUE), "#cce5ff"),
         backgroundSize     = "98% 70%",
         backgroundRepeat   = "no-repeat",
         backgroundPosition = "center"
       ) %>%
-      formatRound("AVG", digits=3) %>%
-      formatRound("ERA", digits=2) %>%
-      formatRound("IP",  digits=1) %>%
-      formatRound("ADP", digits=1) %>%
+      formatRound("AVG",  digits=3) %>%
+      formatRound("ERA",  digits=2) %>%
+      formatRound("IP",   digits=1) %>%
+      formatRound("ADP",  digits=1) %>%
       formatRound("Brl%", digits=1)
-  })
+  }, server=FALSE)
 
   # ── Draft log ─────────────────────────────────────────────
   output$draft_log_table <- renderDT({
-    log <- draft_log() %>% dplyr::arrange(dplyr::desc(pick))
     datatable(
-      log, rownames=FALSE,
+      draft_log() %>% dplyr::arrange(dplyr::desc(pick)),
+      rownames=FALSE,
       options=list(pageLength=8, dom="ftp", order=list(list(0,"desc"))),
       class="compact stripe"
     ) %>%
       formatStyle("team",
-        backgroundColor = styleEqual(
-          c(MY_TEAM_1, MY_TEAM_2),
-          c("#d5f5e3", "#dbeafe")
-        )
+        backgroundColor = styleEqual(c(MY_TEAM_1, MY_TEAM_2), c("#d5f5e3","#dbeafe"))
       ) %>%
       formatRound("vor", digits=1)
   })
