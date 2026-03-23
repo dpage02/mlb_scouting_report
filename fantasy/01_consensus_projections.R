@@ -341,7 +341,11 @@ if (file.exists(manual_bat_path)) {
   # Only add players not already in steamer_bat
   new_players <- manual_bat %>%
     dplyr::filter(!fg_id %in% steamer_bat$fg_id) %>%
-    dplyr::mutate(n_systems = 0L)   # flag as manually added
+    dplyr::mutate(
+      n_systems = 0L,
+      mlbam_id  = suppressWarnings(as.integer(mlbam_id)),
+      fg_id     = as.character(fg_id)
+    )
   if (nrow(new_players) > 0) {
     message("Manual bat overrides added: ",
             paste(new_players$player_name, collapse=", "))
