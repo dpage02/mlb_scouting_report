@@ -228,18 +228,35 @@ message("Consensus pitching: ", nrow(pit_avg), " players (avg across ",
         max(pit_avg$n_systems, na.rm=TRUE), " systems)")
 
 # ── Check coverage for known players ─────────────────────────────────────────
+# Checks raw per-system data first, then the averaged output.
+# This pinpoints exactly where a player disappears in the pipeline.
 check_bat <- c("Baldwin", "Acuna", "Rodriguez", "Soto", "Judge")
 for (nm in check_bat) {
-  rows <- bat_avg %>% dplyr::filter(grepl(nm, player_name, ignore.case=TRUE))
-  if (nrow(rows) > 0) {
-    message("  PROJ ", nm, ": ", rows$player_name[1],
-            " PA=", round(rows$pa[1]), " n_sys=", rows$n_systems[1])
+  # Search raw systems
+  sys_hits <- lapply(names(bat_systems), function(sys) {
+    rows <- bat_systems[[sys]] %>%
+      dplyr::filter(grepl(nm, player_name, ignore.case=TRUE))
+    if (nrow(rows) > 0)
+      data.frame(sys=sys, name=rows$player_name[1], fg_id=rows$fg_id[1],
+                 pa=rows$pa[1], stringsAsFactors=FALSE)
+    else NULL
+  })
+  sys_hits <- dplyr::bind_rows(Filter(Negate(is.null), sys_hits))
+
+  if (nrow(sys_hits) == 0) {
+    message("  PROJ ", nm, ": NOT IN ANY system — player missing from FG API entirely")
+    message("    >> Manual add needed or check FG player page for correct fg_id")
   } else {
-    # Check which individual systems had them
-    found_in <- names(bat_systems)[sapply(bat_systems, function(s)
-      any(grepl(nm, s$player_name, ignore.case=TRUE)))]
-    message("  PROJ ", nm, ": MISSING from bat_avg — found in: ",
-            if (length(found_in)) paste(found_in, collapse=",") else "NONE")
+    message("  PROJ ", nm, ": found in ", nrow(sys_hits), "/", length(bat_systems),
+            " systems — fg_ids: ", paste(unique(sys_hits$fg_id), collapse=","),
+            " | PA: ", paste(round(sys_hits$pa), collapse=","))
+    # Check if it made it through averaging
+    in_avg <- bat_avg %>% dplyr::filter(grepl(nm, player_name, ignore.case=TRUE))
+    if (nrow(in_avg) == 0) {
+      message("    >> DROPPED in average_systems — likely fg_id mismatch across systems")
+    } else {
+      message("    >> In bat_avg: PA=", round(in_avg$pa[1]), " n_sys=", in_avg$n_systems[1])
+    }
   }
 }
 
@@ -313,6 +330,24 @@ steamer_pit <- pit_avg %>%
     proj_er, proj_qs, proj_role,
     n_systems
   )
+
+# ── Manual player overrides ───────────────────────────────────────────────────
+# Add players here that the FG API misses. Find fg_id on their FanGraphs page:
+# fangraphs.com/players/[name]/[fg_id]/stats/bat
+# These rows are appended AFTER averaging so they never get overwritten.
+manual_bat_path <- "fantasy/manual_players_bat.csv"
+if (file.exists(manual_bat_path)) {
+  manual_bat <- readr::read_csv(manual_bat_path, show_col_types = FALSE)
+  # Only add players not already in steamer_bat
+  new_players <- manual_bat %>%
+    dplyr::filter(!fg_id %in% steamer_bat$fg_id) %>%
+    dplyr::mutate(n_systems = 0L)   # flag as manually added
+  if (nrow(new_players) > 0) {
+    message("Manual bat overrides added: ",
+            paste(new_players$player_name, collapse=", "))
+    steamer_bat <- dplyr::bind_rows(steamer_bat, new_players)
+  }
+}
 
 message("01_consensus_projections complete — ",
         length(PROJ_SYSTEMS), " systems pulled and averaged.")

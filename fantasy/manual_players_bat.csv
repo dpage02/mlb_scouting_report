@@ -1,0 +1,2 @@
+fg_id,mlbam_id,player_name,team_abbr,proj_pos_raw,proj_pa,proj_ab,proj_h,proj_2b,proj_3b,proj_hr,proj_r,proj_rbi,proj_sb,proj_cs,proj_bb,proj_hbp,proj_avg,proj_obp,proj_slg,proj_woba,proj_wrc_plus
+REPLACE_FG_ID,REPLACE_MLBAM_ID,Drake Baldwin,ATL,C,450,400,104,20,1,20,55,62,4,2,42,5,0.260,0.340,0.440,0.330,115
