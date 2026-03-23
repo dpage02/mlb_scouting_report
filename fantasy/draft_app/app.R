@@ -557,7 +557,7 @@ server <- function(input, output, session) {
       formatRound("IP",   digits=1) %>%
       formatRound("ADP",  digits=1) %>%
       formatRound("Brl%", digits=1)
-  }, server=FALSE)
+  })
 
   # ── Draft log ─────────────────────────────────────────────
   output$draft_log_table <- renderDT({
