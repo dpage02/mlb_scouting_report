@@ -227,6 +227,22 @@ message("Consensus batting: ", nrow(bat_avg), " players (avg across ",
 message("Consensus pitching: ", nrow(pit_avg), " players (avg across ",
         max(pit_avg$n_systems, na.rm=TRUE), " systems)")
 
+# ── Check coverage for known players ─────────────────────────────────────────
+check_bat <- c("Baldwin", "Acuna", "Rodriguez", "Soto", "Judge")
+for (nm in check_bat) {
+  rows <- bat_avg %>% dplyr::filter(grepl(nm, player_name, ignore.case=TRUE))
+  if (nrow(rows) > 0) {
+    message("  PROJ ", nm, ": ", rows$player_name[1],
+            " PA=", round(rows$pa[1]), " n_sys=", rows$n_systems[1])
+  } else {
+    # Check which individual systems had them
+    found_in <- names(bat_systems)[sapply(bat_systems, function(s)
+      any(grepl(nm, s$player_name, ignore.case=TRUE)))]
+    message("  PROJ ", nm, ": MISSING from bat_avg — found in: ",
+            if (length(found_in)) paste(found_in, collapse=",") else "NONE")
+  }
+}
+
 # ------------------------------------------------------------
 # Join to mlbam_id + format to match downstream scripts
 # ------------------------------------------------------------

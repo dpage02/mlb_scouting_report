@@ -229,15 +229,29 @@ pitcher_board <- pit_pts %>%
     n_systems  = if ("n_systems" %in% names(pit_pts)) n_systems else NA_integer_
   )
 
+# ── Diagnostic: check for known players that should be on the board ──────────
+check_players <- c("Baldwin", "Acuna", "Rodriguez", "Ohtani", "Judge", "Ramirez")
+for (nm in check_players) {
+  found <- bat_pts %>% dplyr::filter(grepl(nm, player_name, ignore.case = TRUE))
+  if (nrow(found) > 0) {
+    message("  CHECK ", nm, ": found ", nrow(found), " — PA=",
+            paste(dplyr::coalesce(found$final_pa, 0L), collapse=","),
+            " pos=", paste(found$primary_pos, collapse=","))
+  } else {
+    message("  CHECK ", nm, ": NOT FOUND in bat_pts (missing from projection systems)")
+  }
+}
+
 filtered <- dplyr::bind_rows(batter_board, pitcher_board) %>%
   dplyr::filter(
-    # Batters: at least 50 projected PA (eliminates fringe guys)
-    (player_type == "batter"  & dplyr::coalesce(proj_pa, 0L) >= 50) |
-    # SP: at least 30 IP; RP: at least 10 IP
+    # Batters: at least 25 projected PA — low enough to catch emerging starters
+    # who are only in some projection systems (bringing their average PA down)
+    (player_type == "batter"  & dplyr::coalesce(proj_pa, 0L) >= 25) |
+    # SP: at least 20 IP; RP: at least 8 IP
     (player_type == "pitcher" & primary_pos == "SP" &
-       dplyr::coalesce(proj_ip, 0) >= 30) |
+       dplyr::coalesce(proj_ip, 0) >= 20) |
     (player_type == "pitcher" & primary_pos %in% c("RP","RP_closer") &
-       dplyr::coalesce(proj_ip, 0) >= 10)
+       dplyr::coalesce(proj_ip, 0) >= 8)
   )
 
 # ── Two-way players (Ohtani): combine batter + pitcher points ──────────────
