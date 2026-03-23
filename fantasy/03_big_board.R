@@ -149,9 +149,28 @@ repl_of <- nth_pts(bat_pts, "OF", depth$OF)
 repl_sp <- nth_pts(pit_pts %>% dplyr::filter(primary_pos == "SP"), "SP", depth$SP)
 repl_rp <- nth_pts(pit_pts %>% dplyr::filter(primary_pos %in% c("RP","RP_closer")), "RP|RP_closer", depth$RP)
 
+# ── Util-adjusted replacement level ──────────────────────────────────────────
+# Util slots (4 per team) mean 40 extra hitters get drafted across the league.
+# The Util replacement = the Nth best hitter overall, where N covers ALL hitter
+# slots (positional + Util + buffer). Every hitter is Util-eligible, so a
+# hitter's true VOR = max(positional VOR, Util VOR).
+# Effect: scarce positions (C, SS) keep their premium; abundant positions
+# (OF, 1B) get a better floor because they can slide into Util.
+total_hitter_slots <- TOTAL_C_ROSTERED + TOTAL_1B_ROSTERED + TOTAL_2B_ROSTERED +
+                      TOTAL_3B_ROSTERED + TOTAL_SS_ROSTERED + TOTAL_OF_ROSTERED +
+                      TOTAL_UTIL_ROSTERED + REPLACEMENT_BUFFER
+
+repl_util <- {
+  sorted_batters <- bat_pts %>% dplyr::arrange(dplyr::desc(proj_fpts))
+  if (nrow(sorted_batters) >= total_hitter_slots)
+    dplyr::coalesce(sorted_batters$proj_fpts[total_hitter_slots], 0)
+  else 0
+}
+
 message("Replacement levels — C:", round(repl_c), " 1B:", round(repl_1b),
         " 2B:", round(repl_2b), " 3B:", round(repl_3b), " SS:", round(repl_ss),
         " OF:", round(repl_of), " SP:", round(repl_sp), " RP:", round(repl_rp))
+message("Util replacement (", total_hitter_slots, "th best hitter): ", round(repl_util))
 
 bat_pts <- bat_pts %>%
   dplyr::mutate(
@@ -161,7 +180,9 @@ bat_pts <- bat_pts %>%
       primary_pos == "SS" ~ repl_ss, primary_pos == "OF" ~ repl_of,
       TRUE                ~ repl_of
     ),
-    vor = round(proj_fpts - pos_replacement, 1)
+    # VOR = max(positional VOR, Util VOR) — takes the better baseline
+    vor = round(pmax(proj_fpts - pos_replacement,
+                     proj_fpts - repl_util), 1)
   )
 
 pit_pts <- pit_pts %>%

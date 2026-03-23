@@ -158,6 +158,14 @@ ui <- fluidPage(
     .btn-team1 { background:#27ae60 !important; color:white !important; border:none !important; }
     .btn-team2 { background:#1a73e8 !important; color:white !important; border:none !important; }
     .btn-opp   { background:#95a5a6 !important; color:white !important; border:none !important; }
+    .db1 { background:#27ae60; color:white; border:none; border-radius:3px;
+           padding:1px 5px; font-size:10px; cursor:pointer; font-weight:600; }
+    .db2 { background:#1a73e8; color:white; border:none; border-radius:3px;
+           padding:1px 5px; font-size:10px; cursor:pointer; font-weight:600; }
+    .dbo { background:#95a5a6; color:white; border:none; border-radius:3px;
+           padding:1px 5px; font-size:10px; cursor:pointer; }
+    .db1:hover { background:#1e8449; } .db2:hover { background:#1558b0; }
+    .dbo:hover { background:#717d7e; }
     .selected-player-box {
       background:#fffde7; border:2px solid #f39c12; border-radius:6px;
       padding:8px; min-height:52px;
@@ -244,7 +252,7 @@ ui <- fluidPage(
         )
       ),
       tags$p(style="font-size:11px; color:#888; margin:2px 0 4px 4px;",
-             "\u2190 Click any row to select a player, then use the draft buttons on the left"),
+             "Click T1/T2/Opp to draft instantly \u00b7 or click a row then use buttons on left"),
       DTOutput("board_table"),
 
       tags$div(class="panel", style="margin-top:8px;",
@@ -414,7 +422,19 @@ server <- function(input, output, session) {
     )))
   }
 
-  # Draft via row selection
+  # Draft via inline table buttons (fastest path — one click)
+  observeEvent(input$draft_inline, {
+    req(input$draft_inline$id)
+    team <- switch(input$draft_inline$t,
+      t1  = MY_TEAM_1,
+      t2  = MY_TEAM_2,
+      opp = "Opponent",
+      "Opponent"
+    )
+    do_draft(input$draft_inline$id, team)
+  })
+
+  # Draft via row selection + sidebar buttons (fallback)
   observeEvent(input$draft_t1, {
     p <- selected_player(); req(!is.null(p)); do_draft(p$fg_id, MY_TEAM_1)
   })
@@ -460,44 +480,58 @@ server <- function(input, output, session) {
   # ── Big board table ───────────────────────────────────────
   output$board_table <- renderDT({
     b <- filtered_board()
-    display <- b %>%
-      dplyr::transmute(
-        `#`    = overall_rank,
-        `P#`   = pos_rank,
-        Player = player_name,
-        Pos    = pos_label(primary_pos),
-        Team   = dplyr::coalesce(team_abbr, "?"),
-        Pts    = proj_fpts,
-        VOR    = round(vor),
-        ADP    = round(dplyr::coalesce(adp, NA_real_), 1),
-        Val    = dplyr::coalesce(value_vs_adp, NA_real_),
-        PA     = dplyr::coalesce(proj_pa,  NA_integer_),
-        HR     = dplyr::coalesce(proj_hr,  NA_integer_),
-        R      = dplyr::coalesce(proj_r,   NA_integer_),
-        RBI    = dplyr::coalesce(proj_rbi, NA_integer_),
-        SB     = dplyr::coalesce(proj_sb,  NA_integer_),
-        AVG    = dplyr::coalesce(proj_avg, NA_real_),
-        `wRC+` = round(dplyr::coalesce(proj_wrc_plus, NA_real_)),
-        `Brl%` = dplyr::coalesce(sc_brl_percent, NA_real_),
-        IP     = dplyr::coalesce(proj_ip,  NA_real_),
-        W      = dplyr::coalesce(proj_w,   NA_integer_),
-        SV     = dplyr::coalesce(proj_sv,  NA_integer_),
-        K      = dplyr::coalesce(proj_k,   NA_integer_),
-        ERA    = dplyr::coalesce(proj_era, NA_real_),
-        QS     = dplyr::coalesce(proj_qs,  NA_real_),
-        Status = status,
-        By     = dplyr::coalesce(drafted_by, "")
-      )
+
+    # Inline draft buttons — one click drafts directly from the row
+    draft_btns <- paste0(
+      '<div style="white-space:nowrap">',
+      '<button class="db1" onclick="Shiny.setInputValue(\'draft_inline\',',
+        '{id:\'', b$fg_id, '\',t:\'t1\'},{priority:\'event\'})">T1</button> ',
+      '<button class="db2" onclick="Shiny.setInputValue(\'draft_inline\',',
+        '{id:\'', b$fg_id, '\',t:\'t2\'},{priority:\'event\'})">T2</button> ',
+      '<button class="dbo" onclick="Shiny.setInputValue(\'draft_inline\',',
+        '{id:\'', b$fg_id, '\',t:\'opp\'},{priority:\'event\'})">Opp</button>',
+      '</div>'
+    )
+
+    display <- dplyr::tibble(
+      Draft  = draft_btns,
+      `#`    = b$overall_rank,
+      `P#`   = b$pos_rank,
+      Player = b$player_name,
+      Pos    = pos_label(b$primary_pos),
+      Team   = dplyr::coalesce(b$team_abbr, "?"),
+      Pts    = b$proj_fpts,
+      VOR    = round(b$vor),
+      ADP    = round(dplyr::coalesce(b$adp, NA_real_), 1),
+      Val    = dplyr::coalesce(b$value_vs_adp, NA_real_),
+      PA     = dplyr::coalesce(b$proj_pa,  NA_integer_),
+      HR     = dplyr::coalesce(b$proj_hr,  NA_integer_),
+      R      = dplyr::coalesce(b$proj_r,   NA_integer_),
+      RBI    = dplyr::coalesce(b$proj_rbi, NA_integer_),
+      SB     = dplyr::coalesce(b$proj_sb,  NA_integer_),
+      AVG    = dplyr::coalesce(b$proj_avg, NA_real_),
+      `wRC+` = round(dplyr::coalesce(b$proj_wrc_plus, NA_real_)),
+      `Brl%` = dplyr::coalesce(b$sc_brl_percent, NA_real_),
+      IP     = dplyr::coalesce(b$proj_ip,  NA_real_),
+      W      = dplyr::coalesce(b$proj_w,   NA_integer_),
+      SV     = dplyr::coalesce(b$proj_sv,  NA_integer_),
+      K      = dplyr::coalesce(b$proj_k,   NA_integer_),
+      ERA    = dplyr::coalesce(b$proj_era, NA_real_),
+      QS     = dplyr::coalesce(b$proj_qs,  NA_real_),
+      Status = b$status,
+      By     = dplyr::coalesce(b$drafted_by, "")
+    )
 
     datatable(
-      display, rownames=FALSE, selection="single",
+      display, rownames=FALSE, escape=FALSE, selection="single",
       options=list(
         pageLength=30, scrollX=TRUE,
-        order=list(list(5,"desc")),
+        order=list(list(7,"desc")),   # sort by VOR col (index 7 after Draft col)
         dom="ftip",
         columnDefs=list(
-          list(width="120px", targets=2),
-          list(width="34px",  targets=c(0,1,3,4))
+          list(width="75px",  targets=0),   # Draft buttons
+          list(width="120px", targets=3),   # Player name
+          list(width="34px",  targets=c(1,2,4,5))
         )
       ),
       class="cell-border stripe compact hover"

@@ -201,6 +201,9 @@ fetch_yahoo_adp <- function() {
 # ------------------------------------------------------------
 
 normalize_name <- function(x) {
+  # Convert accented chars to ASCII first (José→Jose, Ramírez→Ramirez)
+  # so our board names match FantasyPros/Yahoo ASCII names
+  x <- iconv(x, from="UTF-8", to="ASCII//TRANSLIT")
   x %>%
     stringr::str_to_lower() %>%
     stringr::str_remove_all("[^a-z ]") %>%
