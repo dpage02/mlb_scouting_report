@@ -349,5 +349,77 @@ if (file.exists(manual_bat_path)) {
   }
 }
 
+# ── Automatic gap-fill from last season's actuals ────────────────────────────
+# Any batter with 150+ real PA last year who isn't in the projection systems
+# gets added using their actual stats × 0.85 (light regression toward mean).
+# This catches breakout players, new regulars, and API coverage gaps.
+if (exists("offense_master_season") && exists("player_master_ids")) {
+
+  recent_season <- max(offense_master_season$season, na.rm = TRUE)
+  message("Gap-fill: checking ", recent_season, " actuals for missing players...")
+
+  # Name lookup from player_master_ids
+  name_cols <- intersect(c("player_name","full_name","playerName"), names(player_master_ids))
+  name_col  <- if (length(name_cols) > 0) name_cols[1] else NULL
+
+  id_lookup <- player_master_ids %>%
+    dplyr::filter(!is.na(fg_id), !is.na(mlbam_id)) %>%
+    dplyr::distinct(mlbam_id, .keep_all = TRUE) %>%
+    dplyr::select(mlbam_id, fg_id,
+                  dplyr::any_of(c("player_name","full_name","playerName")))
+
+  # Players with meaningful PA last year, joined to their fg_id
+  actual_starters <- offense_master_season %>%
+    dplyr::filter(season == recent_season,
+                  dplyr::coalesce(mlb_pa, 0L) >= 150) %>%
+    dplyr::left_join(id_lookup, by = "mlbam_id") %>%
+    dplyr::filter(!is.na(fg_id),
+                  !as.character(fg_id) %in% steamer_bat$fg_id)
+
+  if (nrow(actual_starters) == 0) {
+    message("  Gap-fill: all 150+ PA players already in projections.")
+  } else {
+    # Resolve player name: prefer name from id_lookup, fall back to offense_master col
+    nm_src <- intersect(c("player_name","full_name","playerName"), names(actual_starters))[1]
+
+    REGRESS <- 0.85   # regress actuals 15% toward the mean for projection
+    wrc_col <- intersect(c("fg_wRC_plus","fg_wRC.","fg_wRC_plus."), names(actual_starters))
+    pos_col <- intersect(c("fg_position","position"), names(actual_starters))
+
+    gap_bat <- actual_starters %>%
+      dplyr::transmute(
+        fg_id         = as.character(fg_id),
+        mlbam_id      = as.integer(mlbam_id),
+        player_name   = if (!is.na(nm_src)) .data[[nm_src]] else NA_character_,
+        team_abbr,
+        proj_pos_raw  = if (length(pos_col) > 0) .data[[pos_col[1]]] else NA_character_,
+        proj_pa       = as.integer(round(dplyr::coalesce(mlb_pa,  0L) * REGRESS)),
+        proj_ab       = as.integer(round(dplyr::coalesce(mlb_ab,  0L) * REGRESS)),
+        proj_h        = as.integer(round(dplyr::coalesce(mlb_h,   0L) * REGRESS)),
+        proj_2b       = as.integer(round(dplyr::coalesce(mlb_2b,  0L) * REGRESS)),
+        proj_3b       = as.integer(round(dplyr::coalesce(mlb_3b,  0L) * REGRESS)),
+        proj_hr       = as.integer(round(dplyr::coalesce(mlb_hr,  0L) * REGRESS)),
+        proj_r        = as.integer(round(dplyr::coalesce(mlb_r,   0L) * REGRESS)),
+        proj_rbi      = as.integer(round(dplyr::coalesce(mlb_rbi, 0L) * REGRESS)),
+        proj_sb       = as.integer(round(dplyr::coalesce(mlb_sb,  0L) * REGRESS)),
+        proj_cs       = as.integer(round(dplyr::coalesce(mlb_cs,  0L) * REGRESS)),
+        proj_bb       = as.integer(round(dplyr::coalesce(mlb_bb,  0L) * REGRESS)),
+        proj_hbp      = as.integer(round(dplyr::coalesce(mlb_hbp, 0L) * REGRESS)),
+        proj_avg      = round(dplyr::coalesce(mlb_avg, 0), 3),
+        proj_obp      = round(dplyr::coalesce(mlb_obp, 0), 3),
+        proj_slg      = round(dplyr::coalesce(mlb_slg, 0), 3),
+        proj_woba     = NA_real_,
+        proj_wrc_plus = if (length(wrc_col) > 0) round(.data[[wrc_col[1]]]) else NA_real_,
+        n_systems     = -1L   # flag: gap-filled from actuals, not projection system
+      )
+
+    message("  Gap-fill: adding ", nrow(gap_bat), " players missing from FG API:")
+    message("    ", paste(gap_bat$player_name, collapse = ", "))
+    steamer_bat <- dplyr::bind_rows(steamer_bat, gap_bat)
+  }
+} else {
+  message("Gap-fill skipped: offense_master_season or player_master_ids not loaded")
+}
+
 message("01_consensus_projections complete — ",
         length(PROJ_SYSTEMS), " systems pulled and averaged.")
