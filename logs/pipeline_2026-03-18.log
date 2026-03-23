@@ -48,3 +48,823 @@
 [2026-03-18 11:28:03.196099] Wrote park_ids to data/ids/park_ids.csv (348 rows) 
 [2026-03-18 11:28:03.201938] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
 [2026-03-18 11:28:03.203235] Phase 01_ids complete: all ID tables written 
+[2026-03-18 12:56:52.726656] Pipeline configuration loaded 
+[2026-03-18 13:08:10.562902] Pipeline configuration loaded 
+[2026-03-18 13:08:27.124692] park_ids built: 348 rows 
+[2026-03-18 13:08:27.297057] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-03-18 13:08:27.623226] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-03-18 13:08:27.922552] league_ids built: 47 rows 
+[2026-03-18 13:08:27.934016] Wrote team_ids to data/ids/team_ids.csv (30 rows) 
+[2026-03-18 13:08:27.948901] Wrote league_ids to data/ids/league_ids.csv (47 rows) 
+[2026-03-18 13:08:27.96751] Wrote park_ids to data/ids/park_ids.csv (348 rows) 
+[2026-03-18 13:08:27.978144] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-03-18 13:08:27.98032] Phase 01_ids complete: all ID tables written 
+[2026-03-18 13:34:18.412207] Pipeline configuration loaded 
+[2026-03-18 13:34:41.982873] park_ids built: 348 rows 
+[2026-03-18 13:34:42.179998] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-03-18 13:34:42.712985] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-03-18 13:34:43.092118] league_ids built: 47 rows 
+[2026-03-18 13:34:43.098083] Wrote team_ids to data/ids/team_ids.csv (30 rows) 
+[2026-03-18 13:34:43.1059] Wrote league_ids to data/ids/league_ids.csv (47 rows) 
+[2026-03-18 13:34:43.114787] Wrote park_ids to data/ids/park_ids.csv (348 rows) 
+[2026-03-18 13:34:43.119415] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-03-18 13:34:43.120619] Phase 01_ids complete: all ID tables written 
+[2026-03-18 13:40:04.580812] Pipeline configuration loaded 
+[2026-03-18 13:40:19.171738] park_ids built: 348 rows 
+[2026-03-18 13:40:19.297971] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-03-18 13:40:19.679583] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-03-18 13:40:19.889792] league_ids built: 47 rows 
+[2026-03-18 13:40:19.895781] Wrote team_ids to data/ids/team_ids.csv (30 rows) 
+[2026-03-18 13:40:19.902628] Wrote league_ids to data/ids/league_ids.csv (47 rows) 
+[2026-03-18 13:40:19.913367] Wrote park_ids to data/ids/park_ids.csv (348 rows) 
+[2026-03-18 13:40:19.918004] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-03-18 13:40:19.91923] Phase 01_ids complete: all ID tables written 
+[2026-03-18 13:51:45.715669] Pipeline configuration loaded 
+[2026-03-18 13:52:04.431574] park_ids built: 348 rows 
+[2026-03-18 13:52:04.60979] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-03-18 13:52:05.072828] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-03-18 13:52:05.251447] league_ids built: 47 rows 
+[2026-03-18 13:52:05.25869] Wrote team_ids to data/ids/team_ids.csv (30 rows) 
+[2026-03-18 13:52:05.266366] Wrote league_ids to data/ids/league_ids.csv (47 rows) 
+[2026-03-18 13:52:05.27516] Wrote park_ids to data/ids/park_ids.csv (348 rows) 
+[2026-03-18 13:52:05.280246] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-03-18 13:52:05.281468] Phase 01_ids complete: all ID tables written 
+[2026-03-18 14:19:19.156857] Pipeline configuration loaded 
+[2026-03-18 14:19:35.801787] park_ids built: 348 rows 
+[2026-03-18 14:19:35.936257] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-03-18 14:19:36.131754] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-03-18 14:19:36.328539] league_ids built: 47 rows 
+[2026-03-18 14:19:36.338094] Wrote team_ids to data/ids/team_ids.csv (30 rows) 
+[2026-03-18 14:19:36.348731] Wrote league_ids to data/ids/league_ids.csv (47 rows) 
+[2026-03-18 14:19:36.367283] Wrote park_ids to data/ids/park_ids.csv (348 rows) 
+[2026-03-18 14:19:36.378316] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-03-18 14:19:36.37945] Phase 01_ids complete: all ID tables written 
+[2026-03-18 14:25:39.789178] Pipeline configuration loaded 
+[2026-03-18 14:25:55.399579] park_ids built: 348 rows 
+[2026-03-18 14:25:55.531934] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-03-18 14:25:55.992598] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-03-18 14:25:56.186389] league_ids built: 47 rows 
+[2026-03-18 14:25:56.194014] Wrote team_ids to data/ids/team_ids.csv (30 rows) 
+[2026-03-18 14:25:56.201009] Wrote league_ids to data/ids/league_ids.csv (47 rows) 
+[2026-03-18 14:25:56.210743] Wrote park_ids to data/ids/park_ids.csv (348 rows) 
+[2026-03-18 14:25:56.217106] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-03-18 14:25:56.218635] Phase 01_ids complete: all ID tables written 
+[2026-03-18 14:29:49.526048] Pipeline configuration loaded 
+[2026-03-18 14:30:11.25351] park_ids built: 348 rows 
+[2026-03-18 14:30:11.606785] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-03-18 14:30:12.362485] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-03-18 14:30:12.827152] league_ids built: 47 rows 
+[2026-03-18 14:30:12.834037] Wrote team_ids to data/ids/team_ids.csv (30 rows) 
+[2026-03-18 14:30:12.841086] Wrote league_ids to data/ids/league_ids.csv (47 rows) 
+[2026-03-18 14:30:12.852262] Wrote park_ids to data/ids/park_ids.csv (348 rows) 
+[2026-03-18 14:30:12.858584] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-03-18 14:30:12.86004] Phase 01_ids complete: all ID tables written 
+[2026-03-18 14:35:14.931742] Pipeline configuration loaded 
+[2026-03-18 14:35:32.804805] park_ids built: 348 rows 
+[2026-03-18 14:35:32.949217] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-03-18 14:35:33.358849] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-03-18 14:35:33.57335] league_ids built: 47 rows 
+[2026-03-18 14:35:33.578748] Wrote team_ids to data/ids/team_ids.csv (30 rows) 
+[2026-03-18 14:35:33.586299] Wrote league_ids to data/ids/league_ids.csv (47 rows) 
+[2026-03-18 14:35:33.597803] Wrote park_ids to data/ids/park_ids.csv (348 rows) 
+[2026-03-18 14:35:33.602626] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-03-18 14:35:33.603816] Phase 01_ids complete: all ID tables written 
+[2026-03-18 14:39:23.798996] Pipeline configuration loaded 
+[2026-03-18 14:39:37.329239] park_ids built: 348 rows 
+[2026-03-18 14:39:37.475431] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-03-18 14:39:37.894185] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-03-18 14:39:38.124061] league_ids built: 47 rows 
+[2026-03-18 14:39:38.129907] Wrote team_ids to data/ids/team_ids.csv (30 rows) 
+[2026-03-18 14:39:38.137979] Wrote league_ids to data/ids/league_ids.csv (47 rows) 
+[2026-03-18 14:39:38.151487] Wrote park_ids to data/ids/park_ids.csv (348 rows) 
+[2026-03-18 14:39:38.158067] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-03-18 14:39:38.159424] Phase 01_ids complete: all ID tables written 
+[2026-03-18 14:43:32.660174] Pipeline configuration loaded 
+[2026-03-18 14:43:47.567783] park_ids built: 348 rows 
+[2026-03-18 14:43:47.717792] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-03-18 14:43:48.217283] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-03-18 14:43:48.425988] league_ids built: 47 rows 
+[2026-03-18 14:43:48.433654] Wrote team_ids to data/ids/team_ids.csv (30 rows) 
+[2026-03-18 14:43:48.441753] Wrote league_ids to data/ids/league_ids.csv (47 rows) 
+[2026-03-18 14:43:48.453666] Wrote park_ids to data/ids/park_ids.csv (348 rows) 
+[2026-03-18 14:43:48.459131] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-03-18 14:43:48.460346] Phase 01_ids complete: all ID tables written 
+[2026-03-18 14:46:24.263074] Pipeline configuration loaded 
+[2026-03-18 14:46:43.895793] park_ids built: 348 rows 
+[2026-03-18 14:46:44.050088] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-03-18 14:46:44.515872] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-03-18 14:46:44.72388] league_ids built: 47 rows 
+[2026-03-18 14:46:44.731919] Wrote team_ids to data/ids/team_ids.csv (30 rows) 
+[2026-03-18 14:46:44.740167] Wrote league_ids to data/ids/league_ids.csv (47 rows) 
+[2026-03-18 14:46:44.750131] Wrote park_ids to data/ids/park_ids.csv (348 rows) 
+[2026-03-18 14:46:44.755999] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-03-18 14:46:44.757279] Phase 01_ids complete: all ID tables written 
+[2026-03-18 14:50:50.715863] Pipeline configuration loaded 
+[2026-03-18 14:51:05.120187] park_ids built: 348 rows 
+[2026-03-18 14:51:05.280693] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-03-18 14:51:05.711757] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-03-18 14:51:05.930374] league_ids built: 47 rows 
+[2026-03-18 14:51:05.938366] Wrote team_ids to data/ids/team_ids.csv (30 rows) 
+[2026-03-18 14:51:05.945842] Wrote league_ids to data/ids/league_ids.csv (47 rows) 
+[2026-03-18 14:51:05.95477] Wrote park_ids to data/ids/park_ids.csv (348 rows) 
+[2026-03-18 14:51:05.959956] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-03-18 14:51:05.961275] Phase 01_ids complete: all ID tables written 
+[2026-03-18 15:12:41.306151] Pipeline configuration loaded 
+[2026-03-18 15:12:56.283678] park_ids built: 348 rows 
+[2026-03-18 15:12:56.424868] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-03-18 15:12:56.910322] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-03-18 15:12:57.120725] league_ids built: 47 rows 
+[2026-03-18 15:12:57.127449] Wrote team_ids to data/ids/team_ids.csv (30 rows) 
+[2026-03-18 15:12:57.135255] Wrote league_ids to data/ids/league_ids.csv (47 rows) 
+[2026-03-18 15:12:57.150982] Wrote park_ids to data/ids/park_ids.csv (348 rows) 
+[2026-03-18 15:12:57.15774] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-03-18 15:12:57.159079] Phase 01_ids complete: all ID tables written 
+[2026-03-18 15:16:15.909992] Pipeline configuration loaded 
+[2026-03-18 15:16:15.919963] Building ID layer... 
+[2026-03-18 15:16:36.127241] park_ids built: 348 rows 
+[2026-03-18 15:16:36.26321] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-03-18 15:16:36.399645] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-03-18 15:16:36.614734] league_ids built: 47 rows 
+[2026-03-18 15:16:36.623768] Wrote team_ids to data/ids/team_ids.csv (30 rows) 
+[2026-03-18 15:16:36.634515] Wrote league_ids to data/ids/league_ids.csv (47 rows) 
+[2026-03-18 15:16:36.649613] Wrote park_ids to data/ids/park_ids.csv (348 rows) 
+[2026-03-18 15:16:36.659584] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-03-18 15:16:36.660861] Phase 01_ids complete: all ID tables written 
+[2026-03-18 15:16:36.661415] Building static context... 
+[2026-03-18 15:16:36.668171] Building season roster universe... 
+[2026-03-18 15:16:42.318062] 03_rosters complete 
+[2026-03-18 15:16:42.318845] Building schedule context... 
+[2026-03-18 15:16:44.775372] 04 — schedule done 
+[2026-03-18 15:16:44.840231] 04 — game_meta done 
+[2026-03-18 15:16:54.576872] 04 — probable_pitchers done 
+[2026-03-18 15:17:03.634316] 04 — umpire_assignments done 
+[2026-03-18 15:17:06.15794] 04 — weather_forecast done 
+[2026-03-18 15:17:06.166698] 04 — series_context done 
+[2026-03-18 15:17:06.184168] 04_game_context complete 
+[2026-03-18 15:17:06.184814] Building performance... 
+[2026-03-18 15:17:06.730669] 05 — mlb_offense_season done 
+[2026-03-18 15:17:11.447153] 05 — fangraphs_offense_season done 
+[2026-03-18 15:17:12.072257] 05 — statcast_offense_season done 
+[2026-03-18 15:17:12.701597] 05 — mlb_offense_splits done 
+[2026-03-18 15:17:12.833947] 05 — lahman_offense_season done 
+[2026-03-18 15:17:13.12382] 05 — offense_master_join done 
+[2026-03-18 15:17:13.622943] 05 — player_career_offense done 
+[2026-03-18 15:17:14.120757] 05 — mlb_pitching_season done 
+[2026-03-18 15:19:03.879563] 05 — fangraphs_pitching_season done 
+[2026-03-18 15:19:04.264251] 05 — statcast_pitching_season done 
+[2026-03-18 15:19:05.186708] 05 — mlb_pitching_splits done 
+[2026-03-18 15:19:05.369871] 05 — lahman_pitching_season done 
+[2026-03-18 15:19:05.395208] 05 — pitching_master_join done 
+[2026-03-18 15:19:05.579246] 05 — player_career_pitching done 
+[2026-03-18 15:19:06.007885] 05 — mlb_baserunning_season done 
+[2026-03-18 15:19:11.368899] 05 — fangraphs_baserunning_season done 
+[2026-03-18 15:19:12.004482] 05 — statcast_baserunning_season done 
+[2026-03-18 15:19:12.080484] 05 — lahman_baserunning_season done 
+[2026-03-18 15:19:12.156281] 05_baserunning complete 
+[2026-03-18 15:19:16.911307] 05 — fangraphs_batting_value done 
+[2026-03-18 15:19:19.663579] 05 — fangraphs_pitching_value done 
+[2026-03-18 15:19:26.468199] 05 — bbref_batting_value done 
+[2026-03-18 15:19:32.511917] 05 — bbref_pitching_value done 
+[2026-03-18 15:19:32.632956] 05_value complete 
+[2026-03-18 15:19:33.769733] 05 — mlb_fielding_pull done 
+[2026-03-18 15:19:35.187958] 05 — fangraphs_fielding_pull done 
+[2026-03-18 15:19:35.592605] 05 — statcast_fielding_pull done 
+[2026-03-18 15:19:35.684098] 05 — lahman_fielding_pull done 
+[2026-03-18 15:19:35.812383] 05_defense complete 
+[2026-03-18 15:19:35.813188] Building player context... 
+[2026-03-18 15:20:10.49235] 06 — depth_charts done 
+[2026-03-18 15:20:10.51178] 06_player_context complete 
+[2026-03-18 15:20:10.512532] Building bullpen context... 
+[2026-03-18 15:20:43.225536] 07 — recent_pitching_logs done 
+[2026-03-18 15:20:43.286514] 07 — bullpen_availability done 
+[2026-03-18 15:20:43.328275] 07_bullpen_context complete 
+[2026-03-18 15:20:43.328948] Building game model... 
+[2026-03-18 15:20:43.354907] 08 — starter_matchup done 
+[2026-03-18 15:20:43.539958] 08 — lineup_context done 
+[2026-03-18 15:20:43.645197] 08 — bullpen_grid done 
+[2026-03-18 15:20:43.790498] 08 — matchup_splits done 
+[2026-03-18 15:20:43.840032] 08_game_model complete 
+[2026-03-18 15:20:43.840667] Pipeline complete: all phases done 
+[2026-03-18 15:23:32.761765] Pipeline configuration loaded 
+[2026-03-18 15:23:32.776037] Building ID layer... 
+[2026-03-18 15:23:50.716868] park_ids built: 348 rows 
+[2026-03-18 15:23:50.880881] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-03-18 15:23:51.299348] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-03-18 15:23:51.496224] league_ids built: 47 rows 
+[2026-03-18 15:23:51.503718] Wrote team_ids to data/ids/team_ids.csv (30 rows) 
+[2026-03-18 15:23:51.513018] Wrote league_ids to data/ids/league_ids.csv (47 rows) 
+[2026-03-18 15:23:51.524526] Wrote park_ids to data/ids/park_ids.csv (348 rows) 
+[2026-03-18 15:23:51.530176] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-03-18 15:23:51.531663] Phase 01_ids complete: all ID tables written 
+[2026-03-18 15:23:51.532615] Building static context... 
+[2026-03-18 15:23:51.541086] Building season roster universe... 
+[2026-03-18 15:24:27.865702] 03_rosters complete 
+[2026-03-18 15:24:27.867617] Building schedule context... 
+[2026-03-18 15:24:30.577161] 04 — schedule done 
+[2026-03-18 15:24:30.58938] 04 — game_meta done 
+[2026-03-18 15:24:39.783994] 04 — probable_pitchers done 
+[2026-03-18 15:24:49.34318] 04 — umpire_assignments done 
+[2026-03-18 15:24:51.777049] 04 — weather_forecast done 
+[2026-03-18 15:24:51.784858] 04 — series_context done 
+[2026-03-18 15:24:51.803736] 04_game_context complete 
+[2026-03-18 15:24:51.804817] Building performance... 
+[2026-03-18 15:24:52.419161] 05 — mlb_offense_season done 
+[2026-03-18 15:24:56.985548] 05 — fangraphs_offense_season done 
+[2026-03-18 15:24:57.79692] 05 — statcast_offense_season done 
+[2026-03-18 15:24:58.634304] 05 — mlb_offense_splits done 
+[2026-03-18 15:24:58.853835] 05 — lahman_offense_season done 
+[2026-03-18 15:24:59.358094] 05 — offense_master_join done 
+[2026-03-18 15:24:59.673288] 05 — player_career_offense done 
+[2026-03-18 15:25:00.492804] 05 — mlb_pitching_season done 
+[2026-03-18 15:27:34.596223] 05 — fangraphs_pitching_season done 
+[2026-03-18 15:27:35.321631] 05 — statcast_pitching_season done 
+[2026-03-18 15:27:36.59124] 05 — mlb_pitching_splits done 
+[2026-03-18 15:27:36.763912] 05 — lahman_pitching_season done 
+[2026-03-18 15:27:36.792477] 05 — pitching_master_join done 
+[2026-03-18 15:27:36.944933] 05 — player_career_pitching done 
+[2026-03-18 15:27:37.442085] 05 — mlb_baserunning_season done 
+[2026-03-18 15:27:43.903917] 05 — fangraphs_baserunning_season done 
+[2026-03-18 15:27:44.466922] 05 — statcast_baserunning_season done 
+[2026-03-18 15:27:44.512658] 05 — lahman_baserunning_season done 
+[2026-03-18 15:27:44.566904] 05_baserunning complete 
+[2026-03-18 15:27:49.576154] 05 — fangraphs_batting_value done 
+[2026-03-18 15:27:53.547406] 05 — fangraphs_pitching_value done 
+[2026-03-18 15:27:59.465693] 05 — bbref_batting_value done 
+[2026-03-18 15:28:05.5587] 05 — bbref_pitching_value done 
+[2026-03-18 15:28:05.618765] 05_value complete 
+[2026-03-18 15:28:06.790981] 05 — mlb_fielding_pull done 
+[2026-03-18 15:28:08.448672] 05 — fangraphs_fielding_pull done 
+[2026-03-18 15:28:08.80225] 05 — statcast_fielding_pull done 
+[2026-03-18 15:28:09.021135] 05 — lahman_fielding_pull done 
+[2026-03-18 15:28:09.076437] 05_defense complete 
+[2026-03-18 15:28:09.077358] Building player context... 
+[2026-03-18 15:28:41.905166] 06 — depth_charts done 
+[2026-03-18 15:28:41.921422] 06_player_context complete 
+[2026-03-18 15:28:41.922287] Building bullpen context... 
+[2026-03-18 15:29:13.325647] 07 — recent_pitching_logs done 
+[2026-03-18 15:29:13.407317] 07 — bullpen_availability done 
+[2026-03-18 15:29:13.434491] 07_bullpen_context complete 
+[2026-03-18 15:29:13.435314] Building game model... 
+[2026-03-18 15:29:13.458048] 08 — starter_matchup done 
+[2026-03-18 15:29:13.512426] 08 — lineup_context done 
+[2026-03-18 15:29:13.554199] 08 — bullpen_grid done 
+[2026-03-18 15:29:13.715614] 08 — matchup_splits done 
+[2026-03-18 15:29:13.759581] 08_game_model complete 
+[2026-03-18 15:29:13.760803] Pipeline complete: all phases done 
+[2026-03-18 15:29:32.655028] Pipeline configuration loaded 
+[2026-03-18 15:29:32.668582] Building ID layer... 
+[2026-03-18 15:29:48.978107] park_ids built: 348 rows 
+[2026-03-18 15:29:49.130381] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-03-18 15:29:49.548647] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-03-18 15:29:49.753793] league_ids built: 47 rows 
+[2026-03-18 15:29:49.761613] Wrote team_ids to data/ids/team_ids.csv (30 rows) 
+[2026-03-18 15:29:49.771144] Wrote league_ids to data/ids/league_ids.csv (47 rows) 
+[2026-03-18 15:29:49.780645] Wrote park_ids to data/ids/park_ids.csv (348 rows) 
+[2026-03-18 15:29:49.786006] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-03-18 15:29:49.787419] Phase 01_ids complete: all ID tables written 
+[2026-03-18 15:29:49.788183] Building static context... 
+[2026-03-18 15:29:49.797038] Building season roster universe... 
+[2026-03-18 15:29:56.01479] 03_rosters complete 
+[2026-03-18 15:29:56.015837] Building schedule context... 
+[2026-03-18 15:29:58.283621] 04 — schedule done 
+[2026-03-18 15:29:58.29516] 04 — game_meta done 
+[2026-03-18 15:30:07.456944] 04 — probable_pitchers done 
+[2026-03-18 15:30:16.921454] 04 — umpire_assignments done 
+[2026-03-18 15:30:19.816687] 04 — weather_forecast done 
+[2026-03-18 15:30:19.823865] 04 — series_context done 
+[2026-03-18 15:30:19.862409] 04_game_context complete 
+[2026-03-18 15:30:19.863136] Building performance... 
+[2026-03-18 15:30:20.283439] 05 — mlb_offense_season done 
+[2026-03-18 15:30:26.174829] 05 — fangraphs_offense_season done 
+[2026-03-18 15:30:26.774668] 05 — statcast_offense_season done 
+[2026-03-18 15:30:27.340493] 05 — mlb_offense_splits done 
+[2026-03-18 15:30:27.572665] 05 — lahman_offense_season done 
+[2026-03-18 15:30:28.091912] 05 — offense_master_join done 
+[2026-03-18 15:30:28.428616] 05 — player_career_offense done 
+[2026-03-18 15:30:28.884459] 05 — mlb_pitching_season done 
+[2026-03-18 15:32:18.382941] 05 — fangraphs_pitching_season done 
+[2026-03-18 15:32:18.854562] 05 — statcast_pitching_season done 
+[2026-03-18 15:32:19.47695] 05 — mlb_pitching_splits done 
+[2026-03-18 15:32:19.617357] 05 — lahman_pitching_season done 
+[2026-03-18 15:32:19.637518] 05 — pitching_master_join done 
+[2026-03-18 15:32:19.76754] 05 — player_career_pitching done 
+[2026-03-18 15:32:20.105861] 05 — mlb_baserunning_season done 
+[2026-03-18 15:32:25.126898] 05 — fangraphs_baserunning_season done 
+[2026-03-18 15:32:25.676002] 05 — statcast_baserunning_season done 
+[2026-03-18 15:32:25.727029] 05 — lahman_baserunning_season done 
+[2026-03-18 15:32:25.761632] 05_baserunning complete 
+[2026-03-18 15:32:30.352475] 05 — fangraphs_batting_value done 
+[2026-03-18 15:32:33.170919] 05 — fangraphs_pitching_value done 
+[2026-03-18 15:32:39.052515] 05 — bbref_batting_value done 
+[2026-03-18 15:32:45.756516] 05 — bbref_pitching_value done 
+[2026-03-18 15:32:45.827771] 05_value complete 
+[2026-03-18 15:32:46.55016] 05 — mlb_fielding_pull done 
+[2026-03-18 15:32:48.030624] 05 — fangraphs_fielding_pull done 
+[2026-03-18 15:32:48.400419] 05 — statcast_fielding_pull done 
+[2026-03-18 15:32:48.608341] 05 — lahman_fielding_pull done 
+[2026-03-18 15:32:48.660367] 05_defense complete 
+[2026-03-18 15:32:48.66155] Building player context... 
+[2026-03-18 15:33:23.132084] 06 — depth_charts done 
+[2026-03-18 15:33:23.149451] 06_player_context complete 
+[2026-03-18 15:33:23.150369] Building bullpen context... 
+[2026-03-18 15:33:55.807455] 07 — recent_pitching_logs done 
+[2026-03-18 15:33:55.885808] 07 — bullpen_availability done 
+[2026-03-18 15:33:55.916595] 07_bullpen_context complete 
+[2026-03-18 15:33:55.917401] Building game model... 
+[2026-03-18 15:33:55.9401] 08 — starter_matchup done 
+[2026-03-18 15:33:55.998645] 08 — lineup_context done 
+[2026-03-18 15:33:56.046865] 08 — bullpen_grid done 
+[2026-03-18 15:33:56.191509] 08 — matchup_splits done 
+[2026-03-18 15:33:56.240737] 08_game_model complete 
+[2026-03-18 15:33:56.242356] Pipeline complete: all phases done 
+[2026-03-18 15:34:17.901681] Pipeline configuration loaded 
+[2026-03-18 15:34:17.918218] Building ID layer... 
+[2026-03-18 15:34:46.23593] park_ids built: 348 rows 
+[2026-03-18 15:34:46.455063] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-03-18 15:34:46.939992] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-03-18 15:34:47.261656] league_ids built: 47 rows 
+[2026-03-18 15:34:47.269763] Wrote team_ids to data/ids/team_ids.csv (30 rows) 
+[2026-03-18 15:34:47.2795] Wrote league_ids to data/ids/league_ids.csv (47 rows) 
+[2026-03-18 15:34:47.290963] Wrote park_ids to data/ids/park_ids.csv (348 rows) 
+[2026-03-18 15:34:47.296782] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-03-18 15:34:47.298168] Phase 01_ids complete: all ID tables written 
+[2026-03-18 15:34:47.299036] Building static context... 
+[2026-03-18 15:34:47.309273] Building season roster universe... 
+[2026-03-18 15:34:55.369449] 03_rosters complete 
+[2026-03-18 15:34:55.370527] Building schedule context... 
+[2026-03-18 15:34:57.737785] 04 — schedule done 
+[2026-03-18 15:34:57.750058] 04 — game_meta done 
+[2026-03-18 15:35:09.947095] 04 — probable_pitchers done 
+[2026-03-18 15:35:23.328468] 04 — umpire_assignments done 
+[2026-03-18 15:35:26.150762] 04 — weather_forecast done 
+[2026-03-18 15:35:26.158232] 04 — series_context done 
+[2026-03-18 15:35:26.177142] 04_game_context complete 
+[2026-03-18 15:35:26.177869] Building performance... 
+[2026-03-18 15:35:26.718745] 05 — mlb_offense_season done 
+[2026-03-18 15:35:31.247226] 05 — fangraphs_offense_season done 
+[2026-03-18 15:35:31.848518] 05 — statcast_offense_season done 
+[2026-03-18 15:35:32.560286] 05 — mlb_offense_splits done 
+[2026-03-18 15:35:32.788971] 05 — lahman_offense_season done 
+[2026-03-18 15:35:33.336918] 05 — offense_master_join done 
+[2026-03-18 15:35:33.669658] 05 — player_career_offense done 
+[2026-03-18 15:35:34.189164] 05 — mlb_pitching_season done 
+[2026-03-18 15:36:51.393128] 05 — fangraphs_pitching_season done 
+[2026-03-18 15:36:51.760645] 05 — statcast_pitching_season done 
+[2026-03-18 15:36:52.643011] 05 — mlb_pitching_splits done 
+[2026-03-18 15:36:52.792816] 05 — lahman_pitching_season done 
+[2026-03-18 15:36:52.826026] 05 — pitching_master_join done 
+[2026-03-18 15:36:52.952296] 05 — player_career_pitching done 
+[2026-03-18 15:36:53.445698] 05 — mlb_baserunning_season done 
+[2026-03-18 15:36:57.937616] 05 — fangraphs_baserunning_season done 
+[2026-03-18 15:36:58.56593] 05 — statcast_baserunning_season done 
+[2026-03-18 15:36:58.607477] 05 — lahman_baserunning_season done 
+[2026-03-18 15:36:58.645805] 05_baserunning complete 
+[2026-03-18 15:37:02.966401] 05 — fangraphs_batting_value done 
+[2026-03-18 15:37:05.571795] 05 — fangraphs_pitching_value done 
+[2026-03-18 15:37:11.576868] 05 — bbref_batting_value done 
+[2026-03-18 15:37:17.597593] 05 — bbref_pitching_value done 
+[2026-03-18 15:37:17.667544] 05_value complete 
+[2026-03-18 15:37:18.852282] 05 — mlb_fielding_pull done 
+[2026-03-18 15:37:20.239886] 05 — fangraphs_fielding_pull done 
+[2026-03-18 15:37:20.585749] 05 — statcast_fielding_pull done 
+[2026-03-18 15:37:20.799273] 05 — lahman_fielding_pull done 
+[2026-03-18 15:37:20.849614] 05_defense complete 
+[2026-03-18 15:37:20.850481] Building player context... 
+[2026-03-18 15:37:55.81652] 06 — depth_charts done 
+[2026-03-18 15:37:55.831456] 06_player_context complete 
+[2026-03-18 15:37:55.832235] Building bullpen context... 
+[2026-03-18 15:38:27.51816] 07 — recent_pitching_logs done 
+[2026-03-18 15:38:27.573783] 07 — bullpen_availability done 
+[2026-03-18 15:38:27.630345] 07_bullpen_context complete 
+[2026-03-18 15:38:27.631419] Building game model... 
+[2026-03-18 15:38:27.656862] 08 — starter_matchup done 
+[2026-03-18 15:38:27.713604] 08 — lineup_context done 
+[2026-03-18 15:38:27.761897] 08 — bullpen_grid done 
+[2026-03-18 15:38:27.906216] 08 — matchup_splits done 
+[2026-03-18 15:38:28.02709] 08_game_model complete 
+[2026-03-18 15:38:28.028866] Pipeline complete: all phases done 
+[2026-03-18 15:38:46.688343] Pipeline configuration loaded 
+[2026-03-18 15:38:46.703489] Building ID layer... 
+[2026-03-18 15:39:01.249395] park_ids built: 348 rows 
+[2026-03-18 15:39:01.37199] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-03-18 15:39:01.842703] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-03-18 15:39:02.043377] league_ids built: 47 rows 
+[2026-03-18 15:39:02.051711] Wrote team_ids to data/ids/team_ids.csv (30 rows) 
+[2026-03-18 15:39:02.063266] Wrote league_ids to data/ids/league_ids.csv (47 rows) 
+[2026-03-18 15:39:02.074895] Wrote park_ids to data/ids/park_ids.csv (348 rows) 
+[2026-03-18 15:39:02.080978] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-03-18 15:39:02.082432] Phase 01_ids complete: all ID tables written 
+[2026-03-18 15:39:02.083279] Building static context... 
+[2026-03-18 15:39:02.092227] Building season roster universe... 
+[2026-03-18 15:39:08.461069] 03_rosters complete 
+[2026-03-18 15:39:08.462399] Building schedule context... 
+[2026-03-18 15:39:11.093364] 04 — schedule done 
+[2026-03-18 15:39:11.10466] 04 — game_meta done 
+[2026-03-18 15:39:20.219305] 04 — probable_pitchers done 
+[2026-03-18 15:39:29.497205] 04 — umpire_assignments done 
+[2026-03-18 15:39:31.641227] 04 — weather_forecast done 
+[2026-03-18 15:39:31.649611] 04 — series_context done 
+[2026-03-18 15:39:31.673114] 04_game_context complete 
+[2026-03-18 15:39:31.6745] Building performance... 
+[2026-03-18 15:39:32.081628] 05 — mlb_offense_season done 
+[2026-03-18 15:39:36.449884] 05 — fangraphs_offense_season done 
+[2026-03-18 15:39:36.921652] 05 — statcast_offense_season done 
+[2026-03-18 15:39:37.435596] 05 — mlb_offense_splits done 
+[2026-03-18 15:39:37.658651] 05 — lahman_offense_season done 
+[2026-03-18 15:39:38.168164] 05 — offense_master_join done 
+[2026-03-18 15:39:38.479683] 05 — player_career_offense done 
+[2026-03-18 15:39:38.941012] 05 — mlb_pitching_season done 
+[2026-03-18 15:41:11.737118] 05 — fangraphs_pitching_season done 
+[2026-03-18 15:41:12.128827] 05 — statcast_pitching_season done 
+[2026-03-18 15:41:12.655873] 05 — mlb_pitching_splits done 
+[2026-03-18 15:41:12.798533] 05 — lahman_pitching_season done 
+[2026-03-18 15:41:12.818937] 05 — pitching_master_join done 
+[2026-03-18 15:41:12.942895] 05 — player_career_pitching done 
+[2026-03-18 15:41:13.280982] 05 — mlb_baserunning_season done 
+[2026-03-18 15:41:18.090908] 05 — fangraphs_baserunning_season done 
+[2026-03-18 15:41:18.573598] 05 — statcast_baserunning_season done 
+[2026-03-18 15:41:18.616596] 05 — lahman_baserunning_season done 
+[2026-03-18 15:41:18.649664] 05_baserunning complete 
+[2026-03-18 15:41:23.200423] 05 — fangraphs_batting_value done 
+[2026-03-18 15:41:25.791945] 05 — fangraphs_pitching_value done 
+[2026-03-18 15:41:31.657576] 05 — bbref_batting_value done 
+[2026-03-18 15:41:37.762755] 05 — bbref_pitching_value done 
+[2026-03-18 15:41:37.831724] 05_value complete 
+[2026-03-18 15:41:38.593812] 05 — mlb_fielding_pull done 
+[2026-03-18 15:41:39.98831] 05 — fangraphs_fielding_pull done 
+[2026-03-18 15:41:40.358754] 05 — statcast_fielding_pull done 
+[2026-03-18 15:41:40.570289] 05 — lahman_fielding_pull done 
+[2026-03-18 15:41:40.622172] 05_defense complete 
+[2026-03-18 15:41:40.623078] Building player context... 
+[2026-03-18 15:42:14.489738] 06 — depth_charts done 
+[2026-03-18 15:42:14.508848] 06_player_context complete 
+[2026-03-18 15:42:14.509804] Building bullpen context... 
+[2026-03-18 15:42:46.114759] 07 — recent_pitching_logs done 
+[2026-03-18 15:42:46.191103] 07 — bullpen_availability done 
+[2026-03-18 15:42:46.220491] 07_bullpen_context complete 
+[2026-03-18 15:42:46.221317] Building game model... 
+[2026-03-18 15:42:46.243426] 08 — starter_matchup done 
+[2026-03-18 15:42:46.298103] 08 — lineup_context done 
+[2026-03-18 15:42:46.34253] 08 — bullpen_grid done 
+[2026-03-18 15:42:46.48311] 08 — matchup_splits done 
+[2026-03-18 15:42:46.5235] 08_game_model complete 
+[2026-03-18 15:42:46.524244] Pipeline complete: all phases done 
+[2026-03-18 15:43:06.229016] Pipeline configuration loaded 
+[2026-03-18 15:43:06.244251] Building ID layer... 
+[2026-03-18 15:43:22.259757] park_ids built: 348 rows 
+[2026-03-18 15:43:22.391222] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-03-18 15:43:22.78022] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-03-18 15:43:22.994846] league_ids built: 47 rows 
+[2026-03-18 15:43:23.002541] Wrote team_ids to data/ids/team_ids.csv (30 rows) 
+[2026-03-18 15:43:23.01401] Wrote league_ids to data/ids/league_ids.csv (47 rows) 
+[2026-03-18 15:43:23.026843] Wrote park_ids to data/ids/park_ids.csv (348 rows) 
+[2026-03-18 15:43:23.033105] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-03-18 15:43:23.034485] Phase 01_ids complete: all ID tables written 
+[2026-03-18 15:43:23.035257] Building static context... 
+[2026-03-18 15:43:23.043897] Building season roster universe... 
+[2026-03-18 15:43:29.059348] 03_rosters complete 
+[2026-03-18 15:43:29.060468] Building schedule context... 
+[2026-03-18 15:43:31.480732] 04 — schedule done 
+[2026-03-18 15:43:31.493317] 04 — game_meta done 
+[2026-03-18 15:43:40.78631] 04 — probable_pitchers done 
+[2026-03-18 15:43:53.007439] 04 — umpire_assignments done 
+[2026-03-18 15:43:55.725791] 04 — weather_forecast done 
+[2026-03-18 15:43:55.733525] 04 — series_context done 
+[2026-03-18 15:43:55.750521] 04_game_context complete 
+[2026-03-18 15:43:55.751482] Building performance... 
+[2026-03-18 15:43:56.50173] 05 — mlb_offense_season done 
+[2026-03-18 15:44:01.067098] 05 — fangraphs_offense_season done 
+[2026-03-18 15:44:01.831374] 05 — statcast_offense_season done 
+[2026-03-18 15:44:02.856296] 05 — mlb_offense_splits done 
+[2026-03-18 15:44:03.09307] 05 — lahman_offense_season done 
+[2026-03-18 15:44:03.620766] 05 — offense_master_join done 
+[2026-03-18 15:44:03.945769] 05 — player_career_offense done 
+[2026-03-18 15:44:04.79227] 05 — mlb_pitching_season done 
+[2026-03-18 15:45:25.542077] 05 — fangraphs_pitching_season done 
+[2026-03-18 15:45:25.993234] 05 — statcast_pitching_season done 
+[2026-03-18 15:45:26.907885] 05 — mlb_pitching_splits done 
+[2026-03-18 15:45:27.055192] 05 — lahman_pitching_season done 
+[2026-03-18 15:45:27.078953] 05 — pitching_master_join done 
+[2026-03-18 15:45:27.204065] 05 — player_career_pitching done 
+[2026-03-18 15:45:27.682212] 05 — mlb_baserunning_season done 
+[2026-03-18 15:45:32.789329] 05 — fangraphs_baserunning_season done 
+[2026-03-18 15:45:33.307161] 05 — statcast_baserunning_season done 
+[2026-03-18 15:45:33.35751] 05 — lahman_baserunning_season done 
+[2026-03-18 15:45:33.404511] 05_baserunning complete 
+[2026-03-18 15:45:37.83686] 05 — fangraphs_batting_value done 
+[2026-03-18 15:45:40.439317] 05 — fangraphs_pitching_value done 
+[2026-03-18 15:45:46.361238] 05 — bbref_batting_value done 
+[2026-03-18 15:45:52.468276] 05 — bbref_pitching_value done 
+[2026-03-18 15:45:52.530308] 05_value complete 
+[2026-03-18 15:45:53.700472] 05 — mlb_fielding_pull done 
+[2026-03-18 15:45:55.072607] 05 — fangraphs_fielding_pull done 
+[2026-03-18 15:45:55.416262] 05 — statcast_fielding_pull done 
+[2026-03-18 15:45:55.631038] 05 — lahman_fielding_pull done 
+[2026-03-18 15:45:55.684613] 05_defense complete 
+[2026-03-18 15:45:55.685596] Building player context... 
+[2026-03-18 15:46:28.552054] 06 — depth_charts done 
+[2026-03-18 15:46:28.568836] 06_player_context complete 
+[2026-03-18 15:46:28.569725] Building bullpen context... 
+[2026-03-18 15:47:00.959405] 07 — recent_pitching_logs done 
+[2026-03-18 15:47:01.037515] 07 — bullpen_availability done 
+[2026-03-18 15:47:01.068008] 07_bullpen_context complete 
+[2026-03-18 15:47:01.068933] Building game model... 
+[2026-03-18 15:47:01.092152] 08 — starter_matchup done 
+[2026-03-18 15:47:01.149927] 08 — lineup_context done 
+[2026-03-18 15:47:01.192945] 08 — bullpen_grid done 
+[2026-03-18 15:47:01.384442] 08 — matchup_splits done 
+[2026-03-18 15:47:01.428523] 08_game_model complete 
+[2026-03-18 15:47:01.429375] Pipeline complete: all phases done 
+[2026-03-18 15:47:21.275346] Pipeline configuration loaded 
+[2026-03-18 15:47:21.29226] Building ID layer... 
+[2026-03-18 15:47:37.638181] park_ids built: 348 rows 
+[2026-03-18 15:47:37.799469] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-03-18 15:47:38.241702] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-03-18 15:47:38.440358] league_ids built: 47 rows 
+[2026-03-18 15:47:38.449447] Wrote team_ids to data/ids/team_ids.csv (30 rows) 
+[2026-03-18 15:47:38.459432] Wrote league_ids to data/ids/league_ids.csv (47 rows) 
+[2026-03-18 15:47:38.474417] Wrote park_ids to data/ids/park_ids.csv (348 rows) 
+[2026-03-18 15:47:38.48229] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-03-18 15:47:38.483959] Phase 01_ids complete: all ID tables written 
+[2026-03-18 15:47:38.484984] Building static context... 
+[2026-03-18 15:47:38.495103] Building season roster universe... 
+[2026-03-18 15:47:44.622486] 03_rosters complete 
+[2026-03-18 15:47:44.623955] Building schedule context... 
+[2026-03-18 15:47:47.256224] 04 — schedule done 
+[2026-03-18 15:47:47.270959] 04 — game_meta done 
+[2026-03-18 15:47:56.674867] 04 — probable_pitchers done 
+[2026-03-18 15:48:06.055148] 04 — umpire_assignments done 
+[2026-03-18 15:48:08.679171] 04 — weather_forecast done 
+[2026-03-18 15:48:08.68688] 04 — series_context done 
+[2026-03-18 15:48:08.702842] 04_game_context complete 
+[2026-03-18 15:48:08.703575] Building performance... 
+[2026-03-18 15:48:09.153377] 05 — mlb_offense_season done 
+[2026-03-18 15:48:13.609627] 05 — fangraphs_offense_season done 
+[2026-03-18 15:48:14.49733] 05 — statcast_offense_season done 
+[2026-03-18 15:48:15.300161] 05 — mlb_offense_splits done 
+[2026-03-18 15:48:15.856882] 05 — lahman_offense_season done 
+[2026-03-18 15:48:16.116279] 05 — offense_master_join done 
+[2026-03-18 15:48:16.432553] 05 — player_career_offense done 
+[2026-03-18 15:48:16.901091] 05 — mlb_pitching_season done 
+[2026-03-18 15:49:58.298925] 05 — fangraphs_pitching_season done 
+[2026-03-18 15:49:58.622084] 05 — statcast_pitching_season done 
+[2026-03-18 15:49:59.681817] 05 — mlb_pitching_splits done 
+[2026-03-18 15:49:59.843936] 05 — lahman_pitching_season done 
+[2026-03-18 15:49:59.870635] 05 — pitching_master_join done 
+[2026-03-18 15:50:00.034396] 05 — player_career_pitching done 
+[2026-03-18 15:50:00.52707] 05 — mlb_baserunning_season done 
+[2026-03-18 15:50:06.573768] 05 — fangraphs_baserunning_season done 
+[2026-03-18 15:50:07.639474] 05 — statcast_baserunning_season done 
+[2026-03-18 15:50:07.697045] 05 — lahman_baserunning_season done 
+[2026-03-18 15:50:07.730801] 05_baserunning complete 
+[2026-03-18 15:50:12.704886] 05 — fangraphs_batting_value done 
+[2026-03-18 15:50:16.234191] 05 — fangraphs_pitching_value done 
+[2026-03-18 15:50:22.40907] 05 — bbref_batting_value done 
+[2026-03-18 15:50:28.370028] 05 — bbref_pitching_value done 
+[2026-03-18 15:50:28.432134] 05_value complete 
+[2026-03-18 15:50:29.419967] 05 — mlb_fielding_pull done 
+[2026-03-18 15:50:31.113837] 05 — fangraphs_fielding_pull done 
+[2026-03-18 15:50:32.802345] 05 — statcast_fielding_pull done 
+[2026-03-18 15:50:33.012847] 05 — lahman_fielding_pull done 
+[2026-03-18 15:50:33.066268] 05_defense complete 
+[2026-03-18 15:50:33.067195] Building player context... 
+[2026-03-18 15:51:07.068249] 06 — depth_charts done 
+[2026-03-18 15:51:07.083712] 06_player_context complete 
+[2026-03-18 15:51:07.084588] Building bullpen context... 
+[2026-03-18 15:51:37.900346] 07 — recent_pitching_logs done 
+[2026-03-18 15:51:37.951003] 07 — bullpen_availability done 
+[2026-03-18 15:51:37.979315] 07_bullpen_context complete 
+[2026-03-18 15:51:37.980094] Building game model... 
+[2026-03-18 15:51:38.002565] 08 — starter_matchup done 
+[2026-03-18 15:51:38.084937] 08 — lineup_context done 
+[2026-03-18 15:51:38.126027] 08 — bullpen_grid done 
+[2026-03-18 15:51:38.276718] 08 — matchup_splits done 
+[2026-03-18 15:51:38.314729] 08_game_model complete 
+[2026-03-18 15:51:38.315522] Pipeline complete: all phases done 
+[2026-03-18 15:51:58.127079] Pipeline configuration loaded 
+[2026-03-18 15:51:58.141496] Building ID layer... 
+[2026-03-18 15:52:42.252698] Pipeline configuration loaded 
+[2026-03-18 15:52:42.26306] Building ID layer... 
+[2026-03-18 15:52:57.133754] park_ids built: 348 rows 
+[2026-03-18 15:52:57.309944] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-03-18 15:52:57.476783] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-03-18 15:52:57.709086] league_ids built: 47 rows 
+[2026-03-18 15:52:57.718538] Wrote team_ids to data/ids/team_ids.csv (30 rows) 
+[2026-03-18 15:52:57.731429] Wrote league_ids to data/ids/league_ids.csv (47 rows) 
+[2026-03-18 15:52:57.746335] Wrote park_ids to data/ids/park_ids.csv (348 rows) 
+[2026-03-18 15:52:57.758878] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-03-18 15:52:57.760487] Phase 01_ids complete: all ID tables written 
+[2026-03-18 15:52:57.761237] Building static context... 
+[2026-03-18 15:52:57.76886] Building season roster universe... 
+[2026-03-18 15:53:04.022679] 03_rosters complete 
+[2026-03-18 15:53:04.02349] Building schedule context... 
+[2026-03-18 15:53:06.964158] 04 — schedule done 
+[2026-03-18 15:53:06.9791] 04 — game_meta done 
+[2026-03-18 15:53:17.214568] 04 — probable_pitchers done 
+[2026-03-18 15:53:26.913927] 04 — umpire_assignments done 
+[2026-03-18 15:53:29.397248] 04 — weather_forecast done 
+[2026-03-18 15:53:29.405273] 04 — series_context done 
+[2026-03-18 15:53:29.422439] 04_game_context complete 
+[2026-03-18 15:53:29.423391] Building performance... 
+[2026-03-18 15:53:30.018752] 05 — mlb_offense_season done 
+[2026-03-18 15:53:48.676772] 05 — fangraphs_offense_season done 
+[2026-03-18 15:53:49.32359] 05 — statcast_offense_season done 
+[2026-03-18 15:53:52.654631] 05 — mlb_offense_splits done 
+[2026-03-18 15:53:52.797687] 05 — lahman_offense_season done 
+[2026-03-18 15:53:53.132084] 05 — offense_master_join done 
+[2026-03-18 15:53:53.476719] 05 — player_career_offense done 
+[2026-03-18 15:53:54.311921] 05 — mlb_pitching_season done 
+[2026-03-18 15:55:27.375541] 05 — fangraphs_pitching_season done 
+[2026-03-18 15:55:27.78554] 05 — statcast_pitching_season done 
+[2026-03-18 15:55:28.387198] 05 — mlb_pitching_splits done 
+[2026-03-18 15:55:28.453736] 05 — lahman_pitching_season done 
+[2026-03-18 15:55:28.481208] 05 — pitching_master_join done 
+[2026-03-18 15:55:28.691143] 05 — player_career_pitching done 
+[2026-03-18 15:55:29.024963] 05 — mlb_baserunning_season done 
+[2026-03-18 15:55:34.080018] 05 — fangraphs_baserunning_season done 
+[2026-03-18 15:55:34.678141] 05 — statcast_baserunning_season done 
+[2026-03-18 15:55:34.738404] 05 — lahman_baserunning_season done 
+[2026-03-18 15:55:34.789588] 05_baserunning complete 
+[2026-03-18 15:55:39.789236] 05 — fangraphs_batting_value done 
+[2026-03-18 15:55:43.152523] 05 — fangraphs_pitching_value done 
+[2026-03-18 15:55:49.040839] 05 — bbref_batting_value done 
+[2026-03-18 15:55:55.141506] 05 — bbref_pitching_value done 
+[2026-03-18 15:55:55.219158] 05_value complete 
+[2026-03-18 15:55:56.252047] 05 — mlb_fielding_pull done 
+[2026-03-18 15:55:58.429437] 05 — fangraphs_fielding_pull done 
+[2026-03-18 15:55:58.781552] 05 — statcast_fielding_pull done 
+[2026-03-18 15:55:58.853615] 05 — lahman_fielding_pull done 
+[2026-03-18 15:55:58.987628] 05_defense complete 
+[2026-03-18 15:55:58.988306] Building player context... 
+[2026-03-18 15:56:35.014881] 06 — depth_charts done 
+[2026-03-18 15:56:35.033171] 06_player_context complete 
+[2026-03-18 15:56:35.033804] Building bullpen context... 
+[2026-03-18 15:57:07.158181] 07 — recent_pitching_logs done 
+[2026-03-18 15:57:07.258203] 07 — bullpen_availability done 
+[2026-03-18 15:57:07.300855] 07_bullpen_context complete 
+[2026-03-18 15:57:07.301514] Building game model... 
+[2026-03-18 15:57:07.329945] 08 — starter_matchup done 
+[2026-03-18 15:57:07.444808] 08 — lineup_context done 
+[2026-03-18 15:57:07.554017] 08 — bullpen_grid done 
+[2026-03-18 15:57:07.689991] 08 — matchup_splits done 
+[2026-03-18 15:57:07.76527] 08_game_model complete 
+[2026-03-18 15:57:07.766254] Pipeline complete: all phases done 
+[2026-03-18 15:57:10.943253] Pipeline configuration loaded 
+[2026-03-18 15:57:10.957792] Building ID layer... 
+[2026-03-18 15:57:25.163401] park_ids built: 348 rows 
+[2026-03-18 15:57:25.332308] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-03-18 15:57:25.781726] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-03-18 15:57:26.001291] league_ids built: 47 rows 
+[2026-03-18 15:57:26.009295] Wrote team_ids to data/ids/team_ids.csv (30 rows) 
+[2026-03-18 15:57:26.017821] Wrote league_ids to data/ids/league_ids.csv (47 rows) 
+[2026-03-18 15:57:26.027091] Wrote park_ids to data/ids/park_ids.csv (348 rows) 
+[2026-03-18 15:57:26.032558] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-03-18 15:57:26.03386] Phase 01_ids complete: all ID tables written 
+[2026-03-18 15:57:26.034793] Building static context... 
+[2026-03-18 15:57:26.04493] Building season roster universe... 
+[2026-03-18 15:57:32.275909] 03_rosters complete 
+[2026-03-18 15:57:32.276825] Building schedule context... 
+[2026-03-18 15:57:34.734373] 04 — schedule done 
+[2026-03-18 15:57:34.745597] 04 — game_meta done 
+[2026-03-18 15:57:43.865718] 04 — probable_pitchers done 
+[2026-03-18 15:57:53.496116] 04 — umpire_assignments done 
+[2026-03-18 15:57:56.062372] 04 — weather_forecast done 
+[2026-03-18 15:57:56.069966] 04 — series_context done 
+[2026-03-18 15:57:56.088387] 04_game_context complete 
+[2026-03-18 15:57:56.089166] Building performance... 
+[2026-03-18 15:57:56.531475] 05 — mlb_offense_season done 
+[2026-03-18 15:58:01.284748] 05 — fangraphs_offense_season done 
+[2026-03-18 15:58:01.826485] 05 — statcast_offense_season done 
+[2026-03-18 15:58:02.583909] 05 — mlb_offense_splits done 
+[2026-03-18 15:58:02.813309] 05 — lahman_offense_season done 
+[2026-03-18 15:58:03.066633] 05 — offense_master_join done 
+[2026-03-18 15:58:03.434821] 05 — player_career_offense done 
+[2026-03-18 15:58:03.903457] 05 — mlb_pitching_season done 
+[2026-03-18 15:59:30.304333] 05 — fangraphs_pitching_season done 
+[2026-03-18 15:59:30.681] 05 — statcast_pitching_season done 
+[2026-03-18 15:59:31.134461] 05 — mlb_pitching_splits done 
+[2026-03-18 15:59:31.285403] 05 — lahman_pitching_season done 
+[2026-03-18 15:59:31.306] 05 — pitching_master_join done 
+[2026-03-18 15:59:31.449101] 05 — player_career_pitching done 
+[2026-03-18 15:59:31.734727] 05 — mlb_baserunning_season done 
+[2026-03-18 15:59:36.159737] 05 — fangraphs_baserunning_season done 
+[2026-03-18 15:59:36.933609] 05 — statcast_baserunning_season done 
+[2026-03-18 15:59:36.97672] 05 — lahman_baserunning_season done 
+[2026-03-18 15:59:37.015033] 05_baserunning complete 
+[2026-03-18 15:59:41.687933] 05 — fangraphs_batting_value done 
+[2026-03-18 15:59:44.202295] 05 — fangraphs_pitching_value done 
+[2026-03-18 15:59:50.011534] 05 — bbref_batting_value done 
+[2026-03-18 15:59:56.064759] 05 — bbref_pitching_value done 
+[2026-03-18 15:59:56.173886] 05_value complete 
+[2026-03-18 15:59:56.922427] 05 — mlb_fielding_pull done 
+[2026-03-18 15:59:58.233458] 05 — fangraphs_fielding_pull done 
+[2026-03-18 15:59:58.628811] 05 — statcast_fielding_pull done 
+[2026-03-18 15:59:58.828944] 05 — lahman_fielding_pull done 
+[2026-03-18 15:59:58.87487] 05_defense complete 
+[2026-03-18 15:59:58.875699] Building player context... 
+[2026-03-18 16:00:31.822451] 06 — depth_charts done 
+[2026-03-18 16:00:31.837919] 06_player_context complete 
+[2026-03-18 16:00:31.838742] Building bullpen context... 
+[2026-03-18 16:01:03.190356] 07 — recent_pitching_logs done 
+[2026-03-18 16:01:03.244399] 07 — bullpen_availability done 
+[2026-03-18 16:01:03.273501] 07_bullpen_context complete 
+[2026-03-18 16:01:03.274308] Building game model... 
+[2026-03-18 16:01:03.295395] 08 — starter_matchup done 
+[2026-03-18 16:01:03.350538] 08 — lineup_context done 
+[2026-03-18 16:01:03.391248] 08 — bullpen_grid done 
+[2026-03-18 16:01:03.531895] 08 — matchup_splits done 
+[2026-03-18 16:01:03.573906] 08_game_model complete 
+[2026-03-18 16:01:03.574583] Pipeline complete: all phases done 
+[2026-03-18 16:23:41.51355] Pipeline configuration loaded 
+[2026-03-18 16:23:41.528413] Building ID layer... 
+[2026-03-18 16:23:59.912043] park_ids built: 348 rows 
+[2026-03-18 16:24:00.045229] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-03-18 16:24:00.464252] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-03-18 16:24:00.696881] league_ids built: 47 rows 
+[2026-03-18 16:24:00.705148] Wrote team_ids to data/ids/team_ids.csv (30 rows) 
+[2026-03-18 16:24:00.716273] Wrote league_ids to data/ids/league_ids.csv (47 rows) 
+[2026-03-18 16:24:00.726149] Wrote park_ids to data/ids/park_ids.csv (348 rows) 
+[2026-03-18 16:24:00.732165] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-03-18 16:24:00.7337] Phase 01_ids complete: all ID tables written 
+[2026-03-18 16:24:00.734932] Building static context... 
+[2026-03-18 16:24:00.744607] Building season roster universe... 
+[2026-03-18 16:24:39.236467] 03_rosters complete 
+[2026-03-18 16:24:39.23867] Building schedule context... 
+[2026-03-18 16:24:41.834505] 04 — schedule done 
+[2026-03-18 16:24:41.846754] 04 — game_meta done 
+[2026-03-18 16:24:51.323193] 04 — probable_pitchers done 
+[2026-03-18 16:25:00.97273] 04 — umpire_assignments done 
+[2026-03-18 16:25:03.491604] 04 — weather_forecast done 
+[2026-03-18 16:25:03.501199] 04 — series_context done 
+[2026-03-18 16:25:03.516413] 04_game_context complete 
+[2026-03-18 16:25:03.517149] Building performance... 
+[2026-03-18 16:25:04.280814] 05 — mlb_offense_season done 
+[2026-03-18 16:25:08.649029] 05 — fangraphs_offense_season done 
+[2026-03-18 16:25:09.519968] 05 — statcast_offense_season done 
+[2026-03-18 16:25:10.363621] 05 — mlb_offense_splits done 
+[2026-03-18 16:25:10.594446] 05 — lahman_offense_season done 
+[2026-03-18 16:25:10.844913] 05 — offense_master_join done 
+[2026-03-18 16:25:11.160809] 05 — player_career_offense done 
+[2026-03-18 16:25:11.753768] 05 — mlb_pitching_season done 
+[2026-03-18 16:27:57.879176] 05 — fangraphs_pitching_season done 
+[2026-03-18 16:27:58.581115] 05 — statcast_pitching_season done 
+[2026-03-18 16:27:59.639543] 05 — mlb_pitching_splits done 
+[2026-03-18 16:27:59.782793] 05 — lahman_pitching_season done 
+[2026-03-18 16:27:59.805596] 05 — pitching_master_join done 
+[2026-03-18 16:27:59.931888] 05 — player_career_pitching done 
+[2026-03-18 16:28:00.432278] 05 — mlb_baserunning_season done 
+[2026-03-18 16:28:06.657477] 05 — fangraphs_baserunning_season done 
+[2026-03-18 16:28:09.676018] 05 — statcast_baserunning_season done 
+[2026-03-18 16:28:09.716772] 05 — lahman_baserunning_season done 
+[2026-03-18 16:28:09.954667] 05_baserunning complete 
+[2026-03-18 16:28:15.064208] 05 — fangraphs_batting_value done 
+[2026-03-18 16:28:18.649391] 05 — fangraphs_pitching_value done 
+[2026-03-18 16:28:24.643098] 05 — bbref_batting_value done 
+[2026-03-18 16:28:30.67278] 05 — bbref_pitching_value done 
+[2026-03-18 16:28:30.734216] 05_value complete 
+[2026-03-18 16:28:31.828478] 05 — mlb_fielding_pull done 
+[2026-03-18 16:28:33.417746] 05 — fangraphs_fielding_pull done 
+[2026-03-18 16:28:33.795398] 05 — statcast_fielding_pull done 
+[2026-03-18 16:28:34.032556] 05 — lahman_fielding_pull done 
+[2026-03-18 16:28:34.081592] 05_defense complete 
+[2026-03-18 16:28:34.082442] Building player context... 
+[2026-03-18 16:29:07.01328] 06 — depth_charts done 
+[2026-03-18 16:29:07.028635] 06_player_context complete 
+[2026-03-18 16:29:07.029486] Building bullpen context... 
+[2026-03-18 16:29:37.776483] 07 — recent_pitching_logs done 
+[2026-03-18 16:29:37.829129] 07 — bullpen_availability done 
+[2026-03-18 16:29:37.857834] 07_bullpen_context complete 
+[2026-03-18 16:29:37.858629] Building game model... 
+[2026-03-18 16:29:37.881355] 08 — starter_matchup done 
+[2026-03-18 16:29:37.934939] 08 — lineup_context done 
+[2026-03-18 16:29:37.97756] 08 — bullpen_grid done 
+[2026-03-18 16:29:38.157648] 08 — matchup_splits done 
+[2026-03-18 16:29:38.200503] 08_game_model complete 
+[2026-03-18 16:29:38.201846] Pipeline complete: all phases done 
+[2026-03-18 21:59:29.218891] Pipeline configuration loaded 
+[2026-03-18 21:59:29.229321] 01 — Building ID layer... 
+[2026-03-18 21:59:49.556104] park_ids built: 348 rows 
+[2026-03-18 21:59:49.75575] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-03-18 21:59:50.156728] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-03-18 21:59:50.359452] league_ids built: 47 rows 
+[2026-03-18 21:59:50.369265] Wrote team_ids to data/ids/team_ids.csv (30 rows) 
+[2026-03-18 21:59:50.379044] Wrote league_ids to data/ids/league_ids.csv (47 rows) 
+[2026-03-18 21:59:50.388898] Wrote park_ids to data/ids/park_ids.csv (348 rows) 
+[2026-03-18 21:59:50.396442] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-03-18 21:59:50.397531] Phase 01_ids complete: all ID tables written 
+[2026-03-18 21:59:50.405655] 03 — Building season roster universe... 
+[2026-03-18 22:00:29.716867] 03 — rosters complete 
+[2026-03-18 22:00:29.718641] 04 — Building schedule context... 
+[2026-03-18 22:00:59.013421] 04 — game context complete 
+[2026-03-18 22:00:59.01419] 05 — Building offense... 
+[2026-03-18 22:01:08.166233] 05 — offense complete 
+[2026-03-18 22:01:08.167201] 05 — Building pitching... 
+[2026-03-18 22:04:03.355634] 05 — pitching complete 
+[2026-03-18 22:04:46.363035] 05 — performance complete 
+[2026-03-18 22:04:46.36422] 06 — Building player context... 
+[2026-03-18 22:05:25.082859] 06 — player context complete 
+[2026-03-18 22:05:25.084001] 07 — Building bullpen context... 
+[2026-03-18 22:05:56.968707] 07 — bullpen context complete 
+[2026-03-18 22:05:56.969738] 08 — Building game model... 
+[2026-03-18 22:05:57.288996] 08 — game model complete 
+[2026-03-18 22:05:57.289941] Pipeline complete 

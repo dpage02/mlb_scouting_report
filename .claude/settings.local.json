@@ -4,7 +4,14 @@
       "WebSearch",
       "WebFetch(domain:billpetti.github.io)",
       "WebFetch(domain:github.com)",
-      "WebFetch(domain:docs.statsapi.mlb.com)"
+      "WebFetch(domain:docs.statsapi.mlb.com)",
+      "Bash(curl:*)",
+      "WebFetch(domain:cran.r-project.org)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:www.fangraphs.com)",
+      "WebFetch(domain:rdrr.io)",
+      "WebFetch(domain:library.fangraphs.com)",
+      "WebFetch(domain:baseballsavant.mlb.com)"
     ]
   }
 }

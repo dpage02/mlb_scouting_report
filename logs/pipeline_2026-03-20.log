@@ -1,0 +1,180 @@
+[2026-03-20 09:00:22.571222] Pipeline configuration loaded 
+[2026-03-20 09:00:22.587122] 01 — Building ID layer... 
+[2026-03-20 09:00:42.415966] park_ids built: 348 rows 
+[2026-03-20 09:00:42.597282] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-03-20 09:00:42.847121] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-03-20 09:00:43.071662] league_ids built: 47 rows 
+[2026-03-20 09:00:43.082359] Wrote team_ids to data/ids/team_ids.csv (30 rows) 
+[2026-03-20 09:00:43.100469] Wrote league_ids to data/ids/league_ids.csv (47 rows) 
+[2026-03-20 09:00:43.120842] Wrote park_ids to data/ids/park_ids.csv (348 rows) 
+[2026-03-20 09:00:43.131099] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-03-20 09:00:43.132297] Phase 01_ids complete: all ID tables written 
+[2026-03-20 09:00:43.140259] 03 — Building season roster universe... 
+[2026-03-20 09:01:45.724529] 03 — rosters complete 
+[2026-03-20 09:01:45.725172] 04 — Building schedule context... 
+[2026-03-20 09:02:13.784332] 04 — game context complete 
+[2026-03-20 09:02:13.785] 05 — Building offense... 
+[2026-03-20 09:02:27.257439] 05 — offense complete 
+[2026-03-20 09:02:27.258119] 05 — Building pitching... 
+[2026-03-20 09:05:06.631975] 05 — pitching complete 
+[2026-03-20 09:05:49.820112] 05 — performance complete 
+[2026-03-20 09:05:49.820956] 06 — Building player context... 
+[2026-03-20 09:06:25.609803] 06 — player context complete 
+[2026-03-20 09:06:25.610518] 07 — Building bullpen context... 
+[2026-03-20 09:07:03.001629] 07 — bullpen context complete 
+[2026-03-20 09:07:03.002922] 08 — Building game model... 
+[2026-03-20 09:07:03.500446] 08 — game model complete 
+[2026-03-20 09:07:03.500999] Pipeline complete 
+[2026-03-20 09:07:08.212621] Pipeline configuration loaded 
+[2026-03-20 09:07:08.218466] 01 — Building ID layer... 
+[2026-03-20 09:07:24.651583] park_ids built: 348 rows 
+[2026-03-20 09:07:24.78178] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-03-20 09:07:25.140329] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-03-20 09:07:25.393972] league_ids built: 47 rows 
+[2026-03-20 09:07:25.400808] Wrote team_ids to data/ids/team_ids.csv (30 rows) 
+[2026-03-20 09:07:25.410594] Wrote league_ids to data/ids/league_ids.csv (47 rows) 
+[2026-03-20 09:07:25.419935] Wrote park_ids to data/ids/park_ids.csv (348 rows) 
+[2026-03-20 09:07:25.425237] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-03-20 09:07:25.426221] Phase 01_ids complete: all ID tables written 
+[2026-03-20 09:07:25.433426] 03 — Building season roster universe... 
+[2026-03-20 09:07:31.737056] 03 — rosters complete 
+[2026-03-20 09:07:31.737682] 04 — Building schedule context... 
+[2026-03-20 09:08:04.512165] 04 — game context complete 
+[2026-03-20 09:08:04.512808] 05 — Building offense... 
+[2026-03-20 09:08:12.425781] 05 — offense complete 
+[2026-03-20 09:08:12.426338] 05 — Building pitching... 
+[2026-03-20 09:09:40.913623] 05 — pitching complete 
+[2026-03-20 09:10:09.422145] 05 — performance complete 
+[2026-03-20 09:10:09.4228] 06 — Building player context... 
+[2026-03-20 09:10:43.913419] 06 — player context complete 
+[2026-03-20 09:10:43.913952] 07 — Building bullpen context... 
+[2026-03-20 09:11:18.888076] 07 — bullpen context complete 
+[2026-03-20 09:11:18.888764] 08 — Building game model... 
+[2026-03-20 09:11:19.220808] 08 — game model complete 
+[2026-03-20 09:11:19.221311] Pipeline complete 
+[2026-03-20 09:57:49.597406] Pipeline configuration loaded 
+[2026-03-20 09:57:49.62521] 01 — Building ID layer... 
+[2026-03-20 09:58:11.775317] park_ids built: 348 rows 
+[2026-03-20 09:58:11.993984] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-03-20 09:58:12.206183] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-03-20 09:58:12.424261] league_ids built: 47 rows 
+[2026-03-20 09:58:12.433493] Wrote team_ids to data/ids/team_ids.csv (30 rows) 
+[2026-03-20 09:58:12.44593] Wrote league_ids to data/ids/league_ids.csv (47 rows) 
+[2026-03-20 09:58:12.463731] Wrote park_ids to data/ids/park_ids.csv (348 rows) 
+[2026-03-20 09:58:12.473315] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-03-20 09:58:12.47461] Phase 01_ids complete: all ID tables written 
+[2026-03-20 09:58:12.483012] 03 — Building season roster universe... 
+[2026-03-20 09:58:19.136361] 03 — rosters complete 
+[2026-03-20 09:58:19.137032] 04 — Building schedule context... 
+[2026-03-20 09:58:47.040855] 04 — game context complete 
+[2026-03-20 09:58:47.041524] 05 — Building offense... 
+[2026-03-20 09:58:54.628235] 05 — offense complete 
+[2026-03-20 09:58:54.62887] 05 — Building pitching... 
+[2026-03-20 10:02:48.489182] Pipeline configuration loaded 
+[2026-03-20 10:02:48.499746] 01 — Building ID layer... 
+[2026-03-20 10:03:04.578529] park_ids built: 348 rows 
+[2026-03-20 10:03:04.727495] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-03-20 10:03:04.861967] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-03-20 10:03:05.126748] league_ids built: 47 rows 
+[2026-03-20 10:03:05.136348] Wrote team_ids to data/ids/team_ids.csv (30 rows) 
+[2026-03-20 10:03:05.147577] Wrote league_ids to data/ids/league_ids.csv (47 rows) 
+[2026-03-20 10:03:05.163821] Wrote park_ids to data/ids/park_ids.csv (348 rows) 
+[2026-03-20 10:03:05.175753] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-03-20 10:03:05.176836] Phase 01_ids complete: all ID tables written 
+[2026-03-20 10:03:05.183295] 03 — Building season roster universe... 
+[2026-03-20 10:03:45.647732] 03 — rosters complete 
+[2026-03-20 10:03:45.650557] 04 — Building schedule context... 
+[2026-03-20 10:04:13.734597] 04 — game context complete 
+[2026-03-20 10:04:13.735282] 05 — Building offense... 
+[2026-03-20 10:04:20.952246] 05 — offense complete 
+[2026-03-20 10:04:20.9529] 05 — Building pitching... 
+[2026-03-20 10:04:31.238338] 05 — pitching complete 
+[2026-03-20 10:05:02.541743] 05 — performance complete 
+[2026-03-20 10:05:02.542766] 06 — Building player context... 
+[2026-03-20 10:05:36.885342] 06 — player context complete 
+[2026-03-20 10:05:36.888453] 07 — Building bullpen context... 
+[2026-03-20 10:06:13.750905] 07 — bullpen context complete 
+[2026-03-20 10:06:13.751542] 08 — Building game model... 
+[2026-03-20 10:06:14.294531] 08 — game model complete 
+[2026-03-20 10:06:14.295205] Pipeline complete 
+[2026-03-20 10:06:18.513415] Pipeline configuration loaded 
+[2026-03-20 10:06:18.529533] 01 — Building ID layer... 
+[2026-03-20 10:06:32.462157] park_ids built: 348 rows 
+[2026-03-20 10:06:32.595797] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-03-20 10:06:33.016594] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-03-20 10:06:33.226783] league_ids built: 47 rows 
+[2026-03-20 10:06:33.235654] Wrote team_ids to data/ids/team_ids.csv (30 rows) 
+[2026-03-20 10:06:33.244762] Wrote league_ids to data/ids/league_ids.csv (47 rows) 
+[2026-03-20 10:06:33.254429] Wrote park_ids to data/ids/park_ids.csv (348 rows) 
+[2026-03-20 10:06:33.259992] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-03-20 10:06:33.260902] Phase 01_ids complete: all ID tables written 
+[2026-03-20 10:06:33.267987] 03 — Building season roster universe... 
+[2026-03-20 10:06:39.500636] 03 — rosters complete 
+[2026-03-20 10:06:39.501202] 04 — Building schedule context... 
+[2026-03-20 10:07:06.711243] 04 — game context complete 
+[2026-03-20 10:07:06.711864] 05 — Building offense... 
+[2026-03-20 10:07:13.564721] 05 — offense complete 
+[2026-03-20 10:07:13.565325] 05 — Building pitching... 
+[2026-03-20 10:07:24.072879] 05 — pitching complete 
+[2026-03-20 10:07:54.362412] 05 — performance complete 
+[2026-03-20 10:07:54.363372] 06 — Building player context... 
+[2026-03-20 10:08:27.301836] 06 — player context complete 
+[2026-03-20 10:08:27.302432] 07 — Building bullpen context... 
+[2026-03-20 10:09:02.940388] 07 — bullpen context complete 
+[2026-03-20 10:09:02.94137] 08 — Building game model... 
+[2026-03-20 10:09:03.255369] 08 — game model complete 
+[2026-03-20 10:09:03.255965] Pipeline complete 
+[2026-03-20 18:01:55.465763] Pipeline configuration loaded 
+[2026-03-20 18:01:55.512763] 01 — Building ID layer... 
+[2026-03-20 18:02:18.746944] park_ids built: 348 rows 
+[2026-03-20 18:02:18.928468] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-03-20 18:02:19.147929] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-03-20 18:02:19.446547] league_ids built: 47 rows 
+[2026-03-20 18:02:19.462351] Wrote team_ids to data/ids/team_ids.csv (30 rows) 
+[2026-03-20 18:02:19.480187] Wrote league_ids to data/ids/league_ids.csv (47 rows) 
+[2026-03-20 18:02:19.502344] Wrote park_ids to data/ids/park_ids.csv (348 rows) 
+[2026-03-20 18:02:19.51754] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-03-20 18:02:19.519277] Phase 01_ids complete: all ID tables written 
+[2026-03-20 18:02:19.528921] 03 — Building season roster universe... 
+[2026-03-20 18:03:03.604541] 03 — rosters complete 
+[2026-03-20 18:03:03.605389] 04 — Building schedule context... 
+[2026-03-20 18:03:44.238537] 04 — game context complete 
+[2026-03-20 18:03:44.239465] 05 — Building offense... 
+[2026-03-20 18:04:33.054375] 05 — offense complete 
+[2026-03-20 18:04:33.055059] 05 — Building pitching... 
+[2026-03-20 18:05:11.802919] 05 — pitching complete 
+[2026-03-20 18:05:55.991783] 05 — performance complete 
+[2026-03-20 18:05:55.992448] 06 — Building player context... 
+[2026-03-20 18:06:29.315127] 06 — player context complete 
+[2026-03-20 18:06:29.315812] 07 — Building bullpen context... 
+[2026-03-20 18:07:07.484996] 07 — bullpen context complete 
+[2026-03-20 18:07:07.485691] 08 — Building game model... 
+[2026-03-20 18:07:08.012004] 08 — game model complete 
+[2026-03-20 18:07:08.012685] Pipeline complete 
+[2026-03-20 18:07:12.837808] Pipeline configuration loaded 
+[2026-03-20 18:07:12.854524] 01 — Building ID layer... 
+[2026-03-20 18:07:27.693306] park_ids built: 348 rows 
+[2026-03-20 18:07:27.834578] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-03-20 18:07:28.267789] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-03-20 18:07:28.502821] league_ids built: 47 rows 
+[2026-03-20 18:07:28.508959] Wrote team_ids to data/ids/team_ids.csv (30 rows) 
+[2026-03-20 18:07:28.518028] Wrote league_ids to data/ids/league_ids.csv (47 rows) 
+[2026-03-20 18:07:28.529622] Wrote park_ids to data/ids/park_ids.csv (348 rows) 
+[2026-03-20 18:07:28.535504] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-03-20 18:07:28.536511] Phase 01_ids complete: all ID tables written 
+[2026-03-20 18:07:28.543529] 03 — Building season roster universe... 
+[2026-03-20 18:07:35.710593] 03 — rosters complete 
+[2026-03-20 18:07:35.711231] 04 — Building schedule context... 
+[2026-03-20 18:08:15.275233] 04 — game context complete 
+[2026-03-20 18:08:15.275906] 05 — Building offense... 
+[2026-03-20 18:08:49.473958] 05 — offense complete 
+[2026-03-20 18:08:49.474599] 05 — Building pitching... 
+[2026-03-20 18:09:19.898782] 05 — pitching complete 
+[2026-03-20 18:09:47.278928] 05 — performance complete 
+[2026-03-20 18:09:47.280263] 06 — Building player context... 
+[2026-03-20 18:10:51.132048] 06 — player context complete 
+[2026-03-20 18:10:51.13306] 07 — Building bullpen context... 
+[2026-03-20 18:11:29.33461] 07 — bullpen context complete 
+[2026-03-20 18:11:29.335827] 08 — Building game model... 
+[2026-03-20 18:11:29.91864] 08 — game model complete 
+[2026-03-20 18:11:29.919298] Pipeline complete 
