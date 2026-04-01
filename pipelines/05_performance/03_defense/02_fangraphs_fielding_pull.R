@@ -50,12 +50,26 @@ if (is.null(test_fg) || nrow(test_fg) == 0) {
   season_complete <- season_complete - 1
 }
 
-fg_raw <- baseballr::fg_fielder_leaders(
-  startseason = season_complete,
-  endseason   = season_complete,
-  pos         = "all",
-  qual        = "0"
+fg_raw <- tryCatch(
+  baseballr::fg_fielder_leaders(
+    startseason = season_complete,
+    endseason   = season_complete,
+    pos         = "all",
+    qual        = "0"
+  ),
+  error = function(e) {
+    message("FanGraphs fielding pull failed: ", e$message)
+    NULL
+  }
 )
+
+if (is.null(fg_raw) || nrow(fg_raw) == 0) {
+  message("FanGraphs fielding unavailable. Creating empty table.")
+  player_season_fg_defense <- dplyr::tibble(
+    mlbam_id = integer(), season = integer(), team_abbr = character(),
+    fg_id = character(), primary_position = character()
+  )
+} else {
 
 # ------------------------------------------------------------
 # Standardize
@@ -103,6 +117,8 @@ player_season_fg_defense <- fg_raw %>%
 # ------------------------------------------------------------
 
 validate_performance_table(player_season_fg_defense)
+
+} # end if (fg_raw available)
 
 message("02_fangraphs_fielding_pull complete: ",
         nrow(player_season_fg_defense),

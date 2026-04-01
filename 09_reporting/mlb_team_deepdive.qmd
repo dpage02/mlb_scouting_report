@@ -1,0 +1,235 @@
+---
+title: "Team Deep Dive"
+date: today
+params:
+  game_pk: null
+  side: null
+  game_date: null
+format:
+  html:
+    self-contained: true
+    embed-resources: true
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    toc-title: "Sections"
+    toc-location: left
+    smooth-scroll: true
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+#| output: false
+if (basename(getwd()) == "09_reporting") setwd("..")
+
+library(gt)
+library(dplyr)
+library(stringr)
+
+# Load from pipeline cache when available and fresh (written by run_all.R or
+# a prior render today). Falls back to running the full pipeline if stale/missing.
+cache_path <- "data/pipeline_cache.rds"
+cache_ok   <- file.exists(cache_path) &&
+              difftime(Sys.time(), file.mtime(cache_path), units = "hours") < 12
+
+if (cache_ok) {
+  cache <- readRDS(cache_path)
+  list2env(cache, envir = .GlobalEnv)
+  rm(cache)
+} else {
+  invisible(capture.output(source("run_pipeline_phase01.R")))
+  pipeline_cache_objects <- c(
+    "target_date", "target_season", "team_ids",
+    "game_context", "lineup_context", "starter_matchup", "bullpen_grid",
+    "offense_master_season", "player_career_offense", "player_career_pitching",
+    "pitching_master_season", "pitcher_arsenal",
+    "defense_master_season", "lineup_context_splits", "starter_splits",
+    "player_season_fg_pitching", "player_season_mlb_pitching",
+    "player_master_ids",
+    "depth_charts"
+  )
+  pipeline_cache <- mget(
+    pipeline_cache_objects[pipeline_cache_objects %in% ls()],
+    envir = .GlobalEnv
+  )
+  saveRDS(pipeline_cache, cache_path)
+}
+
+source("09_reporting/_report_helpers.R")
+source("09_reporting/_deepdive_helpers.R")
+
+# Scope to this game and side
+gpk      <- as.integer(params$game_pk)
+side_val <- params$side
+game     <- game_context %>% dplyr::filter(game_pk == gpk)
+
+team_name <- if (side_val == "home") game$home_team_name else game$away_team_name
+team_abbr <- if (side_val == "home") {
+  dplyr::coalesce(
+    team_ids %>% dplyr::filter(mlbam_team_id == game$home_team_id) %>%
+      dplyr::pull(team_abbr) %>% dplyr::first(),
+    "HOME"
+  )
+} else {
+  dplyr::coalesce(
+    team_ids %>% dplyr::filter(mlbam_team_id == game$away_team_id) %>%
+      dplyr::pull(team_abbr) %>% dplyr::first(),
+    "AWAY"
+  )
+}
+opp_name <- if (side_val == "home") game$away_team_name else game$home_team_name
+
+# Build navigation file references
+report_date <- as.character(params$game_date)
+
+away_abbr_nav <- tryCatch({
+  team_ids %>% dplyr::filter(mlbam_team_id == game$away_team_id) %>%
+    dplyr::pull(team_abbr) %>% dplyr::first()
+}, error = function(e) as.character(game$away_team_id))
+
+home_abbr_nav <- tryCatch({
+  team_ids %>% dplyr::filter(mlbam_team_id == game$home_team_id) %>%
+    dplyr::pull(team_abbr) %>% dplyr::first()
+}, error = function(e) as.character(game$home_team_id))
+
+away_abbr_nav <- dplyr::coalesce(away_abbr_nav, as.character(game$away_team_id))
+home_abbr_nav <- dplyr::coalesce(home_abbr_nav, as.character(game$home_team_id))
+
+game_file     <- paste0("deepdive_", report_date, "_", away_abbr_nav, "_", home_abbr_nav, ".html")
+scouting_file <- paste0("scouting_", report_date, ".html")
+```
+
+```{r header}
+#| output: asis
+cat(sprintf("# %s — Team Deep Dive\n\n", team_name))
+cat(sprintf("> **%s** · %s @ %s · %s\n\n",
+    format(as.Date(params$game_date), "%A, %B %d, %Y"),
+    if (side_val == "away") team_name else opp_name,
+    if (side_val == "home") team_name else opp_name,
+    game$venue_name))
+```
+
+```{r nav-bar}
+#| output: asis
+cat(sprintf(
+  '<div style="margin-bottom:1.5rem; padding:10px 14px; background:#f8f9fa; border-radius:6px; border:1px solid #dee2e6; font-size:13px;">
+  <a href="%s" style="color:#1a73e8; text-decoration:none;">← Today\'s Games</a>
+  &nbsp;·&nbsp;
+  <a href="%s" style="color:#1a73e8; text-decoration:none;">Game: %s @ %s</a>
+</div>\n\n',
+  scouting_file,
+  game_file,
+  away_abbr_nav,
+  home_abbr_nav
+))
+```
+
+---
+
+## Lineup — Current Season
+
+*Current season batting stats across all leaderboard dimensions for each player in today's lineup.*
+
+```{r lineup-current}
+#| output: asis
+tables_side <- make_lineup_full_gt(gpk, side_val)
+for (nm in names(tables_side)) {
+  cat(sprintf('\n\n<h4 style="margin-top:1.4rem; margin-bottom:0.3rem; color:#2c3e50;">%s</h4>\n\n', nm))
+  cat(gt::as_raw_html(tables_side[[nm]]))
+  cat("\n\n")
+}
+```
+
+---
+
+## Lineup — Season in Context
+
+*Shows current season vs prior season vs career average for each player in today's lineup.*
+
+```{r lineup-context}
+#| output: asis
+if (exists("make_season_context_gt")) {
+  context_tbl <- make_season_context_gt(gpk, side_val)
+  if (!is.null(context_tbl)) cat(gt::as_raw_html(context_tbl))
+} else {
+  cat('<div style="padding:20px; background:#fff3cd; border:1px solid #ffc107; border-radius:6px; color:#856404; font-size:14px; margin:1rem 0;">
+  <strong>&#9888; Coming Soon</strong> — Season-in-context table (current vs prior season vs career) will appear here once implemented.
+</div>\n\n')
+}
+```
+
+---
+
+## Lineup — vs Expected Stats
+
+*[Placeholder — coming soon]*
+
+<div style="padding:20px; background:#fff3cd; border:1px solid #ffc107; border-radius:6px; color:#856404; font-size:14px; margin:1rem 0;">
+  <strong>&#9888; Coming Soon</strong> — Expected vs actual stat comparison (xBA vs AVG, xwOBA vs wOBA, Barrel%) will appear here once historical Statcast data is integrated.
+</div>
+
+---
+
+## Career History
+
+*Last 5 seasons + current season, totals aggregated across teams.*
+
+```{r career-offense}
+#| output: asis
+cat(gt::as_raw_html(make_career_offense_gt(gpk, side_val)))
+```
+
+---
+
+## Pitching — Projected Rotation
+
+*SP1–SP5 from FanGraphs depth chart with full season stats.*
+
+```{r rotation}
+#| output: asis
+rot_tbl <- make_rotation_gt(gpk, side_val)
+if (!is.null(rot_tbl)) {
+  cat(gt::as_raw_html(rot_tbl))
+} else {
+  cat('<p style="color:#888; font-size:13px; font-style:italic;">Rotation data not available — depth chart may not have loaded.</p>\n\n')
+}
+```
+
+---
+
+## Pitching — Bullpen Deep Dive
+
+*Full season stats for all available bullpen arms.*
+
+```{r bullpen-deep}
+#| output: asis
+if (exists("make_bullpen_deep_gt")) {
+  bp_deep <- make_bullpen_deep_gt(gpk, side_val)
+  if (!is.null(bp_deep)) cat(gt::as_raw_html(bp_deep))
+} else {
+  cat('<div style="padding:20px; background:#fff3cd; border:1px solid #ffc107; border-radius:6px; color:#856404; font-size:14px; margin:1rem 0;">
+  <strong>&#9888; Coming Soon</strong> — Full bullpen season stats (ERA, FIP, K%, BB%, WHIP, leverage) will appear here once implemented.
+</div>\n\n')
+}
+```
+
+---
+
+## Pitching — Bullpen Arsenal
+
+*Pitch mix and characteristics for each bullpen arm.*
+
+```{r bullpen-arsenal}
+#| output: asis
+if (exists("make_bullpen_arsenal_gt")) {
+  bp_arsenal <- make_bullpen_arsenal_gt(gpk, side_val)
+  if (!is.null(bp_arsenal)) cat(gt::as_raw_html(bp_arsenal))
+} else {
+  cat('<div style="padding:20px; background:#fff3cd; border:1px solid #ffc107; border-radius:6px; color:#856404; font-size:14px; margin:1rem 0;">
+  <strong>&#9888; Coming Soon</strong> — Bullpen pitch arsenal (pitch types, velocity, usage%, spin rate, movement) will appear here once Statcast bullpen data is integrated.
+</div>\n\n')
+}
+```

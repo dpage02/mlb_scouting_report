@@ -35,7 +35,17 @@ sp_stat_cols <- c(
   "fg_BABIP", "fg_LOB_pct",
   "fg_K_9", "fg_BB_9", "fg_H_9", "fg_HR_9",
   "fg_K_pct", "fg_BB_pct", "fg_K_BB_pct",
-  "fg_WAR",
+  "fg_WAR", "fg_ERA_minus",
+  # FanGraphs batted ball (from type 2 extra pull)
+  "fg_GB.", "fg_LD.", "fg_FB.", "fg_IFFB.", "fg_HR.FB",
+  "fg_Hard.", "fg_Med.", "fg_Soft.",
+  # FanGraphs plate discipline (from type 5 extra pull)
+  "fg_O.Swing.", "fg_Z.Swing.", "fg_Zone.", "fg_F.Strike.",
+  "fg_SwStr.", "fg_CSW.",
+  # Statcast pitcher-against (from player_season_statcast_pitching)
+  "sc_avg_ev_allowed", "sc_ev95percent_allowed", "sc_barrel_pct_allowed",
+  "sc_xba_allowed", "sc_xslg_allowed", "sc_xwoba_allowed", "sc_xera",
+  "sc_woba_allowed",
   # BBRef advanced
   "bbref_ERA_plus", "bbref_WAR",
   "bbref_H9", "bbref_HR9", "bbref_BB9", "bbref_SO9", "bbref_SO_W"
@@ -83,11 +93,47 @@ if (length(missing_from_season) > 0) {
       mlb_so   = hist_so,
       mlb_bb   = hist_bb,
       mlb_hr   = hist_hr,
-      mlb_sv   = hist_sv,
-      # FG advanced carried through from career table if present
-      dplyr::across(dplyr::any_of(c("fg_FIP", "fg_xFIP", "fg_WAR")),
-                    ~ .x)
+      mlb_sv   = hist_sv
     )
+
+  # Supplement career fallback with best-available advanced stats
+  # (FG/Statcast/BBRef may be from prior season — join by mlbam_id only)
+  adv_cols <- setdiff(sp_stat_cols, names(career_fallback))
+
+  if (exists("player_season_fg_pitching") && nrow(player_season_fg_pitching) > 0) {
+    .fg_ip_vec <- if ("fg_ip" %in% names(player_season_fg_pitching)) {
+      dplyr::coalesce(player_season_fg_pitching$fg_ip, 0)
+    } else {
+      rep(0, nrow(player_season_fg_pitching))
+    }
+    fg_adv <- player_season_fg_pitching %>%
+      dplyr::mutate(.fg_ip_sort = .fg_ip_vec) %>%
+      dplyr::filter(mlbam_id %in% missing_from_season) %>%
+      dplyr::arrange(mlbam_id, dplyr::desc(.fg_ip_sort)) %>%
+      dplyr::select(-.fg_ip_sort) %>%
+      dplyr::distinct(mlbam_id, .keep_all = TRUE) %>%
+      dplyr::select(mlbam_id, dplyr::any_of(adv_cols))
+    career_fallback <- dplyr::left_join(career_fallback, fg_adv, by = "mlbam_id")
+    adv_cols <- setdiff(adv_cols, names(fg_adv))
+  }
+
+  if (exists("player_season_statcast_pitching") && nrow(player_season_statcast_pitching) > 0) {
+    sc_adv <- player_season_statcast_pitching %>%
+      dplyr::filter(mlbam_id %in% missing_from_season) %>%
+      dplyr::distinct(mlbam_id, .keep_all = TRUE) %>%
+      dplyr::select(mlbam_id, dplyr::any_of(adv_cols))
+    career_fallback <- dplyr::left_join(career_fallback, sc_adv, by = "mlbam_id")
+    adv_cols <- setdiff(adv_cols, names(sc_adv))
+  }
+
+  if (exists("player_season_bbref_pitching_advanced") &&
+      nrow(player_season_bbref_pitching_advanced) > 0) {
+    bbref_adv <- player_season_bbref_pitching_advanced %>%
+      dplyr::filter(mlbam_id %in% missing_from_season) %>%
+      dplyr::distinct(mlbam_id, .keep_all = TRUE) %>%
+      dplyr::select(mlbam_id, dplyr::any_of(adv_cols))
+    career_fallback <- dplyr::left_join(career_fallback, bbref_adv, by = "mlbam_id")
+  }
 
   sp_stats <- dplyr::bind_rows(sp_stats, career_fallback)
 }

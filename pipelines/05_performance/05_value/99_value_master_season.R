@@ -93,9 +93,14 @@ value_master_season <- dplyr::bind_rows(fg_batters, fg_pitchers) %>%
     bbref_id, season, team_abbr, fg_id, player_type,
     dplyr::any_of(c("fg_WAR", "bbref_WAR", "fg_Dollars")),
     dplyr::everything()
-  ) %>%
+  )
 
-  dplyr::arrange(team_abbr, player_type, dplyr::desc(fg_WAR))
+.war_sort_vec <- if ("fg_WAR" %in% names(value_master_season))
+  dplyr::coalesce(value_master_season$fg_WAR, -Inf) else
+  rep(-Inf, nrow(value_master_season))
+
+value_master_season <- value_master_season %>%
+  dplyr::arrange(team_abbr, player_type, dplyr::desc(.war_sort_vec))
 
 # ------------------------------------------------------------
 # Validate (each player_type subset separately)

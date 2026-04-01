@@ -5,9 +5,9 @@
 # ============================================================
 # PURPOSE:
 #   Pull season-level FanGraphs pitching leaderboard (league-wide).
-#   Uses fg_pitcher_leaders() — a single leaderboard call that
-#   returns all pitchers with full advanced metrics:
-#   FIP, xFIP, xERA, BABIP, LOB%, SIERA, K/9, BB/9, fWAR, etc.
+#   Bypasses baseballr::fg_pitcher_leaders() which has a known bug
+#   ("object 'leaders' not found"). Uses httr directly instead,
+#   following the same pattern as 01_depth_charts.R.
 #
 # OUTPUT:
 #   player_season_fg_pitching
@@ -19,26 +19,86 @@
 season_to_pull <- unique(player_season_mlb_pitching$season)[1]
 
 # ------------------------------------------------------------
-# Pull FanGraphs Leaderboard
-# qual = "0"  → all pitchers, no IP minimum
-# ind  = "0"  → aggregate across teams for multi-team players
+# Direct FanGraphs API pull — bypasses fg_pitcher_leaders()
+# type 8  = Dashboard  (ERA, FIP, xFIP, xERA, SIERA, WAR, K%, BB%, etc.)
+# type 1  = Advanced   (ERA-, FIP-, xFIP-, K%, BB%, K-BB%)
+# type 2  = Batted Ball (GB%, LD%, FB%, IFFB%, HR/FB, Hard%, Med%, Soft%)
+# type 5  = Plate Disc. (O-Swing%, Z-Swing%, Zone%, SwStr%, CSW%)
+# qual=0  → all pitchers, no IP minimum
+# ind=0   → aggregate across teams for multi-team players
 # ------------------------------------------------------------
 
-fg_raw <- tryCatch(
-  baseballr::fg_pitcher_leaders(
-    startseason = season_to_pull,
-    endseason   = season_to_pull,
-    qual        = "0",
-    ind         = "0"
-  ),
-  error = function(e) {
-    message("FanGraphs pitcher leaders pull failed: ", e$message)
-    NULL
+pull_fg_pitching_api <- function(yr, type_num = 8) {
+  resp <- tryCatch(
+    httr::GET(
+      "https://www.fangraphs.com/api/leaders/major-league/data",
+      query = list(
+        age       = "",
+        pos       = "all",
+        stats     = "pit",
+        lg        = "all",
+        season    = yr,
+        season1   = yr,
+        ind       = "0",
+        qual      = "0",
+        type      = as.character(type_num),
+        pageitems = "2000000",
+        pagenum   = "1",
+        rost      = "0"
+      ),
+      httr::timeout(60)
+    ),
+    error = function(e) {
+      message("FanGraphs pitching API failed (type=", type_num, ", yr=", yr, "): ", e$message)
+      NULL
+    }
+  )
+
+  if (is.null(resp) || httr::http_error(resp)) {
+    message("FanGraphs pitching API error (type=", type_num, ", yr=", yr, ")")
+    return(NULL)
   }
-)
+
+  parsed <- tryCatch(
+    jsonlite::fromJSON(
+      httr::content(resp, as = "text", encoding = "UTF-8"),
+      flatten = TRUE
+    ),
+    error = function(e) {
+      message("FanGraphs JSON parse failed: ", e$message)
+      NULL
+    }
+  )
+
+  if (is.null(parsed) || !"data" %in% names(parsed)) return(NULL)
+
+  result <- tryCatch(dplyr::as_tibble(parsed$data), error = function(e) NULL)
+  if (is.null(result) || nrow(result) == 0) return(NULL)
+  result
+}
+
+# ------------------------------------------------------------
+# Pull dashboard (type 8) — main metrics + WAR
+# Fall back to prior season if current is too sparse
+# ------------------------------------------------------------
+
+fg_raw <- pull_fg_pitching_api(season_to_pull, type_num = 8)
+
+if (is.null(fg_raw) || nrow(fg_raw) < 50) {
+  fallback_yr <- season_to_pull - 1L
+  message("FanGraphs pitching data insufficient for ", season_to_pull,
+          " (", if (is.null(fg_raw)) "NULL" else nrow(fg_raw), " rows). ",
+          "Falling back to ", fallback_yr, ".")
+  fg_raw <- pull_fg_pitching_api(fallback_yr, type_num = 8)
+  if (!is.null(fg_raw) && nrow(fg_raw) >= 50) {
+    season_to_pull <- fallback_yr
+  } else {
+    fg_raw <- NULL
+  }
+}
 
 if (is.null(fg_raw) || nrow(fg_raw) == 0) {
-  message("No FanGraphs pitching data for ", season_to_pull, ". Creating empty table.")
+  message("No FanGraphs pitching data available. Creating empty table.")
   player_season_fg_pitching <- dplyr::tibble(
     mlbam_id  = integer(),
     season    = integer(),
@@ -46,7 +106,7 @@ if (is.null(fg_raw) || nrow(fg_raw) == 0) {
   )
 } else {
 
-  message("FanGraphs pitching pull: ", nrow(fg_raw), " rows | columns: ",
+  message("FanGraphs pitching pull (type 8): ", nrow(fg_raw), " rows | columns: ",
           paste(names(fg_raw), collapse = ", "))
 
   # ------------------------------------------------------------
@@ -128,94 +188,75 @@ if (is.null(fg_raw) || nrow(fg_raw) == 0) {
     fg_HR_9 = safe_num(fg_joined, "HR_per_9", "HR.9"),
 
     # Rate percentages
-    fg_K_pct    = safe_num(fg_joined, "K_pct"),
+    fg_K_pct    = safe_num(fg_joined, "K_pct",    "SO_pct"),
     fg_BB_pct   = safe_num(fg_joined, "BB_pct"),
     fg_K_BB_pct = safe_num(fg_joined, "K_BB_pct"),
 
     # Value
-    fg_WAR = safe_num(fg_joined, "WAR")
+    fg_WAR       = safe_num(fg_joined, "WAR"),
+    fg_ERA_minus = safe_num(fg_joined, "ERA_minus", "ERA-")
   ) %>%
     dplyr::filter(!is.na(mlbam_id)) %>%
     dplyr::distinct(mlbam_id, season, team_abbr, .keep_all = TRUE)
 
-  # Diagnostic: which advanced columns populated
-  advanced_cols <- c("fg_FIP", "fg_xFIP", "fg_xERA", "fg_SIERA",
-                     "fg_BABIP", "fg_LOB_pct", "fg_WAR")
-  fill_rates <- sapply(advanced_cols, function(col) {
-    round(mean(!is.na(player_season_fg_pitching[[col]])) * 100)
-  })
-  message("Advanced stat fill rates: ",
-          paste(names(fill_rates), fill_rates, sep = "=", collapse = "% | "), "%")
-}
+  message("fg_WAR non-NA: ", sum(!is.na(player_season_fg_pitching$fg_WAR)),
+          " | fg_ERA_minus non-NA: ", sum(!is.na(player_season_fg_pitching$fg_ERA_minus)))
 
-# ------------------------------------------------------------
-# Additional FanGraphs pitcher type pulls
-# Same pattern as offense — strip identity/dup cols, join on mlbam_id.
-# ------------------------------------------------------------
+  # ------------------------------------------------------------
+  # Pull additional stat types and join on mlbam_id
+  # ------------------------------------------------------------
 
-pull_fg_pitcher_extra <- function(type_num, season_val, id_map) {
-  raw <- tryCatch(
-    baseballr::fg_pitcher_leaders(
-      qual        = "0",
-      startseason = as.character(season_val),
-      endseason   = as.character(season_val),
-      type        = as.character(type_num),
-      ind         = "0",
-      pageitems   = "10000"
-    ),
-    error = function(e) {
-      message("FG pitcher type ", type_num, " failed: ", e$message)
-      NULL
+  fg_id_map <- player_master_ids %>%
+    dplyr::filter(!is.na(fg_id), !is.na(mlbam_id)) %>%
+    dplyr::distinct(fg_id, .keep_all = TRUE) %>%
+    dplyr::select(fg_id, mlbam_id)
+
+  pull_fg_pitcher_extra <- function(type_num) {
+    raw <- pull_fg_pitching_api(season_to_pull, type_num = type_num)
+    if (is.null(raw) || nrow(raw) == 0) {
+      message("FG pitcher type ", type_num, ": no data")
+      return(NULL)
     }
-  )
 
-  if (is.null(raw) || nrow(raw) == 0) {
-    message("FG pitcher type ", type_num, ": no data")
-    return(NULL)
+    # Normalize special characters in column names
+    names(raw) <- gsub("%", "_pct", gsub("/", "_per_", gsub("-", "_", names(raw))))
+
+    drop_cols <- c(
+      "playerid", "Season", "Name", "PlayerName", "Team", "Tm",
+      "G", "GS", "IP", "W", "L", "SV",
+      "ERA", "FIP", "xFIP", "SIERA", "xERA",
+      "WHIP", "BABIP", "WAR", "K.9", "BB.9", "HR.9",
+      "LOB.", "GB.", "Age", "AgeRng"
+    )
+
+    result <- raw %>%
+      dplyr::left_join(fg_id_map, by = c("playerid" = "fg_id")) %>%
+      dplyr::filter(!is.na(mlbam_id)) %>%
+      dplyr::mutate(mlbam_id = as.integer(mlbam_id)) %>%
+      dplyr::select(-dplyr::any_of(drop_cols), -dplyr::any_of("playerid")) %>%
+      dplyr::rename_with(~ paste0("fg_", .x), -mlbam_id) %>%
+      dplyr::distinct(mlbam_id, .keep_all = TRUE)
+
+    message("FG pitcher type ", type_num, ": ", ncol(result) - 1,
+            " new columns for ", nrow(result), " pitchers")
+    result
   }
 
-  drop_cols <- c(
-    "playerid", "Season", "Name", "PlayerName", "Team", "Tm",
-    "G", "GS", "IP", "W", "L", "SV",
-    "ERA", "FIP", "xFIP", "SIERA", "xERA",
-    "WHIP", "BABIP", "WAR", "K.9", "BB.9", "HR.9",
-    "LOB.", "GB."
+  # Type 1 = Advanced (ERA-, FIP-, K%, BB%)
+  # Type 2 = Batted Ball (Hard%, GB%, FB%, IFFB%, HR/FB)
+  # Type 5 = Plate Discipline (O-Swing%, SwStr%, CSW%, Zone%)
+  extra_types <- list(
+    pull_fg_pitcher_extra(1),
+    pull_fg_pitcher_extra(2),
+    pull_fg_pitcher_extra(5)
   )
 
-  result <- raw %>%
-    dplyr::left_join(
-      id_map,
-      by = c("playerid" = "fg_id")
-    ) %>%
-    dplyr::filter(!is.na(mlbam_id)) %>%
-    dplyr::mutate(mlbam_id = as.integer(mlbam_id)) %>%
-    dplyr::select(-dplyr::any_of(drop_cols), -playerid) %>%
-    dplyr::rename_with(~ paste0("fg_", .x), -mlbam_id) %>%
-    dplyr::distinct(mlbam_id, .keep_all = TRUE)
-
-  message("FG pitcher type ", type_num, ": ", ncol(result) - 1,
-          " new columns for ", nrow(result), " pitchers")
-  result
-}
-
-fg_id_map <- player_master_ids %>%
-  dplyr::filter(!is.na(fg_id), !is.na(mlbam_id)) %>%
-  dplyr::distinct(fg_id, .keep_all = TRUE) %>%
-  dplyr::select(fg_id, mlbam_id)
-
-extra_types_pitching <- list(
-  t1 = pull_fg_pitcher_extra(1, season_to_pull, fg_id_map),  # Advanced: ERA-, FIP-, K%, BB%, K/BB
-  t2 = pull_fg_pitcher_extra(2, season_to_pull, fg_id_map),  # Batted Ball: Hard%, Soft%, Med%, IFFB%
-  t3 = pull_fg_pitcher_extra(3, season_to_pull, fg_id_map),  # Win Probability: WPA, RE24, Clutch, pLI
-  t5 = pull_fg_pitcher_extra(5, season_to_pull, fg_id_map),  # Plate Discipline: O-Swing%, CSW%, SwStr%
-  t7 = pull_fg_pitcher_extra(7, season_to_pull, fg_id_map)   # Pitch values: wFB, wSL, wCB, wCH, etc.
-)
-
-for (extra in extra_types_pitching) {
-  if (!is.null(extra)) {
-    player_season_fg_pitching <- player_season_fg_pitching %>%
-      dplyr::left_join(extra, by = "mlbam_id", suffix = c("", "_dup")) %>%
-      dplyr::select(-dplyr::ends_with("_dup"))
+  for (extra in extra_types) {
+    if (!is.null(extra)) {
+      player_season_fg_pitching <- player_season_fg_pitching %>%
+        dplyr::left_join(extra, by = "mlbam_id", suffix = c("", "_dup")) %>%
+        dplyr::select(-dplyr::ends_with("_dup"))
+    }
   }
 }
 

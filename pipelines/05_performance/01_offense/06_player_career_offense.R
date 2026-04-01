@@ -132,14 +132,161 @@ current_season <- offense_master_season %>%
   )
 
 # ------------------------------------------------------------
-# Stack historical + current
+# Gap fill: Lahman lags ~1 year; pull any missing seasons from MLB API
+# ------------------------------------------------------------
+
+latest_lahman <- if (nrow(lahman_career) > 0)
+  max(lahman_career$season, na.rm = TRUE) else hist_start - 1L
+
+# Guard against seq() returning a decreasing sequence when there is no gap
+gap_start <- latest_lahman + 1L
+gap_end   <- current_year - 1L
+gap_years <- if (gap_start <= gap_end) seq(gap_start, gap_end) else integer(0)
+
+gap_seasons_list <- lapply(gap_years, function(yr) {
+  raw <- tryCatch(
+    baseballr::mlb_stats(
+      stat_type   = "season",
+      stat_group  = "hitting",
+      player_pool = "all",
+      season      = yr,
+      limit       = 3000
+    ),
+    error = function(e) NULL
+  )
+  if (is.null(raw) || !"player_id" %in% names(raw) || nrow(raw) == 0)
+    return(NULL)
+
+  raw %>%
+    dplyr::transmute(
+      mlbam_id    = as.integer(player_id),
+      season      = as.integer(yr),
+      hist_g      = NA_integer_,
+      hist_pa     = as.integer(plate_appearances),
+      hist_ab     = as.integer(at_bats),
+      hist_h      = as.integer(hits),
+      hist_2b     = as.integer(doubles),
+      hist_3b     = as.integer(triples),
+      hist_hr     = as.integer(home_runs),
+      hist_r      = as.integer(runs),
+      hist_rbi    = as.integer(rbi),
+      hist_bb     = as.integer(base_on_balls),
+      hist_so     = as.integer(strike_outs),
+      hist_sb     = as.integer(stolen_bases),
+      hist_avg    = as.numeric(avg),
+      hist_obp    = as.numeric(obp),
+      hist_slg    = as.numeric(slg),
+      hist_ops    = as.numeric(ops),
+      hist_iso    = as.numeric(slg) - as.numeric(avg),
+      hist_bb_pct = dplyr::if_else(
+        !is.na(plate_appearances) & as.integer(plate_appearances) > 0,
+        as.integer(base_on_balls) / as.integer(plate_appearances), NA_real_),
+      hist_k_pct  = dplyr::if_else(
+        !is.na(plate_appearances) & as.integer(plate_appearances) > 0,
+        as.integer(strike_outs) / as.integer(plate_appearances), NA_real_)
+    ) %>%
+    # Aggregate across teams (same player, same season)
+    dplyr::group_by(mlbam_id, season) %>%
+    dplyr::summarise(
+      hist_g      = NA_integer_,
+      hist_ab     = sum(hist_ab,  na.rm = TRUE),
+      hist_h      = sum(hist_h,   na.rm = TRUE),
+      hist_2b     = sum(hist_2b,  na.rm = TRUE),
+      hist_3b     = sum(hist_3b,  na.rm = TRUE),
+      hist_hr     = sum(hist_hr,  na.rm = TRUE),
+      hist_r      = sum(hist_r,   na.rm = TRUE),
+      hist_rbi    = sum(hist_rbi, na.rm = TRUE),
+      hist_bb     = sum(hist_bb,  na.rm = TRUE),
+      hist_so     = sum(hist_so,  na.rm = TRUE),
+      hist_sb     = sum(hist_sb,  na.rm = TRUE),
+      hist_pa     = sum(hist_pa,  na.rm = TRUE),
+      hist_avg    = dplyr::if_else(sum(hist_ab,  na.rm=TRUE) > 0,
+                      sum(hist_h,  na.rm=TRUE) / sum(hist_ab,  na.rm=TRUE), NA_real_),
+      hist_obp    = dplyr::if_else(sum(hist_pa,  na.rm=TRUE) > 0,
+                      (sum(hist_h, na.rm=TRUE) + sum(hist_bb, na.rm=TRUE)) /
+                      sum(hist_pa, na.rm=TRUE), NA_real_),
+      hist_slg    = dplyr::if_else(sum(hist_ab,  na.rm=TRUE) > 0,
+                      (sum(hist_h, na.rm=TRUE) + sum(hist_2b, na.rm=TRUE) +
+                       2*sum(hist_3b, na.rm=TRUE) + 3*sum(hist_hr, na.rm=TRUE)) /
+                      sum(hist_ab, na.rm=TRUE), NA_real_),
+      hist_ops    = hist_obp + hist_slg,
+      hist_iso    = hist_slg - hist_avg,
+      hist_bb_pct = dplyr::if_else(sum(hist_pa, na.rm=TRUE) > 0,
+                      sum(hist_bb, na.rm=TRUE) / sum(hist_pa, na.rm=TRUE), NA_real_),
+      hist_k_pct  = dplyr::if_else(sum(hist_pa, na.rm=TRUE) > 0,
+                      sum(hist_so, na.rm=TRUE) / sum(hist_pa, na.rm=TRUE), NA_real_),
+      .groups = "drop"
+    )
+})
+
+gap_seasons <- dplyr::bind_rows(Filter(Negate(is.null), gap_seasons_list))
+
+if (nrow(gap_seasons) > 0) {
+  message("Gap fill: added ", nrow(gap_seasons), " player-season rows for seasons ",
+          paste(gap_years, collapse = ", "))
+}
+
+# ------------------------------------------------------------
+# FanGraphs pull for historical years — adds wRC+ and wOBA
+# One call per year from hist_start to current_year - 1
+# (current_year already has these from offense_master_season)
+# ------------------------------------------------------------
+
+fg_hist_list <- lapply(seq(hist_start, current_year - 1L), function(yr) {
+  fg <- tryCatch(
+    baseballr::fg_batter_leaders(
+      qual        = "0",
+      startseason = as.character(yr),
+      endseason   = as.character(yr),
+      type        = "8",
+      pageitems   = "10000"
+    ),
+    error = function(e) {
+      message("FG career pull failed for ", yr, ": ", e$message)
+      NULL
+    }
+  )
+  if (is.null(fg) || nrow(fg) == 0) return(NULL)
+
+  fg <- fg %>%
+    dplyr::rename_with(~ ifelse(.x %in% c("wRC.", "wRC+"), "wRC_plus", .x))
+
+  out <- dplyr::tibble(
+    mlbam_id = suppressWarnings(as.integer(fg$xMLBAMID)),
+    season   = as.integer(yr)
+  )
+  if ("wRC_plus" %in% names(fg)) out$fg_wRC_plus <- suppressWarnings(as.numeric(fg$wRC_plus))
+  if ("wOBA"     %in% names(fg)) out$fg_wOBA     <- suppressWarnings(as.numeric(fg$wOBA))
+  out %>% dplyr::filter(!is.na(mlbam_id))
+})
+
+fg_hist <- dplyr::bind_rows(Filter(Negate(is.null), fg_hist_list))
+
+message("FG historical pull: ", nrow(fg_hist), " player-season rows | ",
+        "seasons ", hist_start, "-", current_year - 1L)
+
+# Join wRC+/wOBA onto Lahman and gap rows
+join_fg_hist <- function(df) {
+  if (nrow(fg_hist) == 0 || nrow(df) == 0 || !"mlbam_id" %in% names(df)) return(df)
+  df %>%
+    dplyr::left_join(
+      fg_hist %>% dplyr::select(mlbam_id, season,
+                                dplyr::any_of(c("fg_wRC_plus", "fg_wOBA"))),
+      by = c("mlbam_id", "season")
+    )
+}
+
+# ------------------------------------------------------------
+# Stack historical + gap fill + current
 # ------------------------------------------------------------
 
 player_career_offense <- dplyr::bind_rows(
-  lahman_career %>% dplyr::mutate(season = as.integer(season)),
+  lahman_career  %>% dplyr::mutate(season = as.integer(season)) %>% join_fg_hist(),
+  gap_seasons    %>% dplyr::mutate(season = as.integer(season)) %>% join_fg_hist(),
   current_season %>% dplyr::mutate(season = as.integer(season))
 ) %>%
-  dplyr::arrange(mlbam_id, season)
+  dplyr::arrange(mlbam_id, season) %>%
+  dplyr::distinct(mlbam_id, season, .keep_all = TRUE)  # safety dedup
 
 message("06_player_career_offense complete: ",
         nrow(player_career_offense), " player-season rows | ",

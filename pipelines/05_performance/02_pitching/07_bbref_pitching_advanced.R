@@ -77,64 +77,86 @@ scrape_bbref_pitching_standard <- function(season_val) {
     return(NULL)
   }
 
-  # Parse the table
-  tbl <- tryCatch(
-    rvest::html_table(tbl_node, fill = TRUE),
-    error = function(e) {
-      message("html_table parse failed: ", e$message)
-      NULL
+  # ── Extract by data-stat attributes ───────────────────────────────────────
+  # Using data-stat avoids all html_table() column-name issues (ERA+ header
+  # parsing, duplicate column names, encoding variants).
+  # Player rows are <tr> elements that contain a td[data-stat='player'] with
+  # a link; sub-header/separator rows lack that link and are skipped.
+
+  all_rows <- tbl_node %>% rvest::html_elements("tr")
+  if (length(all_rows) == 0) {
+    message("No rows found in table for ", season_val)
+    return(NULL)
+  }
+
+  # Identify player rows (have a player link)
+  player_rows <- Filter(function(row) {
+    link <- rvest::html_element(row, "td[data-stat='player'] a")
+    !is.na(xml2::xml_attr(link, "href"))
+  }, all_rows)
+
+  if (length(player_rows) == 0) {
+    message("No player rows found in BBRef table for ", season_val)
+    return(NULL)
+  }
+
+  message("BBRef player rows found: ", length(player_rows))
+
+  # Helper: extract text of a single data-stat cell from a row
+  cell_text <- function(row, stat) {
+    v <- rvest::html_element(row, paste0("td[data-stat='", stat, "']")) %>%
+      rvest::html_text(trim = TRUE)
+    if (length(v) == 0 || is.na(v) || v == "") NA_character_ else v
+  }
+
+  # Helper: safe numeric
+  safe_num <- function(x) suppressWarnings(as.numeric(x))
+
+  # WAR data-stat name varies across BBRef page versions — try all known names
+  war_cell <- function(row) {
+    for (s in c("WAR_total_pitch", "war_total_pitch", "WAR", "war")) {
+      v <- cell_text(row, s)
+      if (!is.na(v)) return(v)
     }
-  )
-  if (is.null(tbl) || nrow(tbl) == 0) return(NULL)
-
-  # Extract bbref_id from player <a> href links
-  # href format: "/players/m/mcclas01.shtml" → extract slug "mcclas01"
-  player_links <- tryCatch({
-    tbl_node %>%
-      rvest::html_elements("td[data-stat='player'] a") %>%
-      rvest::html_attr("href")
-  }, error = function(e) character(0))
-
-  bbref_ids <- stringr::str_extract(player_links, "[^/]+(?=\\.shtml$)")
-
-  message("BBRef table columns: ", paste(names(tbl), collapse = ", "))
-
-  # BBRef can name the player column "Name" or "Player" depending on the page.
-  # Find it dynamically — it's the first non-numeric text column.
-  name_col <- names(tbl)[which(names(tbl) %in% c("Name", "Player"))[1]]
-  if (is.na(name_col)) name_col <- names(tbl)[2]  # fallback: second column
-
-  rk_col <- names(tbl)[which(names(tbl) == "Rk")[1]]
-
-  # Remove repeated header rows (BBRef inserts header rows every ~20 rows)
-  tbl_clean <- tbl %>%
-    dplyr::filter(
-      !is.na(.data[[name_col]]),
-      .data[[name_col]] != "",
-      .data[[name_col]] != "Name",
-      .data[[name_col]] != "Player"
-    )
-
-  if (!is.na(rk_col)) {
-    tbl_clean <- tbl_clean %>%
-      dplyr::filter(.data[[rk_col]] != "Rk", .data[[rk_col]] != "")
+    NA_character_
   }
 
-  # Standardize player column to "Name" for downstream code
-  if (name_col != "Name") {
-    tbl_clean <- dplyr::rename(tbl_clean, Name = dplyr::all_of(name_col))
-  }
+  # Build result tibble — one row per player row
+  tbl_clean <- dplyr::tibble(
+    Name           = purrr::map_chr(player_rows,
+                       ~ rvest::html_text(
+                           rvest::html_element(.x, "td[data-stat='player']"),
+                           trim = TRUE)),
+    bbref_id       = purrr::map_chr(player_rows, function(row) {
+                       href <- rvest::html_element(row, "td[data-stat='player'] a") %>%
+                         xml2::xml_attr("href")
+                       if (is.na(href)) NA_character_ else
+                         stringr::str_extract(href, "[^/]+(?=\\.shtml$)")
+                     }),
+    bbref_ERA_plus = safe_num(purrr::map_chr(player_rows,
+                       ~ cell_text(.x, "earned_run_avg_plus"))),
+    bbref_FIP      = safe_num(purrr::map_chr(player_rows,
+                       ~ cell_text(.x, "fip"))),
+    bbref_WAR      = safe_num(purrr::map_chr(player_rows, war_cell)),
+    bbref_H9       = safe_num(purrr::map_chr(player_rows,
+                       ~ cell_text(.x, "hits_per_nine"))),
+    bbref_HR9      = safe_num(purrr::map_chr(player_rows,
+                       ~ cell_text(.x, "home_runs_per_nine"))),
+    bbref_BB9      = safe_num(purrr::map_chr(player_rows,
+                       ~ cell_text(.x, "bases_on_balls_per_nine"))),
+    bbref_SO9      = safe_num(purrr::map_chr(player_rows,
+                       ~ cell_text(.x, "strikeouts_per_nine"))),
+    bbref_SO_W     = safe_num(purrr::map_chr(player_rows,
+                       ~ cell_text(.x, "strikeouts_per_base_on_balls"))),
+    scraped_season = as.integer(season_val)
+  ) %>%
+    dplyr::filter(!is.na(Name), Name != "", !is.na(bbref_id))
 
-  # Attach bbref_id — link count should match data row count
-  if (length(bbref_ids) == nrow(tbl_clean)) {
-    tbl_clean$bbref_id <- bbref_ids
-  } else {
-    message("bbref_id link count (", length(bbref_ids), ") != ",
-            "table row count (", nrow(tbl_clean), "). IDs not attached.")
-    tbl_clean$bbref_id <- NA_character_
-  }
+  n_era  <- sum(!is.na(tbl_clean$bbref_ERA_plus))
+  n_war  <- sum(!is.na(tbl_clean$bbref_WAR))
+  message("BBRef parse complete: ", nrow(tbl_clean), " players | ",
+          "ERA+: ", n_era, " | WAR: ", n_war)
 
-  tbl_clean$scraped_season <- as.integer(season_val)
   tbl_clean
 }
 
@@ -144,9 +166,10 @@ scrape_bbref_pitching_standard <- function(season_val) {
 
 bbref_raw <- scrape_bbref_pitching_standard(season_to_pull)
 
-if (is.null(bbref_raw) || nrow(bbref_raw) == 0) {
-  message("BBRef scrape empty for ", season_to_pull,
-          ". Trying ", season_to_pull - 1, "...")
+if (is.null(bbref_raw) || nrow(bbref_raw) < 50) {
+  message("BBRef scrape insufficient for ", season_to_pull,
+          " (", if (is.null(bbref_raw)) "NULL" else nrow(bbref_raw), " rows). ",
+          "Trying ", season_to_pull - 1, "...")
   season_to_pull <- season_to_pull - 1
   bbref_raw <- scrape_bbref_pitching_standard(season_to_pull)
 }
@@ -165,46 +188,12 @@ if (is.null(bbref_raw) || nrow(bbref_raw) == 0) {
 
 } else {
 
-  message("BBRef raw columns: ", paste(names(bbref_raw), collapse = ", "))
+  # scrape_bbref_pitching_standard() now returns a clean tibble with
+  # pre-named numeric columns (bbref_ERA_plus, bbref_WAR, etc.) extracted
+  # directly by data-stat attribute — no column renaming needed here.
 
-  # Rename BBRef column names to our standard
-  col_map <- c(
-    "ERA+"  = "bbref_ERA_plus",
-    "FIP"   = "bbref_FIP",
-    "H9"    = "bbref_H9",
-    "HR9"   = "bbref_HR9",
-    "BB9"   = "bbref_BB9",
-    "SO9"   = "bbref_SO9",
-    "SO/W"  = "bbref_SO_W",
-    "WAR"   = "bbref_WAR"
-  )
-
-  for (orig in names(col_map)) {
-    if (orig %in% names(bbref_raw)) {
-      names(bbref_raw)[names(bbref_raw) == orig] <- col_map[[orig]]
-    }
-  }
-
-  safe_bbref_num <- function(df, col) {
-    if (!col %in% names(df)) return(rep(NA_real_, nrow(df)))
-    suppressWarnings(as.numeric(df[[col]]))
-  }
-
-  bbref_processed <- bbref_raw %>%
-    dplyr::mutate(
-      bbref_ERA_plus = safe_bbref_num(., "bbref_ERA_plus"),
-      bbref_FIP      = safe_bbref_num(., "bbref_FIP"),
-      bbref_H9       = safe_bbref_num(., "bbref_H9"),
-      bbref_HR9      = safe_bbref_num(., "bbref_HR9"),
-      bbref_BB9      = safe_bbref_num(., "bbref_BB9"),
-      bbref_SO9      = safe_bbref_num(., "bbref_SO9"),
-      bbref_SO_W     = safe_bbref_num(., "bbref_SO_W"),
-      bbref_WAR      = safe_bbref_num(., "bbref_WAR"),
-      season         = as.integer(scraped_season)
-    )
-
-  # Join to mlbam_id via bbref_id
-  player_season_bbref_pitching_advanced <- bbref_processed %>%
+  player_season_bbref_pitching_advanced <- bbref_raw %>%
+    dplyr::mutate(season = as.integer(scraped_season)) %>%
     dplyr::filter(!is.na(bbref_id)) %>%
     dplyr::left_join(
       player_master_ids %>%

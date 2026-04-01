@@ -47,25 +47,32 @@ pitcher_hands <- tryCatch({
   info <- baseballr::mlb_people(
     person_ids = paste(starter_ids, collapse = ",")
   )
-  info %>%
-    dplyr::select(
-      mlbam_id    = id,
-      pitch_hand  = dplyr::any_of(c("pitchHand.code", "pitch_hand_code"))
-    ) %>%
-    dplyr::mutate(mlbam_id = as.integer(mlbam_id))
+  # mlb_people() returns pitchHand.code (flattened JSON) — select all cols
+  # then rename whatever hand column exists
+  # "pitchHand.code" is the flattened MLB API column name —
+  # match "pitchhand" (case-insensitive) to catch it without needing a separator
+  hand_col <- grep("pitchhand|pitch_hand", names(info),
+                   value = TRUE, ignore.case = TRUE)[1]
+  id_col   <- intersect(c("id", "person_id", "player_id"), names(info))[1]
+
+  if (!is.na(hand_col) && !is.na(id_col)) {
+    info %>%
+      dplyr::select(mlbam_id = dplyr::all_of(id_col),
+                    pitch_hand = dplyr::all_of(hand_col)) %>%
+      dplyr::mutate(mlbam_id = as.integer(mlbam_id),
+                    pitch_hand = as.character(pitch_hand))
+  } else {
+    message("mlb_people() returned unexpected columns: ", paste(names(info), collapse=", "))
+    dplyr::tibble(mlbam_id = integer(), pitch_hand = character())
+  }
 }, error = function(e) {
   message("Could not fetch pitcher handedness: ", e$message)
   dplyr::tibble(mlbam_id = integer(), pitch_hand = character())
 })
 
-# Normalize column name (mlb_people() may vary)
+# Safety: ensure pitch_hand column always exists even if lookup returned nothing
 if (!"pitch_hand" %in% names(pitcher_hands)) {
-  hand_col <- grep("pitch.hand|pitch_hand", names(pitcher_hands),
-                   value = TRUE, ignore.case = TRUE)[1]
-  if (!is.na(hand_col)) {
-    pitcher_hands <- pitcher_hands %>%
-      dplyr::rename(pitch_hand = dplyr::all_of(hand_col))
-  }
+  pitcher_hands$pitch_hand <- NA_character_
 }
 
 # ------------------------------------------------------------

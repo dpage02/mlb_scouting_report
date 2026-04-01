@@ -34,31 +34,48 @@ if (length(missing_objects) > 0) {
 # Join (MLB Spine)
 # ------------------------------------------------------------
 
+# FanGraphs and BBRef/Statcast may be from the prior season when current season
+# data is insufficient (early season). Join by mlbam_id only so best-available
+# advanced stats are always attached regardless of season mismatch.
+
+# fg_ip may be absent when the FanGraphs main pull fell back to an empty stub
+fg_ip_vec <- if ("fg_ip" %in% names(player_season_fg_pitching)) {
+  dplyr::coalesce(player_season_fg_pitching$fg_ip, 0)
+} else {
+  rep(0, nrow(player_season_fg_pitching))
+}
+
+fg_best <- player_season_fg_pitching %>%
+  dplyr::arrange(mlbam_id, dplyr::desc(fg_ip_vec)) %>%
+  dplyr::distinct(mlbam_id, .keep_all = TRUE) %>%
+  dplyr::select(-dplyr::any_of(c("season", "team_abbr",
+                                  "fg_g", "fg_gs", "fg_ip",
+                                  "fg_era", "fg_whip")))
+
+sc_best <- player_season_statcast_pitching %>%
+  dplyr::distinct(mlbam_id, .keep_all = TRUE) %>%
+  dplyr::select(-dplyr::any_of(c("season")))
+
+bbref_best <- player_season_bbref_pitching_advanced %>%
+  dplyr::distinct(mlbam_id, .keep_all = TRUE) %>%
+  dplyr::select(-dplyr::any_of(c("season")))
+
 pitching_master_season <- player_season_mlb_pitching %>%
 
-  # FanGraphs — advanced metrics (FIP, xFIP, xERA, BABIP, LOB%, SIERA, fWAR, etc.)
-  dplyr::left_join(
-    player_season_fg_pitching,
-    by = c("mlbam_id", "season", "team_abbr")
-  ) %>%
+  # FanGraphs — join by mlbam_id; best-available season already selected above
+  dplyr::left_join(fg_best, by = "mlbam_id") %>%
 
   # Statcast (no team split)
-  dplyr::left_join(
-    player_season_statcast_pitching,
-    by = c("mlbam_id", "season")
-  ) %>%
+  dplyr::left_join(sc_best, by = "mlbam_id") %>%
 
-  # Lahman (no team split)
+  # Lahman (no team split, same season as MLB)
   dplyr::left_join(
     player_season_lahman_pitching,
     by = c("mlbam_id", "season")
   ) %>%
 
-  # BBRef advanced — ERA+, bWAR, H9, HR9, BB9, SO9, SO/W (no team split)
-  dplyr::left_join(
-    player_season_bbref_pitching_advanced,
-    by = c("mlbam_id", "season")
-  )
+  # BBRef advanced — join by mlbam_id; best-available season already selected above
+  dplyr::left_join(bbref_best, by = "mlbam_id")
 
 # ------------------------------------------------------------
 # Validate Grain

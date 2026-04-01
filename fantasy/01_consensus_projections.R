@@ -52,7 +52,7 @@ extract_bat_system <- function(raw, system_name) {
   id_col   <- intersect(c("playerid", "PlayerId"), names(raw))[1]
   name_col <- intersect(c("PlayerName", "Name", "playerName"), names(raw))[1]
   team_col <- intersect(c("Team", "team"), names(raw))[1]
-  pos_col  <- intersect(c("Positions", "Position", "pos"), names(raw))[1]
+  pos_col  <- intersect(c("Positions", "Position", "Pos", "pos", "position"), names(raw))[1]
 
   if (is.na(id_col)) return(NULL)
 
@@ -340,7 +340,11 @@ if (file.exists(manual_bat_path)) {
   manual_bat <- readr::read_csv(manual_bat_path, show_col_types = FALSE)
   # Only add players not already in steamer_bat
   new_players <- manual_bat %>%
-    dplyr::filter(!fg_id %in% steamer_bat$fg_id) %>%
+    dplyr::filter(
+      !fg_id %in% steamer_bat$fg_id,
+      !grepl("^REPLACE", fg_id),   # skip unfilled placeholder rows
+      !is.na(fg_id)
+    ) %>%
     dplyr::mutate(
       n_systems = 0L,
       mlbam_id  = suppressWarnings(as.integer(mlbam_id)),
@@ -362,39 +366,35 @@ if (exists("offense_master_season") && exists("player_master_ids")) {
   recent_season <- max(offense_master_season$season, na.rm = TRUE)
   message("Gap-fill: checking ", recent_season, " actuals for missing players...")
 
-  # Name lookup from player_master_ids
-  name_cols <- intersect(c("player_name","full_name","playerName"), names(player_master_ids))
-  name_col  <- if (length(name_cols) > 0) name_cols[1] else NULL
-
-  id_lookup <- player_master_ids %>%
-    dplyr::filter(!is.na(fg_id), !is.na(mlbam_id)) %>%
+  # Name lookup — player_master_ids only used for player_name (joined on mlbam_id)
+  # fg_id comes from offense_master_season itself (populated by the FG leaderboard
+  # pull with qual="0", which covers every player with a PA including 2025 rookies)
+  name_lookup <- player_master_ids %>%
+    dplyr::filter(!is.na(mlbam_id)) %>%
     dplyr::distinct(mlbam_id, .keep_all = TRUE) %>%
-    dplyr::select(mlbam_id, fg_id,
-                  dplyr::any_of(c("player_name","full_name","playerName")))
+    dplyr::select(mlbam_id, player_name)
 
-  # Players with meaningful PA last year, joined to their fg_id
+  # Players with meaningful PA last year not already in projection systems
   actual_starters <- offense_master_season %>%
     dplyr::filter(season == recent_season,
-                  dplyr::coalesce(mlb_pa, 0L) >= 150) %>%
-    dplyr::left_join(id_lookup, by = "mlbam_id") %>%
-    dplyr::filter(!is.na(fg_id),
-                  !as.character(fg_id) %in% steamer_bat$fg_id)
+                  dplyr::coalesce(mlb_pa, 0L) >= 100,
+                  !is.na(fg_id),
+                  !as.character(fg_id) %in% steamer_bat$fg_id) %>%
+    dplyr::left_join(name_lookup, by = "mlbam_id")
 
   if (nrow(actual_starters) == 0) {
     message("  Gap-fill: all 150+ PA players already in projections.")
   } else {
-    # Resolve player name: prefer name from id_lookup, fall back to offense_master col
-    nm_src <- intersect(c("player_name","full_name","playerName"), names(actual_starters))[1]
-
     REGRESS <- 0.85   # regress actuals 15% toward the mean for projection
     wrc_col <- intersect(c("fg_wRC_plus","fg_wRC.","fg_wRC_plus."), names(actual_starters))
-    pos_col <- intersect(c("fg_position","position"), names(actual_starters))
+    # fg_batter_leaders renames "Pos" → "fg_Pos" after the fg_ prefix pass
+    pos_col <- intersect(c("fg_Pos","fg_position","fg_Position","position"), names(actual_starters))
 
     gap_bat <- actual_starters %>%
       dplyr::transmute(
         fg_id         = as.character(fg_id),
         mlbam_id      = as.integer(mlbam_id),
-        player_name   = if (!is.na(nm_src)) .data[[nm_src]] else NA_character_,
+        player_name,
         team_abbr,
         proj_pos_raw  = if (length(pos_col) > 0) .data[[pos_col[1]]] else NA_character_,
         proj_pa       = as.integer(round(dplyr::coalesce(mlb_pa,  0L) * REGRESS)),

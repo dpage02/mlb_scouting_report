@@ -24,18 +24,47 @@ source("pipelines/05_performance/00_schema/00_grain_definition.R")
 
 season_to_pull <- target_season
 
-mlb_league_raw <- baseballr::mlb_stats(
-  stat_type   = "season",
-  stat_group  = "hitting",
-  player_pool = "all",
-  season      = season_to_pull,
-  limit       = 3000
+# Pull regular-season stats only by requesting gameType=R.
+# This returns 0 rows during spring training (no R games yet),
+# triggering the fallback below. If the parameter is unsupported,
+# the tryCatch falls back to an unfiltered pull.
+mlb_league_raw <- tryCatch(
+  baseballr::mlb_stats(
+    stat_type   = "season",
+    stat_group  = "hitting",
+    player_pool = "all",
+    season      = season_to_pull,
+    game_type   = "R",
+    limit       = 3000
+  ),
+  error = function(e) {
+    baseballr::mlb_stats(
+      stat_type   = "season",
+      stat_group  = "hitting",
+      player_pool = "all",
+      season      = season_to_pull,
+      limit       = 3000
+    )
+  }
 )
 
-if (!"player_id" %in% colnames(mlb_league_raw)) {
-  message("No official stats found for ", season_to_pull,
-          ". Falling back to ", season_to_pull - 1)
-  season_to_pull <- season_to_pull - 1
+# Fallback: if no meaningful regular-season data, use prior full season.
+# Check max PA — any regular-season player will have more PA than any
+# spring training player within a few weeks, making this robust.
+max_pa <- if (
+  "player_id" %in% names(mlb_league_raw) &&
+  "plate_appearances" %in% names(mlb_league_raw) &&
+  nrow(mlb_league_raw) > 0
+) {
+  max(suppressWarnings(as.integer(mlb_league_raw$plate_appearances)), na.rm = TRUE)
+} else {
+  0L
+}
+
+if (is.na(max_pa) || max_pa < 10) {
+  message(season_to_pull, " hitting data appears to be preseason (max PA = ",
+          max_pa, "). Falling back to ", season_to_pull - 1, " (last full season).")
+  season_to_pull <- season_to_pull - 1L
 
   mlb_league_raw <- baseballr::mlb_stats(
     stat_type   = "season",

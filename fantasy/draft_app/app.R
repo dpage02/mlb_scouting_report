@@ -32,6 +32,15 @@ for (col in c("adp","adp_fantasypros","adp_yahoo","fp_rank","value_vs_adp")) {
     BIG_BOARD_ORIG[[col]] <- NA_real_
 }
 
+# Ensure tier column exists (handle boards built before tier logic)
+if (!"tier" %in% names(BIG_BOARD_ORIG)) {
+  BIG_BOARD_ORIG <- BIG_BOARD_ORIG %>%
+    dplyr::mutate(tier = dplyr::case_when(
+      vor >  200 ~ 1L, vor >  150 ~ 2L, vor >  100 ~ 3L,
+      vor >   60 ~ 4L, vor >=  20 ~ 5L, TRUE        ~ 6L
+    ))
+}
+
 # ── League settings ──────────────────────────────────────────
 LEAGUE_TEAMS  <- 10
 MY_TEAM_1     <- "My Team 1"
@@ -50,36 +59,167 @@ pos_label <- function(p) dplyr::case_when(
 
 safe_val <- function(x) { v <- tryCatch(x, error=function(e) NULL); if (is.null(v) || length(v)==0) NA else v[1] }
 
-# ── Roster checker ───────────────────────────────────────────
+`%||%` <- function(a, b) if (!is.null(a)) a else b
+
+# ── Roster checker (multi-position aware) ────────────────────
+# Fills scarce positions first so a C/1B player satisfies C before 1B.
 check_roster <- function(my_players) {
   if (nrow(my_players) == 0) return(list(needed = names(ROSTER_REQS)))
-  pos_counts <- table(pos_label(my_players$primary_pos))
+  slot_order <- c("C","SS","2B","3B","1B","OF","SP","RP")
+  used_ids <- character(0)
+  filled   <- character(0)
+  for (slot in slot_order) {
+    need <- ROSTER_REQS[[slot]]
+    if (is.null(need) || need == 0) next
+    elig <- my_players %>%
+      dplyr::filter(
+        !fg_id %in% used_ids,
+        if (slot %in% c("SP","RP"))
+          grepl(slot, primary_pos)
+        else
+          grepl(slot, eligible_positions, fixed = TRUE)
+      )
+    n_fill <- min(nrow(elig), need)
+    if (n_fill > 0) {
+      used_ids <- c(used_ids, elig$fg_id[seq_len(n_fill)])
+      filled   <- c(filled, rep(slot, n_fill))
+    }
+  }
   needed <- character(0)
   for (slot in names(ROSTER_REQS)) {
-    have <- as.integer(pos_counts[slot] %||% 0L)
-    if (is.na(have)) have <- 0L
-    need <- ROSTER_REQS[slot]
-    if (have < need) needed <- c(needed, rep(slot, need - have))
+    gap <- ROSTER_REQS[[slot]] - sum(filled == slot)
+    if (gap > 0) needed <- c(needed, rep(slot, gap))
   }
   list(needed = needed)
 }
 
-`%||%` <- function(a, b) if (!is.null(a)) a else b
+# ── Position pool scarcity ────────────────────────────────────
+# For each position: how many above-replacement players remain vs.
+# how many total need to be drafted across the league?
+pos_pool_depth <- function(available) {
+  slots <- c(C=10, `1B`=10, `2B`=10, `3B`=10, SS=10, OF=30, SP=50, RP=30)
+  rows <- lapply(names(slots), function(pos) {
+    total <- slots[[pos]]
+    if (pos %in% c("SP","RP")) {
+      n <- sum(grepl(pos, available$primary_pos) & !is.na(available$vor) & available$vor > 0)
+    } else {
+      n <- sum(grepl(pos, available$eligible_positions, fixed=TRUE) & !is.na(available$vor) & available$vor > 0)
+    }
+    status <- if (n < total * 0.6) "critical" else if (n < total * 1.3) "thinning" else "ok"
+    data.frame(pos=pos, avail=n, needed=total, ratio=n/max(total,1),
+               status=status, stringsAsFactors=FALSE)
+  })
+  do.call(rbind, rows)
+}
 
 # ── Recommendation engine ─────────────────────────────────────
+# Tier-based hybrid strategy:
+#   1. Find BPA (highest VOR available) and their tier.
+#   2. Collect all available players in the same tier.
+#   3. Among same-tier players who fill a positional need, prefer the
+#      highest-VOR one — never reach into a lower tier to fill a need.
+#   4. Scarcity alerts are shown as secondary context.
+#
+# Returns a list with:
+#   $pick    — recommended player
+#   $bpa     — best player available by raw VOR
+#   $reason  — explanation string
+#   $by_pos  — best available at each unfilled position (any tier, for display)
+#   $alerts  — scarcity warning strings
 recommend_pick <- function(board, my_players) {
-  available <- board %>% dplyr::filter(status == "Available")
+  available <- board %>%
+    dplyr::filter(status == "Available") %>%
+    dplyr::arrange(dplyr::desc(dplyr::coalesce(vor, 0)))
   if (nrow(available) == 0) return(NULL)
+
+  bpa        <- available %>% dplyr::slice(1)
   needed_pos <- check_roster(my_players)$needed
-  if (length(needed_pos) == 0) return(available %>% dplyr::slice(1))
-  pos_short <- names(sort(table(needed_pos), decreasing = TRUE))[seq_len(min(3, length(needed_pos)))]
-  available %>%
-    dplyr::mutate(
-      .score = dplyr::coalesce(vor, 0) +
-               dplyr::if_else(pos_label(primary_pos) %in% pos_short, 50, 0, missing = 0)
-    ) %>%
-    dplyr::arrange(dplyr::desc(.score)) %>%
-    dplyr::slice(1)
+  pool       <- pos_pool_depth(available)
+
+  # Scarcity alerts — positions going critical or thinning
+  alerts <- pool %>%
+    dplyr::filter(status != "ok", pos %in% c("C","SS","2B","SP")) %>%
+    dplyr::mutate(msg = dplyr::case_when(
+      status == "critical" ~ paste0("\u26a0\ufe0f ", pos, ": only ", avail, " left"),
+      status == "thinning" ~ paste0("\u23f3 ", pos, ": pool thinning (", avail, " left)"),
+      TRUE ~ ""
+    )) %>%
+    dplyr::pull(msg)
+
+  # Best available at each needed position (any tier — used for display only)
+  by_pos <- lapply(unique(needed_pos), function(pos) {
+    if (pos %in% c("SP","RP")) {
+      cands <- available %>% dplyr::filter(grepl(pos, primary_pos))
+    } else {
+      cands <- available %>% dplyr::filter(grepl(pos, eligible_positions, fixed=TRUE))
+    }
+    if (nrow(cands) == 0) return(NULL)
+    pool_row <- pool %>% dplyr::filter(pool$pos == pos)
+    list(pos    = pos,
+         player = cands %>% dplyr::slice(1),
+         status = if (nrow(pool_row) > 0) pool_row$status[1] else "ok",
+         avail  = if (nrow(pool_row) > 0) pool_row$avail[1] else NA)
+  })
+  by_pos <- Filter(Negate(is.null), by_pos)
+
+  if (length(needed_pos) == 0) {
+    return(list(pick=bpa, bpa=bpa,
+                reason="Roster complete \u2014 best player available",
+                by_pos=by_pos, alerts=alerts))
+  }
+
+  # ── Tier-based pick logic ────────────────────────────────────
+  # Only consider players in the same tier as BPA.
+  # Among them, pick the highest-VOR player who fills a needed position.
+  # If none fill a need, fall back to BPA.
+  bpa_tier <- dplyr::coalesce(bpa$tier[[1]], 6L)
+
+  same_tier <- available %>%
+    dplyr::filter(dplyr::coalesce(tier, 6L) == bpa_tier)
+
+  # For each needed position, find the best same-tier candidate
+  best_pick   <- bpa
+  best_vor    <- dplyr::coalesce(bpa$vor[[1]], 0)
+  best_reason <- "Best player available (Tier \u00a0\u2014 no same-tier positional fit)"
+  found_need  <- FALSE
+
+  for (pos in unique(needed_pos)) {
+    if (pos %in% c("SP","RP")) {
+      cands <- same_tier %>% dplyr::filter(grepl(pos, primary_pos))
+    } else {
+      cands <- same_tier %>% dplyr::filter(grepl(pos, eligible_positions, fixed=TRUE))
+    }
+    if (nrow(cands) == 0) next
+
+    top_cand  <- cands %>% dplyr::slice(1)
+    cand_vor  <- dplyr::coalesce(top_cand$vor[[1]], 0)
+    vor_cost  <- dplyr::coalesce(bpa$vor[[1]], 0) - cand_vor
+
+    # Among same-tier candidates, prefer the one who fills a need AND
+    # has the highest VOR (ties broken by position scarcity via pool order)
+    if (!found_need || cand_vor > best_vor) {
+      pool_row   <- pool %>% dplyr::filter(pool$pos == pos)
+      scarcity   <- if (nrow(pool_row) > 0) pool_row$status[1] else "ok"
+      suf <- if (scarcity == "critical") " \u26a0\ufe0f pool critical" else
+             if (scarcity == "thinning") " \u23f3 pool thinning" else ""
+      cost_str  <- if (vor_cost == 0) "same VOR as BPA" else
+                   paste0(round(vor_cost), " VOR below BPA")
+
+      best_pick   <- top_cand
+      best_vor    <- cand_vor
+      best_reason <- paste0("Tier ", bpa_tier, ": fill ", pos, suf,
+                            " (", cost_str, ")")
+      found_need  <- TRUE
+    }
+  }
+
+  # If BPA itself fills a need, it was already the best — update reason
+  if (identical(best_pick$fg_id, bpa$fg_id)) {
+    best_reason <- paste0("Best player available fills needed position")
+  }
+
+  list(pick=best_pick, bpa=bpa, reason=best_reason,
+       by_pos=by_pos, alerts=alerts)
 }
 
 # ── Roster HTML builder ───────────────────────────────────────
@@ -236,7 +376,7 @@ ui <- fluidPage(
       tags$div(class="panel",
         fluidRow(
           column(2, selectInput("filter_pos", "Position:",
-                                c("All","C","1B","2B","3B","SS","OF","SP","RP"),
+                                c("All","C","1B","2B","3B","SS","OF","Util","SP","RP"),
                                 selected="All")),
           column(2, selectInput("filter_type", "Type:",
                                 c("All","Batters","Pitchers","Two-Way"), selected="All")),
@@ -314,7 +454,7 @@ server <- function(input, output, session) {
     if (input$filter_status == "My Teams")   b <- b %>% dplyr::filter(status %in% MY_TEAMS)
     if (input$filter_status == "Drafted")    b <- b %>% dplyr::filter(status == "Drafted")
     if (input$filter_pos != "All")
-      b <- b %>% dplyr::filter(pos_label(primary_pos) == input$filter_pos)
+      b <- b %>% dplyr::filter(grepl(input$filter_pos, eligible_positions, fixed = TRUE))
     if (input$filter_type == "Batters")  b <- b %>% dplyr::filter(player_type %in% c("batter","two-way"))
     if (input$filter_type == "Pitchers") b <- b %>% dplyr::filter(player_type == "pitcher")
     if (input$filter_type == "Two-Way")  b <- b %>% dplyr::filter(player_type == "two-way")
@@ -357,31 +497,87 @@ server <- function(input, output, session) {
   rec1 <- reactive({ recommend_pick(board(), t1_players()) })
   rec2 <- reactive({ recommend_pick(board(), t2_players()) })
 
-  rec_ui <- function(rec, quick_btn_id, btn_class) {
-    if (is.null(rec)) return(tags$em("No players available"))
-    pos   <- pos_label(rec$primary_pos)
-    fpts  <- round(dplyr::coalesce(rec$proj_fpts, 0))
-    vor_v <- round(dplyr::coalesce(rec$vor, 0), 1)
-    adp_v <- safe_val(rec$adp)
-    val_v <- safe_val(rec$value_vs_adp)
-    adp_txt <- if (isTRUE(!is.na(adp_v))) paste0(" \u00b7 ADP: ", adp_v) else ""
-    val_txt <- if (isTRUE(!is.na(val_v)) && isTRUE(val_v > 0))
-                 paste0(" (\u2b06 +", val_v, ")") else ""
+  player_card <- function(p, label = NULL) {
+    if (is.null(p) || nrow(p) == 0) return(NULL)
+    pos   <- pos_label(p$primary_pos)
+    fpts  <- round(dplyr::coalesce(p$proj_fpts, 0))
+    vor_v <- round(dplyr::coalesce(p$vor, 0), 1)
+    adp_v <- safe_val(p$adp)
+    adp_txt <- if (isTRUE(!is.na(adp_v))) paste0(" ADP:", adp_v) else ""
     tags$div(
-      tags$div(style="font-size:13px; font-weight:700;", rec$player_name),
+      if (!is.null(label)) tags$div(style="font-size:10px; font-weight:600; color:#888; margin-bottom:2px;", label),
+      tags$div(style="font-size:13px; font-weight:700;", p$player_name),
       tags$div(style="font-size:11px; color:#555;",
-               pos, "\u00b7", dplyr::coalesce(rec$team_abbr,"?"),
-               "\u00b7 #", rec$overall_rank, adp_txt, val_txt),
+               pos, "\u00b7", dplyr::coalesce(p$team_abbr, "?"),
+               "\u00b7 #", p$overall_rank, adp_txt),
       tags$div(style="margin:3px 0;",
         tags$span(class="stat-tag", paste("Pts:", fpts)),
         tags$span(class="stat-tag", paste("VOR:", vor_v)),
-        if (isTRUE(!is.na(safe_val(rec$proj_hr))))  tags$span(class="stat-tag", paste("HR:", safe_val(rec$proj_hr)))  else NULL,
-        if (isTRUE(!is.na(safe_val(rec$proj_sb))))  tags$span(class="stat-tag", paste("SB:", safe_val(rec$proj_sb)))  else NULL,
-        if (isTRUE(!is.na(safe_val(rec$proj_era)))) tags$span(class="stat-tag", paste("ERA:", safe_val(rec$proj_era))) else NULL,
-        if (isTRUE(!is.na(safe_val(rec$proj_k))))   tags$span(class="stat-tag", paste("K:", safe_val(rec$proj_k)))    else NULL
-      ),
-      actionButton(quick_btn_id, "\u2713 Draft This Pick",
-                   class=paste(btn_class, "btn-sm"), style="width:100%; margin-top:4px;")
+        if (isTRUE(!is.na(safe_val(p$proj_hr))))  tags$span(class="stat-tag", paste("HR:", safe_val(p$proj_hr)))  else NULL,
+        if (isTRUE(!is.na(safe_val(p$proj_sb))))  tags$span(class="stat-tag", paste("SB:", safe_val(p$proj_sb)))  else NULL,
+        if (isTRUE(!is.na(safe_val(p$proj_era)))) tags$span(class="stat-tag", paste("ERA:", safe_val(p$proj_era))) else NULL,
+        if (isTRUE(!is.na(safe_val(p$proj_k))))   tags$span(class="stat-tag", paste("K:", safe_val(p$proj_k)))    else NULL
+      )
+    )
+  }
+
+  rec_ui <- function(rec, quick_btn_id, btn_class) {
+    if (is.null(rec)) return(tags$em("No players available"))
+    pick <- rec$pick
+    bpa  <- rec$bpa
+
+    # Scarcity alerts (if any)
+    alert_ui <- if (length(rec$alerts) > 0) {
+      tags$div(style="font-size:10px; color:#c0392b; margin-bottom:4px;",
+               paste(rec$alerts, collapse="  "))
+    } else NULL
+
+    # Reason tag
+    reason_ui <- if (!is.null(rec$reason) && rec$reason != "Best player available") {
+      tags$div(style="font-size:10px; color:#7d3c98; font-weight:600; margin-bottom:3px;",
+               paste0("\u27a4 ", rec$reason))
+    } else NULL
+
+    # Recommended pick card
+    pick_card <- player_card(pick, label = "RECOMMENDED")
+
+    # BPA card (only if different from pick)
+    bpa_card <- if (isTRUE(nrow(bpa) > 0) && isTRUE(nrow(pick) > 0) &&
+                    isTRUE(bpa$fg_id[[1]] != pick$fg_id[[1]])) {
+      tags$div(style="margin-top:5px; padding-top:5px; border-top:1px dashed #ccc;",
+               player_card(bpa, label = "BPA"))
+    } else NULL
+
+    # Best by position (compact list)
+    by_pos_ui <- if (length(rec$by_pos) > 0) {
+      pos_items <- lapply(rec$by_pos, function(pb) {
+        p <- pb$player
+        if (is.null(p) || nrow(p) == 0) return(NULL)
+        scarcity_icon <- dplyr::case_when(
+          pb$status == "critical" ~ "\u26a0\ufe0f",
+          pb$status == "thinning" ~ "\u23f3",
+          TRUE ~ ""
+        )
+        tags$div(style="font-size:10px; color:#555; padding:1px 0;",
+          tags$b(paste0(pb$pos, ":")), scarcity_icon, p$player_name,
+          tags$span(style="color:#888;", paste0(" (VOR:", round(dplyr::coalesce(p$vor,0)), ")"))
+        )
+      })
+      tags$div(style="margin-top:5px; padding-top:5px; border-top:1px dashed #ccc;",
+        tags$div(style="font-size:10px; font-weight:600; color:#888; margin-bottom:2px;",
+                 "BEST BY POSITION"),
+        do.call(tags$div, Filter(Negate(is.null), pos_items))
+      )
+    } else NULL
+
+    tags$div(
+      alert_ui,
+      reason_ui,
+      pick_card,
+      bpa_card,
+      by_pos_ui,
+      actionButton(quick_btn_id, "\u2713 Draft Recommended",
+                   class=paste(btn_class, "btn-sm"), style="width:100%; margin-top:6px;")
     )
   }
 
@@ -401,13 +597,19 @@ server <- function(input, output, session) {
     player <- b %>% dplyr::filter(fg_id == fg_id_val)
     if (nrow(player) == 0 || player$status[1] != "Available") return()
     save_undo()
+    new_status <- if (team_name %in% MY_TEAMS) team_name else "Drafted"
+    # If this player has a split twin (same name, different type), remove it too
+    twin_ids <- b %>%
+      dplyr::filter(player_name == player$player_name[1],
+                    fg_id != fg_id_val,
+                    status == "Available") %>%
+      dplyr::pull(fg_id)
+    mark_ids <- c(fg_id_val, twin_ids)
     b <- b %>%
       dplyr::mutate(
-        status       = dplyr::if_else(fg_id == fg_id_val,
-                         if (team_name %in% MY_TEAMS) team_name else "Drafted",
-                         status),
-        drafted_by   = dplyr::if_else(fg_id == fg_id_val, team_name, drafted_by),
-        drafted_pick = dplyr::if_else(fg_id == fg_id_val, as.integer(pick_num()), drafted_pick)
+        status       = dplyr::if_else(fg_id %in% mark_ids, new_status, status),
+        drafted_by   = dplyr::if_else(fg_id %in% mark_ids, team_name, drafted_by),
+        drafted_pick = dplyr::if_else(fg_id %in% mark_ids, as.integer(pick_num()), drafted_pick)
       )
     board(b)
     draft_log(dplyr::bind_rows(draft_log(), dplyr::tibble(
@@ -447,10 +649,10 @@ server <- function(input, output, session) {
 
   # Draft via recommendation quick buttons
   observeEvent(input$quick_draft_t1, {
-    r <- rec1(); req(!is.null(r)); do_draft(r$fg_id, MY_TEAM_1)
+    r <- rec1(); req(!is.null(r)); do_draft(r$pick$fg_id, MY_TEAM_1)
   })
   observeEvent(input$quick_draft_t2, {
-    r <- rec2(); req(!is.null(r)); do_draft(r$fg_id, MY_TEAM_2)
+    r <- rec2(); req(!is.null(r)); do_draft(r$pick$fg_id, MY_TEAM_2)
   })
 
   # Undo
@@ -498,10 +700,11 @@ server <- function(input, output, session) {
       `#`    = b$overall_rank,
       `P#`   = b$pos_rank,
       Player = b$player_name,
-      Pos    = pos_label(b$primary_pos),
+      Pos    = dplyr::coalesce(b$eligible_positions, pos_label(b$primary_pos)),
       Team   = dplyr::coalesce(b$team_abbr, "?"),
       Pts    = b$proj_fpts,
       VOR    = round(b$vor),
+      Tier   = dplyr::coalesce(b$tier, 6L),
       ADP    = round(dplyr::coalesce(b$adp, NA_real_), 1),
       Val    = dplyr::coalesce(b$value_vs_adp, NA_real_),
       PA     = dplyr::coalesce(b$proj_pa,  NA_integer_),
@@ -551,6 +754,14 @@ server <- function(input, output, session) {
         backgroundSize     = "98% 70%",
         backgroundRepeat   = "no-repeat",
         backgroundPosition = "center"
+      ) %>%
+      formatStyle("Tier",
+        backgroundColor = styleEqual(
+          1:6,
+          c("#ffd700", "#c8e6fa", "#c8f5d8", "#ffe0b2", "#eeeeee", "#f5f5f5")
+        ),
+        color = styleEqual(1:6, c("#7b5800","#1a3a5c","#1a5c2a","#7b3800","#555","#aaa")),
+        fontWeight = "bold", textAlign = "center"
       ) %>%
       formatRound("AVG",  digits=3) %>%
       formatRound("ERA",  digits=2) %>%

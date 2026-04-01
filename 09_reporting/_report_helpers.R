@@ -66,12 +66,18 @@ make_game_header_gt <- function(gpk) {
   } else "—"
 
   # Game type flags
+  # MLB MLBAM league IDs: 103 = AL, 104 = NL
+  league_label <- dplyr::case_when(
+    !is.na(game$home_league_id) & game$home_league_id == 103 ~ "AL Game",
+    !is.na(game$home_league_id) & game$home_league_id == 104 ~ "NL Game",
+    TRUE ~ "League Game"
+  )
   type_flags <- c(
     if (isTRUE(game$is_interleague))   "Interleague",
     if (isTRUE(game$is_division_game)) "Division Game",
     if (isTRUE(game$is_doubleheader))  "Doubleheader"
   )
-  type_str <- if (length(type_flags) > 0) paste(type_flags, collapse = " · ") else "—"
+  type_str <- if (length(type_flags) > 0) paste(type_flags, collapse = " · ") else league_label
 
   dplyr::tibble(
     Label = c("Venue", "Weather", "Wind", "HP Umpire", "Series", "Game Type"),
@@ -121,12 +127,19 @@ make_starter_gt <- function(gpk) {
   if ("mlb_gs" %in% names(raw)) display$GS <- raw$mlb_gs
   if ("mlb_ip" %in% names(raw)) display$IP <- raw$mlb_ip
 
-  # Classic rates
-  if ("mlb_era"  %in% names(raw)) display$ERA  <- raw$mlb_era
+  # Classic rates — ERA omitted (ERA+ covers it)
   if ("mlb_whip" %in% names(raw)) display$WHIP <- raw$mlb_whip
 
-  # ERA context
-  if ("bbref_ERA_plus" %in% names(raw)) display$`ERA+` <- raw$bbref_ERA_plus
+  # ERA context — prefer bbref_ERA_plus; derive from fg_ERA_minus if unavailable
+  # ERA+ = 10000 / ERA-  (both centered at 100; higher ERA+ = better)
+  # Guard against Inf (ERA = 0.00 early season) — treat as NA
+  era_plus_vec <- dplyr::coalesce(
+    if ("bbref_ERA_plus" %in% names(raw)) raw$bbref_ERA_plus else rep(NA_real_, nrow(raw)),
+    if ("fg_ERA_minus"   %in% names(raw) && any(!is.na(raw$fg_ERA_minus)))
+      round(10000 / raw$fg_ERA_minus) else rep(NA_real_, nrow(raw))
+  )
+  era_plus_vec <- dplyr::if_else(is.finite(era_plus_vec), era_plus_vec, NA_real_)
+  if (any(!is.na(era_plus_vec))) display$`ERA+` <- era_plus_vec
 
   # ERA estimators
   if ("fg_FIP"   %in% names(raw)) display$FIP   <- raw$fg_FIP
@@ -148,9 +161,16 @@ make_starter_gt <- function(gpk) {
   if ("fg_BB_pct"   %in% names(raw)) display$`BB%`   <- raw$fg_BB_pct
   if ("fg_K_BB_pct" %in% names(raw)) display$`K-BB%` <- raw$fg_K_BB_pct
 
-  # Value
-  if ("fg_WAR"    %in% names(raw)) display$fWAR <- raw$fg_WAR
-  if ("bbref_WAR" %in% names(raw)) display$bWAR <- raw$bbref_WAR
+  # Value — single WAR column, preferring fg_WAR (current season) then bbref_WAR
+  war_vec <- dplyr::coalesce(
+    if ("fg_WAR"    %in% names(raw)) raw$fg_WAR    else rep(NA_real_, nrow(raw)),
+    if ("bbref_WAR" %in% names(raw)) raw$bbref_WAR else rep(NA_real_, nrow(raw))
+  )
+  # Use the label of whichever source actually has data; fall back to "WAR"
+  war_label <- if (any(!is.na(war_vec))) {
+    if ("fg_WAR" %in% names(raw) && any(!is.na(raw$fg_WAR))) "fWAR" else "bWAR"
+  } else "WAR"
+  display[[war_label]] <- war_vec
 
   tbl <- display %>%
     gt::gt() %>%
@@ -172,7 +192,7 @@ make_starter_gt <- function(gpk) {
       decimals = 0
     ) %>%
     gt::fmt_number(
-      columns  = dplyr::any_of(c("fWAR", "bWAR")),
+      columns  = dplyr::any_of(c("fWAR", "bWAR", "WAR")),
       decimals = 1
     ) %>%
     gt::fmt_missing(columns = dplyr::everything(), missing_text = "—") %>%
@@ -198,7 +218,7 @@ make_starter_gt <- function(gpk) {
     ) %>%
     gt::tab_spanner(
       label   = "Value",
-      columns = dplyr::any_of(c("fWAR", "bWAR"))
+      columns = dplyr::any_of(c("fWAR", "bWAR", "WAR"))
     ) %>%
     gt::tab_style(
       style     = gt::cell_fill(color = "#eaf2ff"),
@@ -242,7 +262,12 @@ make_lineup_gt <- function(gpk, side_filter) {
 
   display %>%
     gt::gt() %>%
-    gt::tab_header(title = gt::md(paste0("**", team, "**"))) %>%
+    gt::tab_header(
+      title    = gt::md(paste0("**", team, "**")),
+      subtitle = if (exists("offense_master_season") && nrow(offense_master_season) > 0)
+                   paste0(unique(offense_master_season$season)[1], " season stats")
+                 else NULL
+    ) %>%
     gt::fmt_number(
       columns  = dplyr::any_of(c("AVG", "OBP", "SLG", "OPS")),
       decimals = 3

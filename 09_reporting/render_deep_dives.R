@@ -89,3 +89,49 @@ for (i in seq_len(nrow(game_files))) {
 message("\nDeep dives complete: ", length(rendered), "/",
         nrow(game_files), " rendered.")
 message("Files saved to reports/")
+
+# ------------------------------------------------------------
+# Render team deep dives (one per side per game)
+# ------------------------------------------------------------
+
+message("\nRendering team deep dives...")
+
+team_rendered <- character()
+
+for (i in seq_len(nrow(game_files))) {
+  row <- game_files[i, ]
+  gpk <- row$game_pk
+
+  for (side in c("away", "home")) {
+    abbr      <- if (side == "away") row$away_abbr else row$home_abbr
+    team_name <- if (side == "away") row$away_team_name else row$home_team_name
+    out_file  <- paste0("team_", report_date, "_", abbr, ".html")
+    final_path <- file.path("reports", out_file)
+
+    message(sprintf("  %s — %s...", abbr, team_name))
+
+    tryCatch({
+      quarto::quarto_render(
+        input          = "09_reporting/mlb_team_deepdive.qmd",
+        execute_params = list(
+          game_pk   = gpk,
+          side      = side,
+          game_date = report_date
+        ),
+        output_file = out_file
+      )
+
+      if (file.exists(out_file)) {
+        file.rename(out_file, final_path)
+        team_rendered <- c(team_rendered, final_path)
+        message("    Saved: ", final_path)
+      }
+
+    }, error = function(e) {
+      message("    ERROR rendering ", abbr, " team page: ", e$message)
+    })
+  }
+}
+
+message("\nTeam deep dives complete: ", length(team_rendered), "/",
+        nrow(game_files) * 2, " rendered.")

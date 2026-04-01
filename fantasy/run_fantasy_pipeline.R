@@ -54,16 +54,18 @@ source("fantasy/01_consensus_projections.R")
 message("[3/5] Blending with Statcast adjustments...")
 source("fantasy/02_blend_projections.R")
 
-# ── Step 4: Build big board ──────────────────────────────────
-message("[4/5] Building big board + VOR rankings...")
-source("fantasy/03_big_board.R")
-
-# ── Step 4b: Pull ADP ────────────────────────────────────────
-message("  Pulling ADP rankings...")
+# ── Step 3.5: Pull ADP + Yahoo positions ─────────────────────
+# Run BEFORE big board so Yahoo position eligibility is available
+# during VOR calculation and position filtering
+message("  Pulling ADP + Yahoo positions...")
 tryCatch(
   source("fantasy/01b_adp_rankings.R"),
   error = function(e) message("  ADP pull failed (", e$message, ") — continuing without ADP")
 )
+
+# ── Step 4: Build big board ──────────────────────────────────
+message("[4/5] Building big board + VOR rankings...")
+source("fantasy/03_big_board.R")
 
 # Re-merge ADP only if we got actual non-NA ADP values from scraping
 adp_has_data  <- exists("adp_master") && is.data.frame(adp_master) &&
@@ -78,7 +80,6 @@ if (adp_has_data && !board_has_adp) {
     dplyr::distinct(fg_id, .keep_all = TRUE) %>%
     dplyr::select(fg_id, adp, adp_fantasypros, adp_yahoo, fp_rank)
 
-  # Drop any existing adp columns that were set to NA in step 3 to avoid suffix conflicts
   adp_cols <- c("adp","adp_fantasypros","adp_yahoo","fp_rank","value_vs_adp")
   big_board <- big_board %>%
     dplyr::select(-dplyr::any_of(adp_cols)) %>%
@@ -123,3 +124,21 @@ if (interactive()) {
   message("Launching draft app...")
   shiny::runApp("fantasy/draft_app")
 }
+
+# ============================================================
+# OPTIONAL: Run backtesting to validate/tune blend weights
+# ============================================================
+# Pulls 2022-2024 actual stats, grid-searches weight combos,
+# and reports which weights minimize RMSE vs actual fpts.
+# Run this separately — takes a few minutes.
+#
+#   source("fantasy/05_backtest.R")
+#
+# After reviewing results, update in 00_fantasy_config.R:
+#   BLEND_STEAMER_WT  <- <optimal_steamer_wt>
+#   BLEND_STATCAST_WT <- 1 - BLEND_STEAMER_WT
+# And in 02_blend_projections.R update the signal coefficients:
+#   brl_adj_factor coef (currently 0.012)
+#   xba blend weight (currently 0.35)
+#   sprint speed coef (currently 0.06)
+# ============================================================

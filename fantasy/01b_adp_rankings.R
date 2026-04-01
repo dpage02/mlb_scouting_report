@@ -178,6 +178,8 @@ fetch_yahoo_adp <- function() {
 
   name_col <- intersect(c("Name", "Player", "PLAYER"), names(tbl))[1]
   adp_col  <- intersect(c("ADP", "Avg Pick", "AVG PICK", "Average"), names(tbl))[1]
+  # Yahoo sometimes has a dedicated position column
+  pos_col  <- intersect(c("Position", "Pos", "POS", "Positions", "Eligibility"), names(tbl))[1]
 
   if (is.na(name_col)) {
     message("  Yahoo ADP: could not identify name column")
@@ -185,29 +187,38 @@ fetch_yahoo_adp <- function() {
   }
 
   result <- dplyr::tibble(
-    player_name_yh = as.character(tbl[[name_col]]),
-    adp_yahoo = if (!is.na(adp_col)) suppressWarnings(as.numeric(tbl[[adp_col]])) else as.numeric(seq_len(nrow(tbl)))
+    player_name_raw = as.character(tbl[[name_col]]),
+    adp_yahoo = if (!is.na(adp_col)) suppressWarnings(as.numeric(tbl[[adp_col]])) else as.numeric(seq_len(nrow(tbl))),
+    yahoo_pos_col   = if (!is.na(pos_col)) as.character(tbl[[pos_col]]) else NA_character_
   ) %>%
-    dplyr::mutate(player_name_yh = stringr::str_trim(player_name_yh)) %>%
+    dplyr::mutate(
+      # Yahoo player cells often look like "Aaron Judge\nOF - NYY" or "Ben Rice\nC,1B - NYY"
+      # Extract position from: anything between newline (or start) and " - TEAM" pattern
+      yahoo_pos_extracted = stringr::str_extract(
+        player_name_raw,
+        "(?:\n|^)([A-Z]{1,2}(?:[,/][A-Z]{1,2})*)(?:\\s*[-–]\\s*[A-Z]{2,3})"
+      ) %>%
+        stringr::str_extract("[A-Z]{1,2}(?:[,/][A-Z]{1,2})*"),
+
+      # Prefer dedicated column, fall back to extraction from name string
+      yahoo_pos = dplyr::coalesce(yahoo_pos_col, yahoo_pos_extracted) %>%
+        stringr::str_replace_all(",", "/") %>%   # normalise C,1B → C/1B
+        stringr::str_trim(),
+
+      # Clean player name: remove everything from first newline or "(" onwards
+      player_name_yh = stringr::str_trim(
+        stringr::str_remove(player_name_raw, "(?:\n|\\s*\\().*$")
+      )
+    ) %>%
+    dplyr::select(player_name_yh, adp_yahoo, yahoo_pos) %>%
     dplyr::filter(!is.na(player_name_yh), nchar(player_name_yh) > 2) %>%
     dplyr::distinct(player_name_yh, .keep_all = TRUE)
 
-  message("  Yahoo ADP: ", nrow(result), " players")
+  pos_found <- sum(!is.na(result$yahoo_pos) & nchar(result$yahoo_pos) > 0, na.rm = TRUE)
+  message("  Yahoo ADP: ", nrow(result), " players | position data: ", pos_found, " players")
+  message("  Sample (name | pos): ",
+    paste(head(paste(result$player_name_yh, result$yahoo_pos, sep=" | "), 4), collapse=" // "))
   result
-}
-
-# ------------------------------------------------------------
-# Fuzzy name match helper
-# ------------------------------------------------------------
-
-normalize_name <- function(x) {
-  # Convert accented chars to ASCII first (José→Jose, Ramírez→Ramirez)
-  # so our board names match FantasyPros/Yahoo ASCII names
-  x <- iconv(x, from="UTF-8", to="ASCII//TRANSLIT")
-  x %>%
-    stringr::str_to_lower() %>%
-    stringr::str_remove_all("[^a-z ]") %>%
-    stringr::str_squish()
 }
 
 # ------------------------------------------------------------
@@ -285,5 +296,205 @@ if (!exists("big_board")) {
     message("  If you need ADP, manually download from fantasypros.com/mlb/adp")
   }
 }
+
+# ------------------------------------------------------------
+# FantasyPros position eligibility
+# Scrapes each position-specific ranking page to build a
+# complete player → eligible positions map using Yahoo rules.
+# Ben Rice appears on both /c.php and /1b.php → "C/1B"
+# ------------------------------------------------------------
+
+fetch_fantasypros_positions <- function() {
+  pos_pages <- c(
+    C  = "https://www.fantasypros.com/mlb/rankings/c.php",
+    `1B` = "https://www.fantasypros.com/mlb/rankings/1b.php",
+    `2B` = "https://www.fantasypros.com/mlb/rankings/2b.php",
+    `3B` = "https://www.fantasypros.com/mlb/rankings/3b.php",
+    SS = "https://www.fantasypros.com/mlb/rankings/ss.php",
+    OF = "https://www.fantasypros.com/mlb/rankings/of.php",
+    SP = "https://www.fantasypros.com/mlb/rankings/sp.php",
+    RP = "https://www.fantasypros.com/mlb/rankings/rp.php"
+  )
+
+  all_rows <- list()
+
+  for (pos in names(pos_pages)) {
+    url  <- pos_pages[[pos]]
+    resp <- tryCatch(
+      httr::GET(url,
+                httr::add_headers(`User-Agent` = "Mozilla/5.0"),
+                httr::timeout(20)),
+      error = function(e) NULL
+    )
+    if (is.null(resp) || httr::status_code(resp) != 200) {
+      message("  FP positions [", pos, "]: HTTP failed")
+      next
+    }
+
+    page <- rvest::read_html(httr::content(resp, as = "text", encoding = "UTF-8"))
+
+    # Try multiple CSS selectors — FP has changed their markup over the years
+    names_raw <- character(0)
+
+    selectors <- c(
+      "table#ranking-table td.player-label a.fp-player-name",
+      "table.ecrRankings td.player-label a",
+      "table td.player-label a",
+      "table a.player-name",
+      "table a[href*='/mlb/players/']"
+    )
+    for (sel in selectors) {
+      names_raw <- tryCatch(
+        page %>% rvest::html_elements(sel) %>% rvest::html_text(trim = TRUE),
+        error = function(e) character(0)
+      )
+      if (length(names_raw) > 5) break
+    }
+
+    # Final fallback: parse any large table by column name
+    if (length(names_raw) == 0) {
+      tbls <- tryCatch(
+        page %>% rvest::html_elements("table") %>% purrr::map(rvest::html_table),
+        error = function(e) list()
+      )
+      tbl <- purrr::keep(tbls, ~ nrow(.x) > 10) %>% purrr::pluck(1)
+      if (!is.null(tbl)) {
+        name_col <- intersect(c("Player","Name","PLAYER"), names(tbl))[1]
+        if (!is.na(name_col)) {
+          names_raw <- as.character(tbl[[name_col]]) %>%
+            stringr::str_trim() %>%
+            stringr::str_remove("\\s*\\(.*\\)\\s*$") %>%
+            stringr::str_remove("\\s+[A-Z]{2,3}\\s*$")   # strip trailing team abbr
+          names_raw <- names_raw[nchar(names_raw) > 2]
+        }
+      }
+    }
+
+    if (length(names_raw) == 0) {
+      message("  FP positions [", pos, "]: no players found")
+      next
+    }
+
+    message("  FP positions [", pos, "]: ", length(names_raw), " players")
+    all_rows[[pos]] <- dplyr::tibble(
+      player_name_fp = names_raw,
+      fp_pos         = pos
+    )
+    Sys.sleep(0.4)  # polite delay between page requests
+  }
+
+  if (length(all_rows) == 0) {
+    message("  FP positions: all pages failed")
+    return(NULL)
+  }
+
+  # Combine: one row per player per position, then collapse to "C/1B" style
+  combined <- dplyr::bind_rows(all_rows) %>%
+    dplyr::mutate(name_key = normalize_name(player_name_fp)) %>%
+    dplyr::filter(!is.na(name_key), nchar(name_key) > 2) %>%
+    dplyr::group_by(name_key) %>%
+    dplyr::summarise(
+      player_name_fp = dplyr::first(player_name_fp),
+      fp_eligible    = paste(unique(fp_pos), collapse = "/"),
+      .groups        = "drop"
+    )
+
+  message("FP position map built: ", nrow(combined), " players with eligibility data")
+  message("  Sample: ",
+    paste(head(paste(combined$player_name_fp, combined$fp_eligible, sep="="), 5), collapse=" | "))
+  combined
+}
+
+# ------------------------------------------------------------
+# MLB Position Eligibility (Yahoo threshold = 20+ games at position)
+# ------------------------------------------------------------
+# Yahoo grants eligibility at any position where a player appeared
+# in 20+ games the prior season. This mirrors Yahoo's actual rules
+# and is more accurate than scraping FP ranking pages.
+# One row per mlbam_id with slash-separated eligible positions:
+#   Ben Rice → "C/1B"   |   Bobby Witt Jr. → "SS/3B"
+# ------------------------------------------------------------
+
+fetch_mlb_position_eligibility <- function(min_games = 20) {
+  season_val <- as.integer(format(Sys.Date(), "%Y")) - 1
+
+  raw <- tryCatch(
+    baseballr::mlb_stats(
+      stat_type   = "season",
+      stat_group  = "fielding",
+      player_pool = "all",
+      season      = season_val,
+      sport_id    = 1,
+      limit       = 5000
+    ),
+    error = function(e) { message("  MLB fielding API failed: ", e$message); NULL }
+  )
+
+  if (is.null(raw) || nrow(raw) == 0) {
+    message("  No MLB fielding data returned")
+    return(NULL)
+  }
+
+  raw %>%
+    dplyr::transmute(
+      mlbam_id = as.integer(player_id),
+      position = position_abbreviation,
+      games    = suppressWarnings(as.integer(games))
+    ) %>%
+    dplyr::filter(!is.na(mlbam_id), !is.na(position), !is.na(games),
+                  games >= min_games) %>%
+    dplyr::mutate(
+      fantasy_pos = dplyr::case_when(
+        position == "C"                         ~ "C",
+        position == "1B"                        ~ "1B",
+        position == "2B"                        ~ "2B",
+        position == "3B"                        ~ "3B",
+        position == "SS"                        ~ "SS",
+        position %in% c("LF","CF","RF","OF")   ~ "OF",
+        position == "DH"                        ~ "DH",
+        position %in% c("SP","RP","P","1","0")  ~ NA_character_,
+        TRUE                                    ~ NA_character_
+      )
+    ) %>%
+    dplyr::filter(!is.na(fantasy_pos)) %>%
+    dplyr::group_by(mlbam_id) %>%
+    dplyr::summarise(
+      mlb_eligible = paste(unique(fantasy_pos), collapse = "/"),
+      n_positions  = dplyr::n_distinct(fantasy_pos),
+      .groups      = "drop"
+    )
+}
+
+message("Fetching MLB position eligibility (", 20, "+ games threshold)...")
+mlb_positions <- tryCatch(
+  fetch_mlb_position_eligibility(min_games = 20),
+  error = function(e) { message("  MLB positions failed: ", e$message); NULL }
+)
+
+if (!is.null(mlb_positions) && nrow(mlb_positions) > 0) {
+  multi <- sum(mlb_positions$n_positions > 1)
+  message("  MLB positions: ", nrow(mlb_positions), " players | ",
+          multi, " multi-position")
+  message("  Sample multi-pos: ",
+    paste(
+      head(
+        mlb_positions %>%
+          dplyr::filter(n_positions > 1) %>%
+          dplyr::mutate(lbl = mlb_eligible) %>%
+          dplyr::pull(lbl),
+        8
+      ),
+      collapse = " | "
+    )
+  )
+} else {
+  message("  MLB position eligibility unavailable")
+}
+
+message("Fetching FantasyPros position eligibility...")
+fp_positions <- tryCatch(
+  fetch_fantasypros_positions(),
+  error = function(e) { message("  FP positions failed: ", e$message); NULL }
+)
 
 message("01b_adp_rankings complete.")

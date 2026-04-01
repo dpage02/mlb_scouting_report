@@ -58,14 +58,50 @@ matchup   <- sprintf("%s @ %s", away_team, home_team)
 #| output: asis
 cat(sprintf("# %s\n\n", matchup))
 
-stats_season <- if (exists("player_season_mlb_offense") && nrow(player_season_mlb_offense) > 0)
-  unique(player_season_mlb_offense$season)[1] else "—"
+stats_season <- if (exists("offense_master_season") && nrow(offense_master_season) > 0)
+  unique(offense_master_season$season)[1] else "—"
 
 cat(paste0(
   "> **", format(as.Date(params$game_date), "%A, %B %d, %Y"), "**",
   " · ", game$venue_name,
   " · ", stats_season, " season stats\n\n"
 ))
+```
+
+```{r nav-bar}
+#| output: asis
+scouting_file <- paste0("scouting_", params$game_date, ".html")
+
+away_abbr_str <- tryCatch({
+  team_ids %>% dplyr::filter(mlbam_team_id == game$away_team_id) %>%
+    dplyr::pull(team_abbr) %>% dplyr::first()
+}, error = function(e) "AWAY")
+
+home_abbr_str <- tryCatch({
+  team_ids %>% dplyr::filter(mlbam_team_id == game$home_team_id) %>%
+    dplyr::pull(team_abbr) %>% dplyr::first()
+}, error = function(e) "HOME")
+
+away_abbr_str <- if (length(away_abbr_str) == 0 || is.na(away_abbr_str)) "AWAY" else away_abbr_str
+home_abbr_str <- if (length(home_abbr_str) == 0 || is.na(home_abbr_str)) "HOME" else home_abbr_str
+
+away_team_file <- paste0("team_", params$game_date, "_", away_abbr_str, ".html")
+home_team_file <- paste0("team_", params$game_date, "_", home_abbr_str, ".html")
+
+nav_html <- paste0(
+  '<div style="margin-bottom:1.5rem; padding:10px 14px; background:#f8f9fa; ',
+  'border-radius:6px; border:1px solid #dee2e6; font-size:13px;">',
+  '<a href="', scouting_file, '" style="color:#1a73e8; text-decoration:none;">',
+  '\u2190 Today\'s Games</a>',
+  '&nbsp;&nbsp;|&nbsp;&nbsp;',
+  '<a href="', away_team_file, '" style="color:#1a73e8; text-decoration:none; font-weight:600;">',
+  away_team, ' Team Deep Dive \u2197</a>',
+  '&nbsp;&nbsp;|&nbsp;&nbsp;',
+  '<a href="', home_team_file, '" style="color:#1a73e8; text-decoration:none; font-weight:600;">',
+  home_team, ' Team Deep Dive \u2197</a>',
+  '</div>'
+)
+cat(nav_html, "\n\n")
 ```
 
 ---
@@ -88,8 +124,30 @@ cat("\n\n")
 sp_splits <- make_starter_splits_gt(gpk)
 if (!is.null(sp_splits)) cat(gt::as_raw_html(sp_splits))
 cat("\n\n")
+sp_full <- make_pitcher_full_gt(gpk)
+for (nm in names(sp_full)) {
+  cat(sprintf('\n\n<h4 style="margin-top:1.4rem; margin-bottom:0.3rem; color:#2c3e50;">%s</h4>\n\n', nm))
+  cat(gt::as_raw_html(sp_full[[nm]]))
+  cat("\n\n")
+}
 sp_career <- make_career_pitching_gt(gpk)
 if (!is.null(sp_career)) cat(gt::as_raw_html(sp_career))
+```
+
+---
+
+## Pitch Arsenal
+
+*Pitch mix, velocity, movement, and outcomes for today's starters. Sorted by usage within each pitcher.*
+
+```{r arsenal}
+#| output: asis
+arsenal_tbl <- make_arsenal_gt(gpk)
+if (!is.null(arsenal_tbl)) {
+  cat(gt::as_raw_html(arsenal_tbl))
+} else {
+  cat("*Pitch arsenal data not available for this game.*\n\n")
+}
 ```
 
 ---

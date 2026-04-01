@@ -5,17 +5,10 @@
 # ============================================================
 # PURPOSE:
 #   Pull season-level FanGraphs WAR and value metrics for batters.
-#   Uses type="1" (same FanGraphs endpoint as the baserunning
-#   module), but selects only value/WAR columns.
+#   Bypasses baseballr::fg_batter_leaders() (known bug).
 #
 # KEY METRICS:
-#   WAR     — FanGraphs wins above replacement (fWAR)
-#   Dollars — Dollar value estimate ($/WAR market rate)
-#   Off     — Offensive runs above average
-#   Def     — Defensive runs above average
-#
-# DATA SOURCE:
-#   FanGraphs via baseballr::fg_batter_leaders(type = "1")
+#   WAR, Dollars, Off, Def
 #
 # GRAIN:
 #   One row per mlbam_id per season per team_abbr
@@ -26,72 +19,81 @@
 
 source("pipelines/05_performance/00_schema/00_grain_definition.R")
 
-# ------------------------------------------------------------
-# Determine Season
-# ------------------------------------------------------------
-
 season_complete <- target_season - 1
 
-test_fg <- tryCatch(
-  baseballr::fg_batter_leaders(
-    startseason = season_complete,
-    endseason   = season_complete,
-    qual        = "0",
-    type        = "1",
-    pageitems   = "10"
-  ),
-  error = function(e) NULL
-)
+# ------------------------------------------------------------
+# Direct FanGraphs API pull (type 1 = Advanced, has WAR/Dollars)
+# ------------------------------------------------------------
 
-if (is.null(test_fg) || nrow(test_fg) == 0) {
-  message("No FanGraphs data for ", season_complete,
-          ". Falling back to ", season_complete - 1)
-  season_complete <- season_complete - 1
+pull_fg_batting_value_api <- function(yr) {
+  resp <- tryCatch(
+    httr::GET(
+      "https://www.fangraphs.com/api/leaders/major-league/data",
+      query = list(
+        age = "", pos = "all", stats = "bat", lg = "all",
+        season = yr, season1 = yr, ind = "0", qual = "0",
+        type = "1", pageitems = "2000000", pagenum = "1", rost = "0"
+      ),
+      httr::timeout(60)
+    ),
+    error = function(e) {
+      message("FanGraphs batting value API failed (yr=", yr, "): ", e$message)
+      NULL
+    }
+  )
+  if (is.null(resp) || httr::http_error(resp)) return(NULL)
+  parsed <- tryCatch(
+    jsonlite::fromJSON(httr::content(resp, as = "text", encoding = "UTF-8"), flatten = TRUE),
+    error = function(e) NULL
+  )
+  if (is.null(parsed) || !"data" %in% names(parsed)) return(NULL)
+  result <- tryCatch(dplyr::as_tibble(parsed$data), error = function(e) NULL)
+  if (is.null(result) || nrow(result) == 0) return(NULL)
+  result
 }
 
-fg_raw <- baseballr::fg_batter_leaders(
-  startseason = season_complete,
-  endseason   = season_complete,
-  qual        = "0",
-  type        = "1",
-  pageitems   = "10000"
-)
+fg_raw <- pull_fg_batting_value_api(season_complete)
 
-# ------------------------------------------------------------
-# Select value columns only
-# ------------------------------------------------------------
+if (is.null(fg_raw) || nrow(fg_raw) == 0) {
+  message("No FanGraphs data for ", season_complete, ". Falling back to ", season_complete - 1)
+  season_complete <- season_complete - 1
+  fg_raw <- pull_fg_batting_value_api(season_complete)
+}
 
-value_cols <- c(
-  "playerid", "xMLBAMID", "team_name_abb", "Season",
-  "WAR", "Dollars", "Off", "Def"
-)
+if (is.null(fg_raw) || nrow(fg_raw) == 0) {
+  message("FanGraphs batting value unavailable. Creating empty table.")
+  player_season_fg_batting_value <- dplyr::tibble(
+    mlbam_id = integer(), season = integer(), team_abbr = character(),
+    fg_id = character(), player_type = character()
+  )
+} else {
 
-player_season_fg_batting_value <- fg_raw %>%
-  dplyr::select(dplyr::any_of(value_cols)) %>%
-  dplyr::mutate(
-    mlbam_id     = as.integer(xMLBAMID),
-    fg_id        = as.character(playerid),
-    season       = as.integer(season_complete),
-    team_abbr    = team_name_abb,
-    player_type  = "batter"
-  ) %>%
-  dplyr::select(-playerid, -xMLBAMID, -team_name_abb,
-                -dplyr::any_of("Season")) %>%
-  dplyr::rename_with(
-    ~ paste0("fg_", .x),
-    -c(mlbam_id, fg_id, season, team_abbr, player_type)
-  ) %>%
-  dplyr::filter(!is.na(mlbam_id)) %>%
-  dplyr::distinct(mlbam_id, season, team_abbr, .keep_all = TRUE) %>%
-  dplyr::select(mlbam_id, season, team_abbr, fg_id, player_type,
-                dplyr::everything())
+  mlbam_col <- intersect(c("xMLBAMID", "mlbam_id"), names(fg_raw))[1]
+  team_col  <- intersect(c("team_name_abb", "Team"), names(fg_raw))[1]
 
-# ------------------------------------------------------------
-# Validate
-# ------------------------------------------------------------
+  player_season_fg_batting_value <- fg_raw %>%
+    dplyr::mutate(
+      mlbam_id    = as.integer(if (!is.na(mlbam_col)) .data[[mlbam_col]] else NA_integer_),
+      fg_id       = as.character(playerid),
+      season      = as.integer(season_complete),
+      team_abbr   = if (!is.na(team_col)) as.character(.data[[team_col]]) else NA_character_,
+      player_type = "batter"
+    ) %>%
+    dplyr::select(
+      mlbam_id, fg_id, season, team_abbr, player_type,
+      dplyr::any_of(c("WAR", "Dollars", "Off", "Def"))
+    ) %>%
+    dplyr::rename_with(
+      ~ paste0("fg_", .x),
+      dplyr::any_of(c("WAR", "Dollars", "Off", "Def"))
+    ) %>%
+    dplyr::filter(!is.na(mlbam_id)) %>%
+    dplyr::distinct(mlbam_id, season, team_abbr, .keep_all = TRUE) %>%
+    dplyr::select(mlbam_id, season, team_abbr, fg_id, player_type, dplyr::everything())
 
-validate_performance_table(player_season_fg_batting_value)
+  validate_performance_table(player_season_fg_batting_value)
+}
 
 message("01_fangraphs_batting_value_season complete: ",
         nrow(player_season_fg_batting_value),
-        " batter-season-team rows for season ", season_complete)
+        " batter-season rows for season ", season_complete)

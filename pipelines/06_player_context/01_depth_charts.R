@@ -44,8 +44,19 @@ fg_depth_raw <- tryCatch(
 )
 
 if (is.null(fg_depth_raw) || httr::http_error(fg_depth_raw)) {
-  stop("Cannot reach FanGraphs depth chart API — pipeline cannot continue.")
-}
+  message("WARNING: Cannot reach FanGraphs depth chart API. ",
+          "depth_charts will be empty — rotation/role data unavailable.")
+  depth_charts <- dplyr::tibble(
+    mlbam_id     = integer(),
+    player_name  = character(),
+    team_abbr    = character(),
+    fg_team_abbr = character(),
+    fg_role      = character(),
+    fg_position  = character(),
+    roster_type  = character()
+  )
+  message("01_depth_charts complete: 0 players (API unavailable)")
+} else {
 
 parsed_init <- jsonlite::fromJSON(
   httr::content(fg_depth_raw, as = "text", encoding = "UTF-8"),
@@ -160,3 +171,5 @@ if (n_teams < 28) {
 message("01_depth_charts complete: ",
         nrow(depth_charts), " players across ", n_teams, " teams (",
         n_pitchers, " pitchers)")
+
+} # end else (API available)

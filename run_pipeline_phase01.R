@@ -104,6 +104,7 @@ suppressMessages({
   source("pipelines/05_performance/02_pitching/07_bbref_pitching_advanced.R")
   source("pipelines/05_performance/02_pitching/99_pitching_master_join.R")
   source("pipelines/05_performance/02_pitching/06_player_career_pitching.R")
+  source("pipelines/05_performance/02_pitching/08_statcast_pitch_arsenal.R")
 })
 log_message("05 — pitching complete")
 

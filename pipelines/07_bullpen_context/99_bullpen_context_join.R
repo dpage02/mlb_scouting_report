@@ -85,22 +85,28 @@ bullpen_context <- active_pitchers %>%
     value_master_season %>%
       dplyr::filter(player_type == "pitcher") %>%
       dplyr::distinct(mlbam_id, .keep_all = TRUE) %>%
-      dplyr::select(mlbam_id, fg_WAR, fg_Dollars, fg_RAR,
-                    bbref_ERA, bbref_WHIP, bbref_SO),
+      dplyr::select(mlbam_id, dplyr::any_of(c(
+        "fg_WAR", "fg_Dollars", "fg_RAR",
+        "bbref_ERA", "bbref_WHIP", "bbref_SO"
+      ))),
     by = "mlbam_id"
   ) %>%
 
   dplyr::select(
-    mlbam_id, player_name, team_abbr, fg_role, fg_position, roster_type,
-    availability, days_rest, pitches_yesterday,
-    pitches_last_3_days, appearances_last_7d, consecutive_days,
-    last_outing_date,
-    mlb_g, mlb_ip, mlb_era, mlb_whip, mlb_so, mlb_bb, mlb_sv, mlb_hld,
-    fg_WAR, fg_Dollars, bbref_ERA, bbref_WHIP,
+    mlbam_id, player_name, team_abbr,
+    dplyr::any_of(c("fg_role", "fg_position")), roster_type,
+    dplyr::any_of(c(
+      "availability", "days_rest", "pitches_yesterday",
+      "pitches_last_3_days", "appearances_last_7d", "consecutive_days",
+      "last_outing_date"
+    )),
+    dplyr::any_of(c("mlb_g", "mlb_ip", "mlb_era", "mlb_whip",
+                    "mlb_so", "mlb_bb", "mlb_sv", "mlb_hld")),
+    dplyr::any_of(c("fg_WAR", "fg_Dollars", "bbref_ERA", "bbref_WHIP")),
     dplyr::everything()
   ) %>%
 
-  dplyr::arrange(team_abbr, fg_role)
+  dplyr::arrange(team_abbr, dplyr::across(dplyr::any_of("fg_role")))
 
 # ------------------------------------------------------------
 # Validate

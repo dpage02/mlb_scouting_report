@@ -26,22 +26,34 @@ library(gt)
 library(dplyr)
 library(stringr)
 
-# Run the full pipeline (builds all objects in this session)
-# capture.output suppresses cat() log messages from leaking into the HTML
-invisible(capture.output(source("run_pipeline_phase01.R")))
+# Load from pipeline cache when available and fresh (written by run_all.R or
+# a prior render today). Falls back to running the full pipeline if stale/missing.
+cache_path <- "data/pipeline_cache.rds"
+cache_ok   <- file.exists(cache_path) &&
+              difftime(Sys.time(), file.mtime(cache_path), units = "hours") < 12
 
-# Cache key pipeline objects so deep dive renders don't re-run the pipeline
-pipeline_cache_objects <- c(
-  "target_date", "target_season", "team_ids",
-  "game_context", "lineup_context", "starter_matchup", "bullpen_grid",
-  "offense_master_season", "player_career_offense", "player_career_pitching",
-  "defense_master_season", "lineup_context_splits", "starter_splits"
-)
-pipeline_cache <- mget(
-  pipeline_cache_objects[pipeline_cache_objects %in% ls()],
-  envir = .GlobalEnv
-)
-saveRDS(pipeline_cache, "data/pipeline_cache.rds")
+if (cache_ok) {
+  cache <- readRDS(cache_path)
+  list2env(cache, envir = .GlobalEnv)
+  rm(cache)
+} else {
+  invisible(capture.output(source("run_pipeline_phase01.R")))
+  pipeline_cache_objects <- c(
+    "target_date", "target_season", "team_ids",
+    "game_context", "lineup_context", "starter_matchup", "bullpen_grid",
+    "offense_master_season", "player_career_offense", "player_career_pitching",
+    "pitching_master_season", "pitcher_arsenal",
+    "defense_master_season", "lineup_context_splits", "starter_splits",
+    "player_season_fg_pitching", "player_season_mlb_pitching",
+    "player_master_ids",
+    "depth_charts"
+  )
+  pipeline_cache <- mget(
+    pipeline_cache_objects[pipeline_cache_objects %in% ls()],
+    envir = .GlobalEnv
+  )
+  saveRDS(pipeline_cache, cache_path)
+}
 
 # Load report helpers
 source("09_reporting/_report_helpers.R")
@@ -51,11 +63,12 @@ source("09_reporting/_report_helpers.R")
 #| output: asis
 
 # Determine which seasons stats are drawn from
-mlb_stats_season <- if (exists("player_season_mlb_offense") && nrow(player_season_mlb_offense) > 0)
-  unique(player_season_mlb_offense$season)[1] else NA
+mlb_stats_season <- if (exists("offense_master_season") && nrow(offense_master_season) > 0)
+  unique(offense_master_season$season)[1] else NA
 
-fg_stats_season  <- if (exists("player_season_fg_offense") && nrow(player_season_fg_offense) > 0)
-  unique(player_season_fg_offense$season)[1] else NA
+fg_stats_season  <- if (exists("offense_master_season") && nrow(offense_master_season) > 0 &&
+                        "fg_wRC_plus" %in% names(offense_master_season))
+  unique(offense_master_season$season)[1] else NA
 
 stats_note <- if (!is.na(mlb_stats_season) && !is.na(fg_stats_season) &&
                   mlb_stats_season != fg_stats_season) {
@@ -93,6 +106,8 @@ summary_rows <- game_context %>%
     home_abbr     = dplyr::coalesce(home_abbr, as.character(home_team_id)),
     deepdive_file = paste0("deepdive_", summary_date_str, "_",
                            away_abbr, "_", home_abbr, ".html"),
+    away_team_file = paste0("team_", summary_date_str, "_", away_abbr, ".html"),
+    home_team_file = paste0("team_", summary_date_str, "_", home_abbr, ".html"),
     away_sp       = dplyr::coalesce(away_pitcher_name, "TBD"),
     home_sp       = dplyr::coalesce(home_pitcher_name, "TBD"),
     time_flag     = dplyr::case_when(
@@ -114,8 +129,9 @@ rows_html <- paste0(
     paste0(
       '<tr>',
       '<td style="white-space:nowrap; font-weight:600; padding:5px 10px;">',
+        '<a href="', r$deepdive_file, '" style="color:#1a3c6e; text-decoration:none;">',
         r$away_team_name, ' <span style="color:#888;">@</span> ', r$home_team_name,
-        r$game_flag,
+        '</a>', r$game_flag,
       '</td>',
       '<td style="white-space:nowrap; color:#555; font-size:13px; padding:5px 10px;">',
         r$away_sp, ' <span style="color:#bbb;">vs</span> ', r$home_sp,
@@ -131,6 +147,23 @@ rows_html <- paste0(
         'background:#1a73e8; color:white; padding:2px 9px; border-radius:3px; ',
         'text-decoration:none; white-space:nowrap;">Deep Dive</a>',
       '</td>',
+      '<td style="text-align:center; padding:5px 4px;">',
+        '<a href="', r$away_team_file, '" style="font-size:11px; font-weight:600; ',
+        'background:#e8f0fe; color:#1a73e8; padding:2px 8px; border-radius:3px; ',
+        'border:1px solid #1a73e8; text-decoration:none; white-space:nowrap;">',
+        r$away_abbr, ' Team</a>',
+      '</td>',
+      '<td style="text-align:center; padding:5px 4px;">',
+        '<a href="', r$home_team_file, '" style="font-size:11px; font-weight:600; ',
+        'background:#e8f0fe; color:#1a73e8; padding:2px 8px; border-radius:3px; ',
+        'border:1px solid #1a73e8; text-decoration:none; white-space:nowrap;">',
+        r$home_abbr, ' Team</a>',
+      '</td>',
+      '</tr>',
+      '<tr>',
+      '<td colspan="7" style="padding:4px 10px 10px 10px; color:#888; font-size:12px; font-style:italic; border-bottom:1px solid #dee2e6;">',
+      '&#128203; <em>Game narrative coming soon — AI analysis will appear here</em>',
+      '</td>',
       '</tr>'
     )
   }, character(1)),
@@ -145,6 +178,8 @@ cat(paste0(
   '<th style="text-align:left; padding:5px 10px;">Venue</th>',
   '<th style="text-align:center; padding:5px 8px;">D/N</th>',
   '<th style="padding:5px 8px;"></th>',
+  '<th style="text-align:center; padding:5px 4px;">Away Team</th>',
+  '<th style="text-align:center; padding:5px 4px;">Home Team</th>',
   '</tr></thead>',
   '<tbody>', rows_html, '</tbody>',
   '</table>'

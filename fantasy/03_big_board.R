@@ -50,37 +50,77 @@ parse_positions <- function(pos_str) {
 }
 
 
-# Diagnostic: show what position strings look like
-pos_sample <- head(na.omit(unique(proj_bat$proj_pos_raw)), 10)
-message("Position sample from projections: ", paste(pos_sample, collapse=" | "))
-pct_na_pos <- mean(is.na(proj_bat$proj_pos_raw)) * 100
-message("proj_pos_raw NA rate: ", round(pct_na_pos), "%")
+# ── Position resolution ───────────────────────────────────────────────────────
+# Priority order (each layer fills gaps left by the one above):
+#
+#   Layer 1 — MLB fielding stats (20+ games threshold)
+#     Mirrors Yahoo's actual eligibility rules. One row per player with
+#     all positions where they played 20+ games: Ben Rice → "C/1B"
+#     Source: mlb_positions built in 01b_adp_rankings.R
+#
+#   Layer 2 — FanGraphs depth charts
+#     Current 2026 roster position. Catches players not in last season's
+#     MLB data (IL returnees, prospects debuting in 2026, etc.)
+#     Single position only (no multi-pos from this source).
+#
+#   Layer 3 — Projection API "Pos" column (proj_pos_raw already set)
+#     Last resort: whatever the FG projection system returned.
 
-# If >80% of position strings are NA, fall back to offense_master_season fg_position
-if (pct_na_pos > 80) {
-  # Try offense_master_season first (broadest coverage — all players who appeared last season)
-  pos_source <- NULL
-  if (exists("offense_master_season") && "fg_position" %in% names(offense_master_season)) {
-    message("  Using offense_master_season fg_position as fallback")
-    pos_source <- offense_master_season %>%
-      dplyr::arrange(mlbam_id, dplyr::desc(dplyr::coalesce(mlb_pa, 0L))) %>%
-      dplyr::distinct(mlbam_id, .keep_all = TRUE) %>%
-      dplyr::select(mlbam_id, pos_fallback = fg_position)
-  } else if (exists("player_season_fg_offense") && "fg_position" %in% names(player_season_fg_offense)) {
-    message("  Using player_season_fg_offense fg_position as fallback")
-    pos_source <- player_season_fg_offense %>%
-      dplyr::distinct(mlbam_id, .keep_all = TRUE) %>%
-      dplyr::select(mlbam_id, pos_fallback = fg_position)
-  }
-  if (!is.null(pos_source)) {
-    proj_bat <- proj_bat %>%
-      dplyr::left_join(pos_source, by = "mlbam_id") %>%
-      dplyr::mutate(proj_pos_raw = dplyr::coalesce(proj_pos_raw, pos_fallback)) %>%
-      dplyr::select(-pos_fallback)
-    pct_na_after <- mean(is.na(proj_bat$proj_pos_raw)) * 100
-    message("  Position NA rate after fallback: ", round(pct_na_after), "%")
-  }
+# Layer 1 — MLB fielding eligibility (primary source)
+if (exists("mlb_positions") && !is.null(mlb_positions) && nrow(mlb_positions) > 100) {
+  proj_bat <- proj_bat %>%
+    dplyr::left_join(
+      mlb_positions %>% dplyr::select(mlbam_id, mlb_eligible),
+      by = "mlbam_id"
+    ) %>%
+    dplyr::mutate(proj_pos_raw = dplyr::coalesce(mlb_eligible, proj_pos_raw)) %>%
+    dplyr::select(-mlb_eligible)
+  message("MLB eligibility applied: ", sum(!is.na(proj_bat$proj_pos_raw)),
+          " / ", nrow(proj_bat), " players | multi-pos: ",
+          sum(grepl("/", proj_bat$proj_pos_raw, fixed = FALSE), na.rm = TRUE))
+} else {
+  message("mlb_positions not available — skipping to depth_charts")
 }
+
+# Layer 2 — depth_charts fallback (catches 2026 rookies / IL returnees)
+if (exists("depth_charts") && !is.null(depth_charts) && nrow(depth_charts) > 100) {
+  dc_pos <- depth_charts %>%
+    dplyr::filter(!is.na(mlbam_id), !is.na(fg_position), nchar(fg_position) >= 1,
+                  !fg_position %in% c("SP", "RP", "SP/RP")) %>%
+    dplyr::group_by(mlbam_id) %>%
+    dplyr::summarise(
+      dc_pos = paste(unique(fg_position), collapse = "/"),
+      .groups = "drop"
+    ) %>%
+    dplyr::mutate(dc_pos = dplyr::if_else(dc_pos == "", NA_character_, dc_pos))
+
+  proj_bat <- proj_bat %>%
+    dplyr::left_join(dc_pos, by = "mlbam_id") %>%
+    dplyr::mutate(proj_pos_raw = dplyr::coalesce(proj_pos_raw, dc_pos)) %>%
+    dplyr::select(-dc_pos)
+  message("Depth chart fallback: ", sum(!is.na(proj_bat$proj_pos_raw)),
+          " / ", nrow(proj_bat), " players now have position")
+}
+
+# Layer 3 — FP position pages (rarely works due to JS rendering, but kept as hook)
+if (exists("fp_positions") && !is.null(fp_positions) && nrow(fp_positions) > 10) {
+  fp_map <- fp_positions %>% dplyr::select(name_key, fp_eligible)
+  proj_bat <- proj_bat %>%
+    dplyr::mutate(name_key = normalize_name(player_name)) %>%
+    dplyr::left_join(fp_map, by = "name_key") %>%
+    dplyr::mutate(proj_pos_raw = dplyr::coalesce(fp_eligible, proj_pos_raw)) %>%
+    dplyr::select(-name_key, -fp_eligible)
+  message("FP positions applied: ", sum(!is.na(proj_bat$proj_pos_raw)), " players")
+}
+
+# Diagnostic
+n_missing <- sum(is.na(proj_bat$proj_pos_raw))
+message("Final position coverage: ", nrow(proj_bat) - n_missing, " / ", nrow(proj_bat),
+        " — ", n_missing, " will show as Util")
+if (n_missing > 0 && n_missing <= 25) {
+  message("  No position: ", paste(proj_bat$player_name[is.na(proj_bat$proj_pos_raw)], collapse = ", "))
+}
+message("  Sample: ", paste(head(na.omit(unique(proj_bat$proj_pos_raw)), 10), collapse = " | "))
 
 bat_pts <- bat_pts %>%
   dplyr::mutate(
@@ -96,6 +136,14 @@ bat_pts <- bat_pts %>%
       TRUE                             ~ "Util"
     )
   )
+
+util_batters <- bat_pts %>% dplyr::filter(primary_pos == "Util")
+if (nrow(util_batters) > 0) {
+  message("  Util batters (no position found): ", nrow(util_batters),
+          " — ", paste(head(util_batters$player_name, 10), collapse=", "))
+} else {
+  message("  All batters have a fielding position")
+}
 
 message("Position breakdown: ", paste(names(table(bat_pts$primary_pos)),
         table(bat_pts$primary_pos), sep="=", collapse=" | "))
@@ -172,16 +220,26 @@ message("Replacement levels — C:", round(repl_c), " 1B:", round(repl_1b),
         " OF:", round(repl_of), " SP:", round(repl_sp), " RP:", round(repl_rp))
 message("Util replacement (", total_hitter_slots, "th best hitter): ", round(repl_util))
 
+# Replacement level lookup by position — used for multi-position VOR
+repl_by_pos <- c(
+  "C"    = repl_c,  "1B"   = repl_1b, "2B" = repl_2b,
+  "3B"   = repl_3b, "SS"   = repl_ss, "OF" = repl_of,
+  "Util" = repl_util
+)
+
 bat_pts <- bat_pts %>%
   dplyr::mutate(
-    pos_replacement = dplyr::case_when(
-      primary_pos == "C"  ~ repl_c,  primary_pos == "1B" ~ repl_1b,
-      primary_pos == "2B" ~ repl_2b, primary_pos == "3B" ~ repl_3b,
-      primary_pos == "SS" ~ repl_ss, primary_pos == "OF" ~ repl_of,
-      TRUE                ~ repl_of
-    ),
-    # VOR = max(positional VOR, Util VOR) — takes the better baseline
-    vor = round(pmax(proj_fpts - pos_replacement,
+    # Multi-position VOR: find the lowest replacement level across ALL eligible
+    # slots — lower replacement = higher VOR = most valuable position to occupy.
+    # e.g. SS/2B/OF gets SS replacement if SS is scarcer than 2B or OF.
+    # Then take max vs the Util floor (every hitter is Util-eligible).
+    best_pos_repl = sapply(eligible_positions, function(ep) {
+      pos_list <- unlist(strsplit(ep, "/"))
+      pos_list <- pos_list[pos_list %in% names(repl_by_pos)]
+      if (length(pos_list) == 0) return(repl_util)
+      min(repl_by_pos[pos_list])
+    }),
+    vor = round(pmax(proj_fpts - best_pos_repl,
                      proj_fpts - repl_util), 1)
   )
 
@@ -230,7 +288,7 @@ pitcher_board <- pit_pts %>%
   )
 
 # ── Diagnostic: check for known players that should be on the board ──────────
-check_players <- c("Baldwin", "Acuna", "Rodriguez", "Ohtani", "Judge", "Ramirez")
+check_players <- c("Baldwin", "Rice", "Acuna", "Rodriguez", "Ohtani", "Judge", "Ramirez")
 for (nm in check_players) {
   found <- bat_pts %>% dplyr::filter(grepl(nm, player_name, ignore.case = TRUE))
   if (nrow(found) > 0) {
@@ -270,7 +328,6 @@ if (length(twoway_ids) > 0) {
           paste(twoway_bat$player_name, collapse = ", "))
 
   # Start with batter row, then add pitcher fpts+VOR on top.
-  # batter_board has NA for pitcher cols (from bind_rows); drop them before join.
   pit_cols <- c("proj_ip","proj_gs","proj_w","proj_sv","proj_k","proj_er","proj_era","proj_qs")
 
   pit_pts_only <- twoway_pit %>%
@@ -278,7 +335,7 @@ if (length(twoway_ids) > 0) {
                   dplyr::any_of(pit_cols))
 
   twoway_combined <- twoway_bat %>%
-    dplyr::select(-dplyr::any_of(pit_cols)) %>%   # drop NA pitcher cols from batter row
+    dplyr::select(-dplyr::any_of(pit_cols)) %>%
     dplyr::left_join(pit_pts_only, by = "fg_id") %>%
     dplyr::mutate(
       proj_fpts   = proj_fpts + dplyr::coalesce(pit_fpts, 0),
@@ -334,7 +391,23 @@ if (exists("adp_master") && nrow(adp_master) > 0 && "adp" %in% names(adp_master)
 }
 
 big_board <- big_board %>%
-  dplyr::relocate(overall_rank, pos_rank, .before = player_name)
+  dplyr::mutate(
+    tier = dplyr::case_when(
+      vor >  TIER_BREAKS[1] ~ 1L,
+      vor >  TIER_BREAKS[2] ~ 2L,
+      vor >  TIER_BREAKS[3] ~ 3L,
+      vor >  TIER_BREAKS[4] ~ 4L,
+      vor >= TIER_BREAKS[5] ~ 5L,
+      TRUE                  ~ 6L
+    )
+  ) %>%
+  dplyr::relocate(overall_rank, pos_rank, tier, .before = player_name) %>%
+  dplyr::slice_head(n = BOARD_SIZE)
+
+message("Tier breakdown: ", paste(
+  paste0("T", 1:6, "=", tabulate(big_board$tier, nbins = 6)),
+  collapse = " | "
+))
 
 message("Big board: ", nrow(big_board), " players | ",
         sum(big_board$player_type=="batter"), " batters | ",

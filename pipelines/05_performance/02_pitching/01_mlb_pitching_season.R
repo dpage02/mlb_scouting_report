@@ -19,19 +19,42 @@
 
 season_to_pull <- target_season
 
-# Test if data exists for target season
-mlb_test <- baseballr::mlb_stats(
-  stat_type = "season",
-  stat_group = "pitching",
-  player_pool = "all",
-  season = season_to_pull,
-  limit = 1000
+# Test if meaningful regular-season pitching data exists.
+# Request gameType=R to filter to regular season only — returns 0 rows
+# during spring training. Falls back to unfiltered if param unsupported.
+mlb_test <- tryCatch(
+  baseballr::mlb_stats(
+    stat_type   = "season",
+    stat_group  = "pitching",
+    player_pool = "all",
+    season      = season_to_pull,
+    game_type   = "R",
+    limit       = 1000
+  ),
+  error = function(e) {
+    baseballr::mlb_stats(
+      stat_type   = "season",
+      stat_group  = "pitching",
+      player_pool = "all",
+      season      = season_to_pull,
+      limit       = 1000
+    )
+  }
 )
 
-if (nrow(mlb_test) == 0) {
-  message("No MLB pitching data found for ", season_to_pull,
-          ". Falling back to previous season.")
-  season_to_pull <- target_season - 1
+# Use max IP as the signal: a pitcher with any regular-season starts will
+# quickly accumulate IP that spring training appearances never reach.
+max_ip <- if (nrow(mlb_test) > 0 && "innings_pitched" %in% names(mlb_test)) {
+  max(suppressWarnings(as.numeric(mlb_test$innings_pitched)), na.rm = TRUE)
+} else {
+  0
+}
+
+if (is.na(max_ip) || max_ip < 1) {
+  message(season_to_pull, " pitching data appears to be preseason (max IP = ",
+          round(max_ip, 1), "). Falling back to ", season_to_pull - 1,
+          " (last full season).")
+  season_to_pull <- target_season - 1L
 }
 
 # ------------------------------------------------------------
@@ -54,7 +77,7 @@ player_season_mlb_pitching <- mlb_pitching_raw %>%
   dplyr::transmute(
 
     # Keys
-    mlbam_id      = player_id,
+    mlbam_id      = as.integer(player_id),
     season        = as.integer(season),
     team_name_raw = team_name,
     team_id       = team_id,

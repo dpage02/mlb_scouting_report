@@ -93,11 +93,48 @@ PITCH_WEIGHTS <- list(
 # Projection Blend Weights
 # Steamer is the base; our Statcast adjustments modify it
 # ------------------------------------------------------------
-BLEND_STEAMER_WT  <- 0.75   # weight on Steamer projection
-BLEND_STATCAST_WT <- 0.25   # weight on Statcast-adjusted projection
+BLEND_STEAMER_WT  <- 0.65   # weight on Steamer projection  (tuned via backtest 2022-2024)
+BLEND_STATCAST_WT <- 0.35   # weight on Statcast-adjusted projection
 
 # ------------------------------------------------------------
 # Replacement Level Buffer
 # How many extra picks beyond starters (bench + IL churn)
 # ------------------------------------------------------------
 REPLACEMENT_BUFFER <- 5     # add 5 to each position depth for bench/IL
+
+# ------------------------------------------------------------
+# Big Board Size
+# 10 teams x 22 roster spots = 220 total drafted players.
+# Extra buffer for late-round depth hunting (backup C, streaming SP, etc.)
+# ------------------------------------------------------------
+BOARD_SIZE <- 450
+
+# ------------------------------------------------------------
+# Draft Tiers — VOR breakpoints
+# Players are assigned a tier based on their VOR score.
+# Tier 1 = elite (200+), Tier 6 = replacement-level (<20).
+# Used by the draft app to keep positional targeting within
+# the same talent band — never reach a tier down to fill a need.
+# Tune these to match your board's natural VOR distribution.
+# ------------------------------------------------------------
+TIER_BREAKS <- c(200, 150, 100, 60, 20)
+# Tier 1: VOR > 200   (~round 1, ~10 players)
+# Tier 2: VOR 150–200 (~rounds 2–3, ~25 players)
+# Tier 3: VOR 100–150 (~rounds 4–7, ~30 players)
+# Tier 4: VOR 60–100  (~rounds 8–11, ~40 players)
+# Tier 5: VOR 20–60   (late rounds)
+# Tier 6: VOR < 20    (waiver/speculative)
+
+# ------------------------------------------------------------
+# Shared Utilities
+# ------------------------------------------------------------
+
+# Normalize player names for fuzzy matching across data sources
+# Converts accented chars (José→Jose), lowercases, strips non-alpha
+normalize_name <- function(x) {
+  x <- iconv(x, from = "UTF-8", to = "ASCII//TRANSLIT")
+  x %>%
+    stringr::str_to_lower() %>%
+    stringr::str_remove_all("[^a-z ]") %>%
+    stringr::str_squish()
+}

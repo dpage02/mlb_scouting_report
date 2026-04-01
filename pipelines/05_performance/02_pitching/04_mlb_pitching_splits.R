@@ -141,6 +141,16 @@ splits_vr <- pull_pitcher_split("vr", season_to_pull)
 message("Pulling pitcher splits vs LHH (vl) for ", season_to_pull, "...")
 splits_vl <- pull_pitcher_split("vl", season_to_pull)
 
+# Fallback: if no regular-season split data, try prior season
+if ((is.null(splits_vr) || nrow(splits_vr) == 0) &&
+    (is.null(splits_vl) || nrow(splits_vl) == 0)) {
+  fallback_season <- season_to_pull - 1L
+  message("No pitcher split data for ", season_to_pull,
+          ". Falling back to ", fallback_season)
+  splits_vr <- pull_pitcher_split("vr", fallback_season)
+  splits_vl <- pull_pitcher_split("vl", fallback_season)
+}
+
 player_season_mlb_pitching_splits <- dplyr::bind_rows(splits_vr, splits_vl) %>%
   dplyr::filter(!is.na(mlbam_id)) %>%
   dplyr::arrange(mlbam_id, split_code)

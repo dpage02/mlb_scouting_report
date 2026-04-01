@@ -105,10 +105,9 @@ bullpen_grid <- team_game_bridge %>%
     availability, days_rest, pitches_yesterday,
     pitches_last_3_days, appearances_last_7d, consecutive_days,
     dplyr::any_of(c("last_outing_date")),
-    mlb_g, mlb_ip, mlb_era, mlb_whip, mlb_so, mlb_bb,
-    mlb_sv, mlb_hld,
-    fg_WAR, fg_Dollars,
-    bbref_ERA, bbref_WHIP,
+    dplyr::any_of(c("mlb_g", "mlb_ip", "mlb_era", "mlb_whip",
+                    "mlb_so", "mlb_bb", "mlb_sv", "mlb_hld")),
+    dplyr::any_of(c("fg_WAR", "fg_Dollars", "bbref_ERA", "bbref_WHIP")),
     role_sort
   ) %>%
   dplyr::arrange(game_pk, side, role_sort)

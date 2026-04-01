@@ -177,7 +177,9 @@ if (nrow(game_schedule) == 0) {
   } else {
 
     recent_pitching_logs <- raw_logs %>%
-      dplyr::filter(!is.na(mlbam_id)) %>%
+      dplyr::filter(!is.na(mlbam_id),
+                    !is.na(pitches_thrown),
+                    pitches_thrown > 0) %>%
       dplyr::mutate(days_ago = as.integer(target_date - game_date)) %>%
       dplyr::select(mlbam_id, game_pk, game_date, pitches_thrown,
                     innings_pitched, days_ago) %>%

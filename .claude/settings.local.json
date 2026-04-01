@@ -11,7 +11,9 @@
       "WebFetch(domain:www.fangraphs.com)",
       "WebFetch(domain:rdrr.io)",
       "WebFetch(domain:library.fangraphs.com)",
-      "WebFetch(domain:baseballsavant.mlb.com)"
+      "WebFetch(domain:baseballsavant.mlb.com)",
+      "Bash(cd:*)",
+      "Bash(wc:*)"
     ]
   }
 }
