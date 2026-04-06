@@ -45,30 +45,35 @@ active_pitchers <- depth_charts %>%
                 fg_role, fg_position, roster_type)
 
 # ------------------------------------------------------------
-# Join availability
+# Month-aware scaling factor for availability thresholds
+# April: managers protect arms early (0.85×)
+# Sept+: expanded rosters, playoff push (1.10×)
 # ------------------------------------------------------------
+
+month_num    <- as.integer(format(target_date, "%m"))
+month_factor <- dplyr::case_when(
+  month_num %in% c(3L, 4L)  ~ 0.85,
+  month_num %in% c(9L, 10L) ~ 1.10,
+  TRUE                       ~ 1.00
+)
+
+# Role-based default pitches per outing (used when season IP/G unavailable)
+role_default_pitches <- c(
+  "CL" = 16, "SU8" = 18, "SU7" = 18, "SU6" = 17,
+  "SU" = 18, "MID" = 20, "LR" = 35
+)
 
 bullpen_context <- active_pitchers %>%
 
   dplyr::left_join(bullpen_availability, by = "mlbam_id") %>%
 
-  # Mark pitchers with no recent log as fresh
+  # Fill NAs for pitchers with no recent log
   dplyr::mutate(
-    availability        = dplyr::coalesce(availability, "fresh"),
     days_rest           = dplyr::coalesce(days_rest, NA_integer_),
     pitches_yesterday   = dplyr::coalesce(pitches_yesterday, 0L),
     pitches_last_3_days = dplyr::coalesce(pitches_last_3_days, 0L),
     appearances_last_7d = dplyr::coalesce(appearances_last_7d, 0L),
     consecutive_days    = dplyr::coalesce(consecutive_days, 0L)
-  ) %>%
-
-  # Override: IL pitchers are always unavailable
-  dplyr::mutate(
-    availability = dplyr::if_else(
-      roster_type %in% c("il-sp", "il-rp"),
-      "injured",
-      availability
-    )
   ) %>%
 
   # Join season stats from MLB pitching module
@@ -92,11 +97,47 @@ bullpen_context <- active_pitchers %>%
     by = "mlbam_id"
   ) %>%
 
+  # -------------------------------------------------------
+  # Role-aware, month-aware availability classification
+  # 5 tiers: fresh / available / limited / doubtful / unavailable
+  # (injured overrides everything via roster_type check)
+  #
+  # typical_pitches: from season IP/G × 15 p/IP, else role default
+  # Thresholds scaled by month_factor (0.85 Apr, 1.0 May-Aug, 1.1 Sep+)
+  #
+  #   unavailable — 3 consecutive days OR ≥ 1.5× typical yesterday
+  #   doubtful    — ≥ 1.0× typical yesterday (full normal outing)
+  #   limited     — any pitches yesterday but < typical, OR 2 consecutive days
+  #   available   — pitched in last 7d but rested ≥ 1 day
+  #   fresh       — nothing in last 3+ days
+  # -------------------------------------------------------
+
+  dplyr::mutate(
+    typical_pitches = dplyr::case_when(
+      !is.na(mlb_ip) & !is.na(mlb_g) & mlb_g > 0 ~
+        (mlb_ip / mlb_g) * 15,
+      fg_role %in% names(role_default_pitches) ~
+        as.numeric(role_default_pitches[fg_role]),
+      TRUE ~ 20
+    ),
+
+    availability = dplyr::case_when(
+      roster_type %in% c("il-sp", "il-rp")                               ~ "injured",
+      consecutive_days >= 3                                               ~ "unavailable",
+      pitches_yesterday >= typical_pitches * month_factor * 1.5          ~ "unavailable",
+      pitches_yesterday >= typical_pitches * month_factor * 1.0          ~ "doubtful",
+      consecutive_days >= 2                                               ~ "limited",
+      pitches_yesterday > 0                                               ~ "limited",
+      !is.na(days_rest) & days_rest <= 3                                  ~ "available",
+      TRUE                                                                ~ "fresh"
+    )
+  ) %>%
+
   dplyr::select(
     mlbam_id, player_name, team_abbr,
     dplyr::any_of(c("fg_role", "fg_position")), roster_type,
     dplyr::any_of(c(
-      "availability", "days_rest", "pitches_yesterday",
+      "availability", "typical_pitches", "days_rest", "pitches_yesterday",
       "pitches_last_3_days", "appearances_last_7d", "consecutive_days",
       "last_outing_date"
     )),
@@ -114,7 +155,10 @@ bullpen_context <- active_pitchers %>%
 
 message("99_bullpen_context_join complete: ",
         nrow(bullpen_context), " pitchers across ",
-        dplyr::n_distinct(bullpen_context$team_abbr), " teams | ",
-        sum(bullpen_context$availability == "unavailable", na.rm = TRUE), " unavailable | ",
-        sum(bullpen_context$availability == "injured",     na.rm = TRUE), " injured | ",
-        sum(bullpen_context$availability == "fresh",       na.rm = TRUE), " fresh")
+        dplyr::n_distinct(bullpen_context$team_abbr), " teams | month_factor=", month_factor,
+        " | unavailable=",  sum(bullpen_context$availability == "unavailable", na.rm = TRUE),
+        " | doubtful=",     sum(bullpen_context$availability == "doubtful",    na.rm = TRUE),
+        " | limited=",      sum(bullpen_context$availability == "limited",     na.rm = TRUE),
+        " | available=",    sum(bullpen_context$availability == "available",   na.rm = TRUE),
+        " | fresh=",        sum(bullpen_context$availability == "fresh",       na.rm = TRUE),
+        " | injured=",      sum(bullpen_context$availability == "injured",     na.rm = TRUE))

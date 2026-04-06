@@ -4,16 +4,12 @@
 # SCRIPT: 02_bullpen_availability.R
 # ============================================================
 # PURPOSE:
-#   Compute fatigue and availability flags for each bullpen
-#   arm based on recent pitching logs.
+#   Compute raw fatigue metrics for each pitcher based on
+#   recent pitching logs.
 #
-# AVAILABILITY RULES:
-#   unavailable    — pitched yesterday (days_ago == 1) AND
-#                    pitches_last_outing >= 30
-#   limited        — pitched yesterday with < 30 pitches, OR
-#                    pitched 2 of last 3 days
-#   fresh          — no appearance in last 3 days
-#   available      — pitched in last 7 days but not limited
+#   NOTE: Final availability classification (5-tier) is computed
+#   in 99_bullpen_context_join.R after season stats and role
+#   data are available for role-aware, month-aware thresholds.
 #
 # KEY OUTPUT COLUMNS:
 #   mlbam_id              — pitcher ID
@@ -23,7 +19,6 @@
 #   pitches_last_3_days   — total pitches in last 3 days
 #   appearances_last_7d   — total appearances in last 7 days
 #   consecutive_days      — days pitched in a row entering today
-#   availability          — "unavailable" / "limited" / "available" / "fresh"
 #
 # OUTPUT:
 #   bullpen_availability
@@ -47,8 +42,7 @@ if (nrow(recent_pitching_logs) == 0) {
     pitches_yesterday   = integer(),
     pitches_last_3_days = integer(),
     appearances_last_7d = integer(),
-    consecutive_days    = integer(),
-    availability        = character()
+    consecutive_days    = integer()
   )
 
 } else {
@@ -59,6 +53,7 @@ if (nrow(recent_pitching_logs) == 0) {
       last_outing_date    = max(game_date),
       pitches_yesterday   = sum(pitches_thrown[days_ago == 1], na.rm = TRUE),
       pitches_2_days_ago  = sum(pitches_thrown[days_ago == 2], na.rm = TRUE),
+      pitches_3_days_ago  = sum(pitches_thrown[days_ago == 3], na.rm = TRUE),
       pitches_last_3_days = sum(pitches_thrown[days_ago <= 3], na.rm = TRUE),
       appearances_last_7d = dplyr::n_distinct(game_date),
       .groups = "drop"
@@ -66,31 +61,22 @@ if (nrow(recent_pitching_logs) == 0) {
     dplyr::mutate(
       days_rest = as.integer(target_date - last_outing_date),
 
-      # Consecutive days pitched entering today
+      # Consecutive days pitched entering today (up to 3)
       consecutive_days = dplyr::case_when(
-        pitches_yesterday > 0 & pitches_2_days_ago > 0 ~ 2L,
-        pitches_yesterday > 0                           ~ 1L,
-        TRUE                                            ~ 0L
-      ),
-
-      # Availability classification
-      availability = dplyr::case_when(
-        pitches_yesterday >= 30                           ~ "unavailable",
-        pitches_yesterday > 0 & pitches_yesterday < 30   ~ "limited",
-        consecutive_days >= 2                             ~ "limited",
-        days_rest <= 3                                    ~ "available",
-        TRUE                                              ~ "fresh"
+        pitches_yesterday > 0 & pitches_2_days_ago > 0 & pitches_3_days_ago > 0 ~ 3L,
+        pitches_yesterday > 0 & pitches_2_days_ago > 0                           ~ 2L,
+        pitches_yesterday > 0                                                     ~ 1L,
+        TRUE                                                                      ~ 0L
       )
     ) %>%
     dplyr::select(mlbam_id, last_outing_date, days_rest,
                   pitches_yesterday, pitches_last_3_days,
-                  appearances_last_7d, consecutive_days, availability)
+                  appearances_last_7d, consecutive_days)
 
 }
 
 message("02_bullpen_availability complete: ",
-        nrow(bullpen_availability), " pitchers assessed | ",
-        sum(bullpen_availability$availability == "unavailable"), " unavailable | ",
-        sum(bullpen_availability$availability == "limited"),     " limited | ",
-        sum(bullpen_availability$availability == "available"),   " available | ",
-        sum(bullpen_availability$availability == "fresh"),       " fresh")
+        nrow(bullpen_availability), " pitcher-game rows | ",
+        sum(bullpen_availability$pitches_yesterday > 0), " pitched yesterday | ",
+        sum(bullpen_availability$consecutive_days >= 2), " on consecutive days | ",
+        "availability classification deferred to 99_bullpen_context_join")

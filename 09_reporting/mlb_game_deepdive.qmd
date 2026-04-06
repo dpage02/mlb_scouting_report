@@ -44,6 +44,7 @@ if (cache_ok) {
 
 source("09_reporting/_report_helpers.R")
 source("09_reporting/_deepdive_helpers.R")
+source("09_reporting/_game_narrative_helpers.R")
 
 # Scope to this game
 gpk  <- as.integer(params$game_pk)
@@ -94,6 +95,9 @@ nav_html <- paste0(
   '<a href="', scouting_file, '" style="color:#1a73e8; text-decoration:none;">',
   '\u2190 Today\'s Games</a>',
   '&nbsp;&nbsp;|&nbsp;&nbsp;',
+  '<a href="#game-prediction" style="color:#1a73e8; text-decoration:none; font-weight:600;">',
+  '\u26a1 Prediction</a>',
+  '&nbsp;&nbsp;|&nbsp;&nbsp;',
   '<a href="', away_team_file, '" style="color:#1a73e8; text-decoration:none; font-weight:600;">',
   away_team, ' Team Deep Dive \u2197</a>',
   '&nbsp;&nbsp;|&nbsp;&nbsp;',
@@ -102,6 +106,12 @@ nav_html <- paste0(
   '</div>'
 )
 cat(nav_html, "\n\n")
+```
+
+```{r game-preview}
+#| output: asis
+preview <- tryCatch(make_game_preview_html(gpk), error = function(e) "")
+if (nchar(preview) > 0) cat(preview, "\n\n")
 ```
 
 ---
@@ -297,4 +307,18 @@ cat(gt::as_raw_html(make_bullpen_gt(gpk, "away")))
 ```{r bullpen-home}
 #| output: asis
 cat(gt::as_raw_html(make_bullpen_gt(gpk, "home")))
+```
+
+---
+
+## Game Prediction
+
+*Statistical projection based on SP quality (xFIP/SIERA) and lineup offensive strength (wRC+). Early-season estimates are less reliable — model accuracy improves as sample sizes grow.*
+
+```{r game-prediction}
+#| output: asis
+pred_html <- tryCatch(make_prediction_html(gpk), error = function(e) {
+  paste0('<p style="color:#888; font-style:italic;">Prediction unavailable: ', e$message, '</p>')
+})
+cat(pred_html, "\n\n")
 ```

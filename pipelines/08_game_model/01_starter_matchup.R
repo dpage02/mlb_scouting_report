@@ -173,6 +173,36 @@ starter_matchup <- dplyr::bind_rows(home_starters, away_starters) %>%
   dplyr::arrange(game_pk, side)
 
 # ------------------------------------------------------------
+# Prior-season context for early-season blending
+# Pull the most recent completed season from player_career_pitching
+# and attach as prior_gs / prior_era / prior_xfip / prior_war.
+# Used by display helpers to blend stats when current GS is small.
+# ------------------------------------------------------------
+
+prior_yr_val <- as.integer(format(min(game_context$game_date, na.rm = TRUE), "%Y")) - 1L
+
+prior_stats_raw <- player_career_pitching %>%
+  dplyr::filter(season == prior_yr_val) %>%
+  dplyr::select(mlbam_id, hist_gs, hist_ip, hist_era,
+                dplyr::any_of(c("fg_xFIP", "fg_WAR")))
+
+if (!"fg_xFIP" %in% names(prior_stats_raw)) prior_stats_raw$fg_xFIP <- NA_real_
+if (!"fg_WAR"  %in% names(prior_stats_raw)) prior_stats_raw$fg_WAR  <- NA_real_
+
+prior_stats <- prior_stats_raw %>%
+  dplyr::rename(
+    prior_gs   = hist_gs,
+    prior_ip   = hist_ip,
+    prior_era  = hist_era,
+    prior_xfip = fg_xFIP,
+    prior_war  = fg_WAR
+  ) %>%
+  dplyr::mutate(prior_season = prior_yr_val)
+
+starter_matchup <- starter_matchup %>%
+  dplyr::left_join(prior_stats, by = "mlbam_id")
+
+# ------------------------------------------------------------
 # Validate
 # ------------------------------------------------------------
 

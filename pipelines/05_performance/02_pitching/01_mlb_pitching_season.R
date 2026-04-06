@@ -19,17 +19,18 @@
 
 season_to_pull <- target_season
 
-# Test if meaningful regular-season pitching data exists.
-# Request gameType=R to filter to regular season only — returns 0 rows
-# during spring training. Falls back to unfiltered if param unsupported.
-mlb_test <- tryCatch(
+# Pull regular-season stats only by requesting game_type = "R".
+# This returns 0 rows during spring training (no R games played yet),
+# triggering the prior-season fallback below.
+# Falls back to unfiltered pull only if the game_type param is unsupported.
+mlb_pitching_raw <- tryCatch(
   baseballr::mlb_stats(
     stat_type   = "season",
     stat_group  = "pitching",
     player_pool = "all",
     season      = season_to_pull,
     game_type   = "R",
-    limit       = 1000
+    limit       = 5000
   ),
   error = function(e) {
     baseballr::mlb_stats(
@@ -37,15 +38,15 @@ mlb_test <- tryCatch(
       stat_group  = "pitching",
       player_pool = "all",
       season      = season_to_pull,
-      limit       = 1000
+      limit       = 5000
     )
   }
 )
 
 # Use max IP as the signal: a pitcher with any regular-season starts will
 # quickly accumulate IP that spring training appearances never reach.
-max_ip <- if (nrow(mlb_test) > 0 && "innings_pitched" %in% names(mlb_test)) {
-  max(suppressWarnings(as.numeric(mlb_test$innings_pitched)), na.rm = TRUE)
+max_ip <- if (nrow(mlb_pitching_raw) > 0 && "innings_pitched" %in% names(mlb_pitching_raw)) {
+  max(suppressWarnings(as.numeric(mlb_pitching_raw$innings_pitched)), na.rm = TRUE)
 } else {
   0
 }
@@ -55,19 +56,15 @@ if (is.na(max_ip) || max_ip < 1) {
           round(max_ip, 1), "). Falling back to ", season_to_pull - 1,
           " (last full season).")
   season_to_pull <- target_season - 1L
+
+  mlb_pitching_raw <- baseballr::mlb_stats(
+    stat_type   = "season",
+    stat_group  = "pitching",
+    player_pool = "all",
+    season      = season_to_pull,
+    limit       = 5000
+  )
 }
-
-# ------------------------------------------------------------
-# Pull League-Wide Pitching
-# ------------------------------------------------------------
-
-mlb_pitching_raw <- baseballr::mlb_stats(
-  stat_type = "season",
-  stat_group = "pitching",
-  player_pool = "all",
-  season = season_to_pull,
-  limit = 5000
-)
 
 # ------------------------------------------------------------
 # Build Canonical Table

@@ -1,24 +1,62 @@
-# Full run: pipeline + cache + render
-# Use this once a day (or when you need fresh data)
-options(timeout = 300)  # 5 min download timeout (default 60s too short for multiple API calls)
-invisible(capture.output(source("run_pipeline_phase01.R")))
+# ============================================================
+# mlb_scouting_report
+# SCRIPT: run_all.R
+# ============================================================
+# PURPOSE:
+#   Main daily entry point. Runs the pipeline and renders
+#   all reports.
+#
+# PIPELINE STRATEGY:
+#   DAILY (fast, 5-10 min):
+#     Loads season stats from base cache, refreshes only
+#     what changes day-to-day (rosters, game context,
+#     weather, bullpen logs, batting streaks, lineups).
+#
+#   BASE REBUILD (slow, 30-60 min):
+#     Re-pulls all season stats from MLB, FanGraphs,
+#     Statcast, BBRef. Triggered automatically when:
+#       - base cache is missing
+#       - base cache is more than 7 days old
+#     Or manually: source("run_pipeline_base.R")
+#
+# USAGE:
+#   source("run_all.R")   — normal daily use
+# ============================================================
 
-pipeline_cache_objects <- c(
-  "target_date", "target_season", "team_ids",
-  "game_context", "lineup_context", "starter_matchup", "bullpen_grid",
-  "offense_master_season", "player_career_offense", "player_career_pitching",
-  "pitching_master_season", "pitcher_arsenal",
-  "defense_master_season", "lineup_context_splits", "starter_splits",
-  "player_season_fg_pitching", "player_season_mlb_pitching",
-  "player_master_ids",
-  "depth_charts"
-)
-pipeline_cache <- mget(
-  pipeline_cache_objects[pipeline_cache_objects %in% ls()],
-  envir = .GlobalEnv
-)
-if (!dir.exists("data")) dir.create("data")
-saveRDS(pipeline_cache, "data/pipeline_cache.rds")
+options(timeout = 300)
+
+# ------------------------------------------------------------
+# Decide: daily refresh or full base rebuild?
+# ------------------------------------------------------------
+
+base_cache_path <- "data/base_cache.rds"
+
+needs_base_rebuild <- !file.exists(base_cache_path) ||
+  as.numeric(difftime(Sys.time(), file.mtime(base_cache_path), units = "days")) > 7
+
+if (needs_base_rebuild) {
+  if (!file.exists(base_cache_path)) {
+    cat("Base cache not found — running full base build (one-time setup)...\n")
+  } else {
+    age <- round(as.numeric(difftime(Sys.time(), file.mtime(base_cache_path), units = "days")))
+    cat(sprintf("Base cache is %d days old — refreshing season stats...\n", age))
+  }
+  source("run_pipeline_base.R")
+} else {
+  age_hrs <- round(as.numeric(difftime(Sys.time(), file.mtime(base_cache_path), units = "hours")))
+  cat(sprintf("Base cache: %.0f days old — using cached season stats\n",
+              as.numeric(difftime(Sys.time(), file.mtime(base_cache_path), units = "days"))))
+}
+
+# ------------------------------------------------------------
+# Daily pipeline: rosters, game context, bullpen, lineups
+# ------------------------------------------------------------
+
+source("run_pipeline_daily.R")
+
+# ------------------------------------------------------------
+# Render reports
+# ------------------------------------------------------------
 
 source("09_reporting/render_report.R")
 source("09_reporting/render_deep_dives.R")

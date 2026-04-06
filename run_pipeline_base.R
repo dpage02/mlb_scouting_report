@@ -1,23 +1,28 @@
 # ============================================================
 # mlb_scouting_report
-# PIPELINE ORCHESTRATOR
-# SCRIPT: run_pipeline_full.R
+# SCRIPT: run_pipeline_base.R
 # ============================================================
 # PURPOSE:
-#   Single entry-point to run the full scouting pipeline
-#   from a clean R session.
+#   Build the slow-moving base layer: player IDs, season
+#   performance stats (offense, pitching, defense, value),
+#   and static context (park factors).
 #
-# WHAT THIS SCRIPT DOES:
-#   - Sources setup/config
-#   - Builds ID layer
-#   - Builds season roster universe
-#   - Builds game schedule context
+#   Run this once a week (or when you need fresh season stats).
+#   Daily reports load from the base cache instead of re-running.
 #
-# WHAT THIS SCRIPT DOES NOT DO:
-#   - Build performance metrics
-#   - Build derived labels
-#   - Generate reports
+# WHAT THIS BUILDS:
+#   01_ids           — permanent identity layer (team, player, park)
+#   02_static_context — park factors (hard-coded), coordinates
+#   05_performance   — season stats from MLB, FanGraphs, Statcast, BBRef
+#
+# WHAT IT DOES NOT RUN:
+#   03_rosters, 04_game_context, 06-08 — those are daily
+#
+# OUTPUT:
+#   data/base_cache.rds
 # ============================================================
+
+options(timeout = 300)
 
 suppressMessages({
   source("pipelines/00_setup/00_load_packages.R")
@@ -25,14 +30,13 @@ suppressMessages({
   source("pipelines/00_setup/02_pipeline_config.R")
 })
 
-cat("Starting mlb_scouting_report — FULL PIPELINE\n")
+cat("Starting base pipeline build — IDs + season stats\n")
+cat("(Run weekly or when you need fresh season stats)\n\n")
 
 # ------------------------------------------------------------
-# 01_ids (Permanent Identity Layer)
+# 01_ids
 # ------------------------------------------------------------
-
 log_message("01 — Building ID layer...")
-
 suppressMessages({
   source("pipelines/01_ids/01_team_ids.R")
   source("pipelines/01_ids/02_player_master_ids.R")
@@ -41,46 +45,18 @@ suppressMessages({
   source("pipelines/01_ids/05_league_ids.R")
   source("pipelines/01_ids/99_write_id_tables.R")
 })
+log_message("01 — IDs complete")
 
 # ------------------------------------------------------------
 # 02_static_context
 # ------------------------------------------------------------
-
 suppressMessages(source("pipelines/02_static_context/00_park_coordinates.R"))
 suppressMessages(source("pipelines/02_static_context/01_park_factors.R"))
 
 # ------------------------------------------------------------
-# 03_rosters (Season Scope Layer)
-# ------------------------------------------------------------
-
-log_message("03 — Building season roster universe...")
-
-suppressMessages(source("pipelines/03_rosters/00_player_season_scope.R"))
-log_message("03 — rosters complete")
-
-# ------------------------------------------------------------
-# 04_game_context (Event Layer)
-# ------------------------------------------------------------
-
-log_message("04 — Building schedule context...")
-
-suppressMessages({
-  source("pipelines/04_game_context/01_schedule.R")
-  source("pipelines/04_game_context/02_game_meta.R")
-  source("pipelines/04_game_context/03_probable_pitchers.R")
-  source("pipelines/04_game_context/04_umpire_assignments.R")
-  source("pipelines/04_game_context/05_weather_forecast.R")
-  source("pipelines/04_game_context/06_series_context.R")
-  source("pipelines/04_game_context/99_game_context.R")
-})
-log_message("04 — game context complete")
-
-# ------------------------------------------------------------
 # 05_performance
 # ------------------------------------------------------------
-
 log_message("05 — Building offense...")
-
 suppressMessages({
   source("pipelines/05_performance/00_schema/00_grain_definition.R")
   source("pipelines/05_performance/00_schema/01_column_dictionary.R")
@@ -95,7 +71,6 @@ suppressMessages({
 log_message("05 — offense complete")
 
 log_message("05 — Building pitching...")
-
 suppressMessages({
   source("pipelines/05_performance/02_pitching/01_mlb_pitching_season.R")
   source("pipelines/05_performance/02_pitching/02_fangraphs_pitching_season.R")
@@ -138,48 +113,45 @@ suppressMessages({
 log_message("05 — performance complete")
 
 # ------------------------------------------------------------
-# 06_player_context
+# Save base cache
 # ------------------------------------------------------------
 
-log_message("06 — Building player context...")
+base_cache_objects <- c(
+  "target_season",
+  "team_ids", "player_master_ids",
+  "park_factors",
+  # Final joined tables
+  "offense_master_season",   "player_career_offense",
+  "pitching_master_season",  "player_career_pitching",
+  "pitcher_arsenal",
+  "defense_master_season",
+  "value_master_season",
+  # Fast component tables (re-run daily)
+  "player_season_fg_pitching", "player_season_mlb_pitching",
+  "player_season_mlb_offense_splits",
+  "player_season_mlb_pitching_splits",
+  # Slow component tables — cached so daily can skip re-pulling them
+  # but still run master joins with fresh MLB API + FanGraphs spine
+  "player_season_statcast_offense",
+  "player_season_lahman_offense",
+  "player_season_statcast_pitching",
+  "player_season_lahman_pitching",
+  "player_season_bbref_pitching_advanced",
+  "player_season_fg_offense"
+)
 
-suppressMessages({
-  source("pipelines/06_player_context/01_depth_charts.R")
-  source("pipelines/06_player_context/99_player_context_join.R")
-})
-log_message("06 — player context complete")
+base_cache <- mget(
+  base_cache_objects[base_cache_objects %in% ls()],
+  envir = .GlobalEnv
+)
 
-# ------------------------------------------------------------
-# 07_bullpen_context
-# ------------------------------------------------------------
+if (!dir.exists("data")) dir.create("data")
+saveRDS(base_cache, "data/base_cache.rds")
 
-log_message("07 — Building bullpen context...")
+log_message(sprintf(
+  "Base cache saved — %d objects, %.1f MB",
+  length(base_cache),
+  file.size("data/base_cache.rds") / 1e6
+))
 
-suppressMessages({
-  source("pipelines/07_bullpen_context/01_recent_pitching_logs.R")
-  source("pipelines/07_bullpen_context/02_bullpen_availability.R")
-  source("pipelines/07_bullpen_context/03_recent_batting_logs.R")
-  source("pipelines/07_bullpen_context/99_bullpen_context_join.R")
-})
-log_message("07 — bullpen context complete")
-
-# ------------------------------------------------------------
-# 08_game_model
-# ------------------------------------------------------------
-
-log_message("08 — Building game model...")
-
-suppressMessages({
-  source("pipelines/08_game_model/01_starter_matchup.R")
-  source("pipelines/08_game_model/02_lineup_context.R")
-  source("pipelines/08_game_model/03_bullpen_grid.R")
-  source("pipelines/08_game_model/04_matchup_splits.R")
-  source("pipelines/08_game_model/99_game_model_join.R")
-})
-log_message("08 — game model complete")
-
-# ------------------------------------------------------------
-# Completion
-# ------------------------------------------------------------
-
-log_message("Pipeline complete")
+log_message("Base pipeline complete — run run_pipeline_daily.R to build today's games")

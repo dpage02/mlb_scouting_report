@@ -119,6 +119,7 @@ bullpen_grid <- team_game_bridge %>%
 n_games     <- dplyr::n_distinct(bullpen_grid$game_pk)
 n_available <- sum(bullpen_grid$availability %in% c("available", "fresh"), na.rm = TRUE)
 n_limited   <- sum(bullpen_grid$availability == "limited",     na.rm = TRUE)
+n_doubtful  <- sum(bullpen_grid$availability == "doubtful",    na.rm = TRUE)
 n_unavail   <- sum(bullpen_grid$availability == "unavailable", na.rm = TRUE)
 n_injured   <- sum(bullpen_grid$availability == "injured",     na.rm = TRUE)
 
@@ -127,5 +128,6 @@ message("03_bullpen_grid complete: ",
         n_games, " games | ",
         n_available, " available/fresh | ",
         n_limited,   " limited | ",
+        n_doubtful,  " doubtful | ",
         n_unavail,   " unavailable | ",
         n_injured,   " injured")

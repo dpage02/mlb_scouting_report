@@ -1436,6 +1436,10 @@ make_bullpen_deep_gt <- function(gpk, side_filter) {
       locations = gt::cells_body(columns = "Status", rows = Status == "limited")
     ) %>%
     gt::tab_style(
+      style     = gt::cell_fill(color = avail_colors["doubtful"], alpha = 0.85),
+      locations = gt::cells_body(columns = "Status", rows = Status == "doubtful")
+    ) %>%
+    gt::tab_style(
       style     = gt::cell_fill(color = avail_colors["unavailable"], alpha = 0.85),
       locations = gt::cells_body(columns = "Status", rows = Status == "unavailable")
     ) %>%

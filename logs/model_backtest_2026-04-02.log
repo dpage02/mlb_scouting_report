@@ -1,0 +1,173 @@
+Warning message:
+package ‘jsonlite’ was built under R version 4.3.3 
+  [cache] game results 2022
+  [cache] game results 2023
+  [cache] game results 2024
+Total games: 7300
+FG batting rows: 90
+FG raw pitcher rows: 2589
+  Columns: Throws, xMLBAMID, Name, Team, Season, Age, AgeR, SeasonMin, SeasonMax, W, L, ERA, G, GS, QS
+  Column map: name=PlayerName team=Team IP=IP GS=GS FIP=FIP xFIP=xFIP
+FG SP rows (GS-heavy, ≥50 IP): 520
+Bullpen team-seasons: 93
+  [FG] park factors
+2026-04-02 11:16:43.182144: Invalid arguments or no park factors data available!
+  ERROR fg_park: object 'park_table' not found
+Park factor rows: 0
+  WARNING: park factors unavailable, using 1.00 for all
+Sample SP quality team names: - - -, <a href="leaders.aspx?pos=all&stats=pit&lg=all&qual=0&type=strType&season=2022&month=0&season1=2022&ind=0&team=1&rost=0&age=0">LAA</a>, <a href="leaders.aspx?pos=all&stats=pit&lg=all&qual=0&type=strType&season=2022&month=0&season1=2022&ind=0&team=10&rost=0&age=0">OAK</a>, <a href="leaders.aspx?pos=all&stats=pit&lg=all&qual=0&type=strType&season=2022&month=0&season1=2022&ind=0&team=11&rost=0&age=0">SEA</a>, <a href="leaders.aspx?pos=all&stats=pit&lg=all&qual=0&type=strType&season=2022&month=0&season1=2022&ind=0&team=12&rost=0&age=0">TBR</a>
+After SP join — NAs home_rotation_FIP: 7300 of 7300
+wRC+ NAs home: 244  away: 243
+
+========================================
+EMPIRICAL LEAGUE CONSTANTS (2022-2024):
+========================================
+  League avg runs/game:  4.429
+  League avg FIP (SP):   4.214
+  League avg xFIP (SP):  4.151
+  Home field adv (runs): -0.005
+  Home win rate:         0.525
+========================================
+
+Games in model dataset: 7300
+Fitting M5 log-linear (LOSO CV)...
+Warning message:
+In left_join(., m5_preds, by = "game_pk") :
+  Detected an unexpected many-to-many relationship between `x` and `y`.
+ℹ Row 462 of `x` matches multiple rows in `y`.
+ℹ Row 462 of `y` matches multiple rows in `x`.
+ℹ If a many-to-many relationship is expected, set `relationship =
+  "many-to-many"` to silence this warning.
+
+=== M5 Log-Linear Coefficients ===
+
+Call:
+lm(formula = log_runs ~ log_wrc + log_opp_fip + log_pf + is_home, 
+    data = long_df)
+
+Residuals:
+    Min      1Q  Median      3Q     Max 
+-2.1057 -0.4998  0.1602  0.6003  2.0068 
+
+Coefficients: (2 not defined because of singularities)
+            Estimate Std. Error t value Pr(>|t|)    
+(Intercept) 1.194805   0.009755 122.480   <2e-16 ***
+log_wrc     0.949546   0.067826  14.000   <2e-16 ***
+log_opp_fip       NA         NA      NA       NA    
+log_pf            NA         NA      NA       NA    
+is_home     0.021320   0.013796   1.545    0.122    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.8347 on 14641 degrees of freedom
+Multiple R-squared:  0.01337,	Adjusted R-squared:  0.01323 
+F-statistic: 99.19 on 2 and 14641 DF,  p-value: < 2.2e-16
+
+Fitting M5b NB (LOSO CV)...
+Warning message:
+In left_join(., m5b_preds, by = "game_pk") :
+  Detected an unexpected many-to-many relationship between `x` and `y`.
+ℹ Row 462 of `x` matches multiple rows in `y`.
+ℹ Row 462 of `y` matches multiple rows in `x`.
+ℹ If a many-to-many relationship is expected, set `relationship =
+  "many-to-many"` to silence this warning.
+
+===========================================
+MODEL EVALUATION SUMMARY  (2022-2024 backtest)
+===========================================
+# A tibble: 6 × 7
+  model n_games brier log_loss mae_total mae_home pct_correct
+  <chr>   <int> <dbl>    <dbl>     <dbl>    <dbl>       <dbl>
+1 M1       7454 0.243    0.678      3.54     2.41       0.567
+2 M2       7454 0.243    0.679      3.53     2.41       0.566
+3 M3       7454 0.243    0.679      3.52     2.41       0.566
+4 M4       7454 0.243    0.679      3.52     2.41       0.565
+5 M5       7454 0.243    0.679      3.71     2.41       0.567
+6 M5b      7454 0.243    0.679      3.53     2.41       0.565
+
+
+--- M1 Calibration ---
+# A tibble: 6 × 5
+    bin     n pred_mean actual_rate    diff
+  <int> <int>     <dbl>       <dbl>   <dbl>
+1     3     9     0.285       0.333 0.0488 
+2     4   781     0.366       0.380 0.0146 
+3     5  2715     0.453       0.472 0.0189 
+4     6  2912     0.547       0.551 0.00365
+5     7   996     0.635       0.673 0.0380 
+6     8    41     0.714       0.780 0.0661 
+
+--- M3 Calibration ---
+# A tibble: 6 × 5
+    bin     n pred_mean actual_rate    diff
+  <int> <int>     <dbl>       <dbl>   <dbl>
+1     3    25     0.291       0.28  -0.0109
+2     4   890     0.366       0.389  0.0231
+3     5  2791     0.452       0.478  0.0259
+4     6  2880     0.547       0.561  0.0149
+5     7   845     0.636       0.670  0.0342
+6     8    23     0.716       0.739  0.0235
+
+--- M5 Calibration ---
+# A tibble: 5 × 5
+    bin     n pred_mean actual_rate     diff
+  <int> <int>     <dbl>       <dbl>    <dbl>
+1     4   403     0.375       0.365 -0.00979
+2     5  2918     0.458       0.461  0.00333
+3     6  3410     0.547       0.558  0.0115 
+4     7   719     0.629       0.677  0.0483 
+5     8     4     0.713       1      0.287  
+
+--- Home Field Advantage by Season ---
+# A tibble: 3 × 6
+  season games home_win_pct avg_hfa_runs avg_home_runs avg_away_runs
+   <int> <int>        <dbl>        <dbl>         <dbl>         <dbl>
+1   2022  2445        0.530       0.0127          4.31          4.29
+2   2023  2535        0.517      -0.0371          4.55          4.59
+3   2024  2474        0.518      -0.0517          4.33          4.38
+
+--- Regression: actual ~ predicted (M3, home runs) ---
+  Intercept:  1.528   Slope:  0.651 
+  R²:  0.0089 
+
+--- Regression: actual ~ predicted (M3, away runs) ---
+  Intercept:  -0.479   Slope:  1.111 
+  R²:  0.0236 
+
+--- Variable Importance (run differential) ---
+
+Call:
+lm(formula = run_diff ~ wrc_diff + fip_diff + bp_diff + park, 
+    data = imp_df)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-22.5625  -2.7363   0.1372   2.7052  19.9093 
+
+Coefficients: (3 not defined because of singularities)
+             Estimate Std. Error t value Pr(>|t|)    
+(Intercept) -0.023244   0.050282  -0.462    0.644    
+wrc_diff     0.063375   0.003435  18.450   <2e-16 ***
+fip_diff           NA         NA      NA       NA    
+bp_diff            NA         NA      NA       NA    
+park               NA         NA      NA       NA    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 4.341 on 7452 degrees of freedom
+Multiple R-squared:  0.04368,	Adjusted R-squared:  0.04356 
+F-statistic: 340.4 on 1 and 7452 DF,  p-value: < 2.2e-16
+
+
+========================================
+EMPIRICAL CONSTANTS SUMMARY
+========================================
+  Recommended LEAGUE_AVG_RUNS:  4.43
+  Recommended LEAGUE_AVG_FIP:   4.21
+  Recommended LEAGUE_AVG_xFIP:  4.15
+  Observed home field (runs):   -0.005
+  Observed home win rate:       0.525
+========================================
+
+All results saved to:  analysis/model_backtest/results 
+DONE.

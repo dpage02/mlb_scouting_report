@@ -26,6 +26,7 @@ avail_colors <- c(
   "fresh"       = "#27ae60",
   "available"   = "#a9dfbf",
   "limited"     = "#f39c12",
+  "doubtful"    = "#e67e22",
   "unavailable" = "#e74c3c",
   "injured"     = "#d5d8dc"
 )
@@ -34,6 +35,7 @@ avail_text_colors <- c(
   "fresh"       = "white",
   "available"   = "#1a5276",
   "limited"     = "white",
+  "doubtful"    = "white",
   "unavailable" = "white",
   "injured"     = "#7f8c8d"
 )
