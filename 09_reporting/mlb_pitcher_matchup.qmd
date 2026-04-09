@@ -70,8 +70,9 @@ home_abbr_str <- tryCatch({
 away_abbr_str <- if (length(away_abbr_str) == 0 || is.na(away_abbr_str)) "AWAY" else away_abbr_str
 home_abbr_str <- if (length(home_abbr_str) == 0 || is.na(home_abbr_str)) "HOME" else home_abbr_str
 
-deepdive_file  <- paste0("deepdive_",    params$game_date, "_", away_abbr_str, "_", home_abbr_str, ".html")
+deepdive_file   <- paste0("deepdive_",   params$game_date, "_", away_abbr_str, "_", home_abbr_str, ".html")
 prediction_file <- paste0("prediction_", params$game_date, "_", away_abbr_str, "_", home_abbr_str, ".html")
+hitting_file    <- paste0("hitting_",    params$game_date, "_", away_abbr_str, "_", home_abbr_str, ".html")
 
 cat(paste0(
   '<div style="margin-bottom:1.5rem; padding:10px 14px; background:#f8f9fa; ',
@@ -81,6 +82,9 @@ cat(paste0(
   '&nbsp;&nbsp;|&nbsp;&nbsp;',
   '<a href="', deepdive_file, '" style="color:#1a73e8; text-decoration:none; font-weight:600;">',
   'Deep Dive</a>',
+  '&nbsp;&nbsp;|&nbsp;&nbsp;',
+  '<a href="', hitting_file, '" style="color:#1a73e8; text-decoration:none; font-weight:600;">',
+  '\u26be Hitting</a>',
   '&nbsp;&nbsp;|&nbsp;&nbsp;',
   '<a href="', prediction_file, '" style="color:#1a73e8; text-decoration:none; font-weight:600;">',
   '\u26a1 Prediction</a>',

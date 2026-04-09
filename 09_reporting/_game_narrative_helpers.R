@@ -998,6 +998,248 @@ BP_STAB_IP <- 120
   max(0.92, min(1.08, mult))
 }
 
+# Internal: wind run multiplier
+# Applies to both teams (affects run environment symmetrically for most parks)
+.wind_mult <- function(wind_speed, wind_dir) {
+  if (is.na(wind_speed) || wind_speed < 8) return(1.0)
+  dir <- tolower(trimws(dplyr::coalesce(wind_dir, "")))
+  base_effect <- (min(wind_speed, 25) - 7) / 18  # 0 at 7mph, 1.0 at 25mph
+  mult <- if (grepl("out", dir) && !grepl("cloudy|overcast", dir)) {
+    1.0 + 0.10 * base_effect   # max +10% at 25mph
+  } else if (grepl("^in$|^in ", dir) || grepl("in$", dir)) {
+    1.0 - 0.10 * base_effect   # max -10% at 25mph
+  } else {
+    1.0 + 0.02 * base_effect   # crosswind/unknown: tiny effect
+  }
+  max(0.90, min(1.10, mult))
+}
+
+# Internal: team defense run-suppression factor
+# Returns multiplier applied to OPPONENT expected runs.
+# Good defense -> < 1.0 (fewer runs allowed); bad defense -> > 1.0.
+.team_defense_factor <- function(gpk, fielding_side) {
+  if (!exists("defense_master_season") || nrow(defense_master_season) == 0) return(1.0)
+  if (!exists("lineup_context") || nrow(lineup_context) == 0) return(1.0)
+
+  fielding_players <- lineup_context %>%
+    dplyr::filter(game_pk == gpk, side == fielding_side) %>%
+    dplyr::pull(mlbam_id)
+  fielding_players <- unique(as.integer(fielding_players[!is.na(fielding_players)]))
+  if (length(fielding_players) < 4) return(1.0)
+
+  def_rows <- defense_master_season %>%
+    dplyr::filter(mlbam_id %in% fielding_players) %>%
+    dplyr::arrange(mlbam_id, dplyr::desc(dplyr::coalesce(
+      if ("mlb_inn" %in% names(.)) .data$mlb_inn else 0,
+      0
+    ))) %>%
+    dplyr::distinct(mlbam_id, .keep_all = TRUE)
+
+  # Prefer OAA > DRS > Defense (most park-neutral first)
+  metric_col <- intersect(c("sc_oaa", "fg_DRS", "fg_Defense"), names(def_rows))[1]
+  if (is.na(metric_col)) return(1.0)
+
+  vals <- suppressWarnings(as.numeric(def_rows[[metric_col]]))
+  valid <- is.finite(vals)
+  if (sum(valid) < 4) return(1.0)
+
+  team_metric <- sum(vals[valid], na.rm = TRUE)
+  n_found     <- sum(valid)
+
+  # Scale to full 8-man lineup equivalent, then to runs/game
+  # Each OAA/DRS unit approx 0.75 runs saved over the full season (162 games)
+  full_team_metric <- team_metric * (8.0 / n_found)
+  runs_per_game    <- full_team_metric * 0.75 / 162
+
+  # Raw multiplier (on opponent expected runs): better defense -> lower multiplier
+  raw_mult <- 1.0 - (runs_per_game / LEAGUE_AVG_RUNS)
+
+  # Regress heavily toward 1.0 (defense metrics are noisy, esp. early season)
+  # Only apply 30% of signal
+  mult <- 1.0 + (raw_mult - 1.0) * 0.30
+  max(0.95, min(1.05, mult))
+}
+
+# ============================================================
+# make_lineup_projection_html(gpk)
+# Per-player Steamer projection vs YTD stats for both lineups
+# ============================================================
+
+make_lineup_projection_html <- function(gpk) {
+  game   <- game_context   %>% dplyr::filter(game_pk == gpk)
+  lineup <- lineup_context %>% dplyr::filter(game_pk == gpk)
+
+  away_team <- dplyr::coalesce(game$away_team_name[1], "Away")
+  home_team <- dplyr::coalesce(game$home_team_name[1], "Home")
+
+  steamer_ok <- exists("steamer_projections") &&
+    is.data.frame(steamer_projections) && nrow(steamer_projections) > 0
+
+  source_note <- if (steamer_ok) "(Steamer)" else "(*=stabilized regression)"
+
+  # wRC+ color coding helper
+  .wrc_color <- function(v) {
+    if (is.na(v) || !is.finite(v)) return("")
+    bg <- if      (v >= 130) "#27ae60"
+          else if (v >= 115) "#a9dfbf"
+          else if (v >= 100) "#ffffff"
+          else if (v >=  85) "#fef9c3"
+          else               "#fde8e8"
+    fg <- if (v >= 130) "white" else "#333"
+    paste0('background:', bg, '; color:', fg, '; font-weight:bold; border-radius:3px; padding:1px 5px;')
+  }
+
+  # Build one team's table HTML
+  .team_table <- function(side, team_label) {
+    rows <- lineup %>%
+      dplyr::filter(side == !!side) %>%
+      dplyr::arrange(batting_slot)
+
+    if (nrow(rows) == 0) return(paste0('<p style="color:#888;font-style:italic;">No lineup data for ', team_label, '.</p>'))
+
+    # Join Steamer projections
+    if (steamer_ok) {
+      rows <- rows %>%
+        dplyr::left_join(
+          steamer_projections %>%
+            dplyr::select(mlbam_id,
+                          dplyr::any_of(c("steamer_wrc_plus", "steamer_pa",
+                                          "steamer_hr", "steamer_avg",
+                                          "steamer_obp", "steamer_slg"))),
+          by = "mlbam_id"
+        )
+    } else {
+      rows$steamer_wrc_plus <- NA_real_
+      rows$steamer_pa       <- NA_integer_
+      rows$steamer_hr       <- NA_real_
+      rows$steamer_avg      <- NA_real_
+      rows$steamer_obp      <- NA_real_
+      rows$steamer_slg      <- NA_real_
+    }
+
+    # Pull YTD stats from offense_master_season when available
+    if (exists("offense_master_season") && nrow(offense_master_season) > 0) {
+      ytd <- offense_master_season %>%
+        dplyr::select(mlbam_id,
+                      dplyr::any_of(c("fg_wRC_plus", "mlb_pa", "mlb_hr",
+                                      "mlb_avg", "mlb_obp", "mlb_slg"))) %>%
+        dplyr::distinct(mlbam_id, .keep_all = TRUE)
+      rows <- rows %>% dplyr::left_join(ytd, by = "mlbam_id", suffix = c("", ".ytd"))
+    }
+
+    # Determine YTD wRC+ column
+    ytd_wrc_col <- intersect(c("fg_wRC_plus"), names(rows))[1]
+    ytd_pa_col  <- intersect(c("mlb_pa"), names(rows))[1]
+    ytd_hr_col  <- intersect(c("mlb_hr"), names(rows))[1]
+    ytd_avg_col <- intersect(c("mlb_avg"), names(rows))[1]
+    ytd_obp_col <- intersect(c("mlb_obp"), names(rows))[1]
+    ytd_slg_col <- intersect(c("mlb_slg"), names(rows))[1]
+
+    header_html <- paste0(
+      '<table style="border-collapse:collapse; font-size:12px; width:100%; min-width:560px;">',
+      '<thead><tr style="background:#f1f3f4; font-size:11px; color:#555;">',
+      '<th style="padding:5px 8px; text-align:center; border-bottom:2px solid #ddd;">#</th>',
+      '<th style="padding:5px 8px; text-align:left; border-bottom:2px solid #ddd;">Name</th>',
+      '<th style="padding:5px 8px; text-align:center; border-bottom:2px solid #ddd;">Pos</th>',
+      '<th style="padding:5px 8px; text-align:center; border-bottom:2px solid #ddd; border-left:2px solid #1a73e8;">',
+        'Steamer wRC+ ', source_note, '</th>',
+      '<th style="padding:5px 8px; text-align:center; border-bottom:2px solid #ddd;">YTD wRC+</th>',
+      '<th style="padding:5px 8px; text-align:center; border-bottom:2px solid #ddd;">AVG</th>',
+      '<th style="padding:5px 8px; text-align:center; border-bottom:2px solid #ddd;">OBP</th>',
+      '<th style="padding:5px 8px; text-align:center; border-bottom:2px solid #ddd;">SLG</th>',
+      '<th style="padding:5px 8px; text-align:center; border-bottom:2px solid #ddd;">HR Proj</th>',
+      '<th style="padding:5px 8px; text-align:center; border-bottom:2px solid #ddd;">HR YTD</th>',
+      '<th style="padding:5px 8px; text-align:center; border-bottom:2px solid #ddd;">PA</th>',
+      '</tr></thead><tbody>'
+    )
+
+    row_html <- vapply(seq_len(nrow(rows)), function(j) {
+      r <- rows[j, ]
+      slot       <- dplyr::coalesce(r$batting_slot, j)
+      name       <- dplyr::coalesce(r$player_name, "Unknown")
+      pos        <- dplyr::coalesce(r$fg_position, "—")
+
+      s_wrc <- if ("steamer_wrc_plus" %in% names(r) && !is.na(r$steamer_wrc_plus))
+        round(r$steamer_wrc_plus) else NA_integer_
+      y_wrc <- if (!is.na(ytd_wrc_col) && ytd_wrc_col %in% names(r) && !is.na(r[[ytd_wrc_col]]))
+        round(r[[ytd_wrc_col]]) else NA_integer_
+      ytd_pa <- if (!is.na(ytd_pa_col) && ytd_pa_col %in% names(r) && !is.na(r[[ytd_pa_col]]))
+        as.integer(r[[ytd_pa_col]]) else NA_integer_
+      ytd_hr <- if (!is.na(ytd_hr_col) && ytd_hr_col %in% names(r) && !is.na(r[[ytd_hr_col]]))
+        as.integer(r[[ytd_hr_col]]) else NA_integer_
+      s_hr   <- if ("steamer_hr" %in% names(r) && !is.na(r$steamer_hr))
+        round(r$steamer_hr, 0) else NA_integer_
+
+      # Prefer Steamer avg/obp/slg, fall back to YTD
+      s_avg <- if ("steamer_avg" %in% names(r) && !is.na(r$steamer_avg)) r$steamer_avg else
+               if (!is.na(ytd_avg_col) && ytd_avg_col %in% names(r)) r[[ytd_avg_col]] else NA_real_
+      s_obp <- if ("steamer_obp" %in% names(r) && !is.na(r$steamer_obp)) r$steamer_obp else
+               if (!is.na(ytd_obp_col) && ytd_obp_col %in% names(r)) r[[ytd_obp_col]] else NA_real_
+      s_slg <- if ("steamer_slg" %in% names(r) && !is.na(r$steamer_slg)) r$steamer_slg else
+               if (!is.na(ytd_slg_col) && ytd_slg_col %in% names(r)) r[[ytd_slg_col]] else NA_real_
+
+      wrc_style <- .wrc_color(s_wrc)
+      row_bg    <- if (j %% 2 == 0) "background:#fafafa;" else ""
+
+      paste0(
+        '<tr style="', row_bg, '">',
+        '<td style="padding:4px 8px; text-align:center; color:#888;">', slot, '</td>',
+        '<td style="padding:4px 8px; font-weight:500;">', name, '</td>',
+        '<td style="padding:4px 8px; text-align:center; color:#555;">', pos, '</td>',
+        '<td style="padding:4px 8px; text-align:center; border-left:2px solid #e8f0fe;">',
+          if (!is.na(s_wrc)) paste0('<span style="', wrc_style, '">', s_wrc, '</span>') else '<span style="color:#bbb;">—</span>',
+        '</td>',
+        '<td style="padding:4px 8px; text-align:center;">',
+          if (!is.na(y_wrc)) {
+            ys <- .wrc_color(y_wrc)
+            paste0('<span style="', ys, '">', y_wrc, '</span>')
+          } else '<span style="color:#bbb;">—</span>',
+        '</td>',
+        '<td style="padding:4px 8px; text-align:center; color:#555;">',
+          if (!is.na(s_avg) && is.finite(s_avg)) sprintf("%.3f", s_avg) else "—", '</td>',
+        '<td style="padding:4px 8px; text-align:center; color:#555;">',
+          if (!is.na(s_obp) && is.finite(s_obp)) sprintf("%.3f", s_obp) else "—", '</td>',
+        '<td style="padding:4px 8px; text-align:center; color:#555;">',
+          if (!is.na(s_slg) && is.finite(s_slg)) sprintf("%.3f", s_slg) else "—", '</td>',
+        '<td style="padding:4px 8px; text-align:center; color:#555;">',
+          if (!is.na(s_hr)) s_hr else "—", '</td>',
+        '<td style="padding:4px 8px; text-align:center; color:#555;">',
+          if (!is.na(ytd_hr)) ytd_hr else "—", '</td>',
+        '<td style="padding:4px 8px; text-align:center; color:#555;">',
+          if (!is.na(ytd_pa)) ytd_pa else "—", '</td>',
+        '</tr>'
+      )
+    }, character(1))
+
+    paste0(
+      '<div style="overflow-x:auto; margin-bottom:1.5rem;">',
+      '<p style="font-size:13px; font-weight:600; margin-bottom:4px; color:#1a3c6e;">',
+        team_label, '</p>',
+      header_html,
+      paste0(row_html, collapse = ""),
+      '</tbody></table></div>'
+    )
+  }
+
+  away_html <- tryCatch(.team_table("away", away_team), error = function(e)
+    paste0('<p style="color:#c00;">Error building ', away_team, ' table: ', e$message, '</p>'))
+  home_html <- tryCatch(.team_table("home", home_team), error = function(e)
+    paste0('<p style="color:#c00;">Error building ', home_team, ' table: ', e$message, '</p>'))
+
+  paste0(
+    '<p style="font-size:12px; color:#666; margin-bottom:0.8rem;">',
+    'wRC+ color scale: ',
+    '<span style="background:#27ae60;color:white;padding:1px 6px;border-radius:3px;font-size:11px;">130+</span> ',
+    '<span style="background:#a9dfbf;color:#333;padding:1px 6px;border-radius:3px;font-size:11px;">115\u2013129</span> ',
+    '<span style="background:#fff;border:1px solid #ddd;padding:1px 6px;border-radius:3px;font-size:11px;">100\u2013114</span> ',
+    '<span style="background:#fef9c3;color:#333;padding:1px 6px;border-radius:3px;font-size:11px;">85\u201399</span> ',
+    '<span style="background:#fde8e8;color:#333;padding:1px 6px;border-radius:3px;font-size:11px;">&lt;85</span>',
+    '</p>',
+    away_html,
+    home_html
+  )
+}
+
 make_prediction_html <- function(gpk) {
   game   <- game_context    %>% dplyr::filter(game_pk == gpk)
   sps    <- starter_matchup %>% dplyr::filter(game_pk == gpk)
@@ -1074,13 +1316,12 @@ make_prediction_html <- function(gpk) {
 
   # --- Temperature adjustment (affects both teams equally — same environment) ---
   # Empirical run suppression/boost by temperature (calibrated to 2022-2024 data)
-  # Wind direction not available in pipeline — only temperature applied
   temp_f       <- .get_num(game, "game_temp_f")
   weather_mult <- if (!is.na(temp_f)) {
     dplyr::case_when(
-      temp_f < 40 ~ 0.93,  # very cold: −7%
-      temp_f < 50 ~ 0.96,  # cold:      −4%
-      temp_f < 60 ~ 0.98,  # cool:      −2%
+      temp_f < 40 ~ 0.93,  # very cold: -7%
+      temp_f < 50 ~ 0.96,  # cold:      -4%
+      temp_f < 60 ~ 0.98,  # cool:      -2%
       temp_f > 95 ~ 1.05,  # very hot:  +5%
       temp_f > 85 ~ 1.03,  # hot:       +3%
       temp_f > 75 ~ 1.01,  # warm:      +1%
@@ -1093,13 +1334,28 @@ make_prediction_html <- function(gpk) {
            round((weather_mult - 1) * 100), "% run environment)")
   } else NULL
 
+  # --- Wind adjustment ---
+  wind_mph  <- .get_num(game, "wind_speed_mph")
+  wind_dir  <- if ("wind_direction" %in% names(game) && !is.na(game$wind_direction[1]))
+    as.character(game$wind_direction[1]) else NA_character_
+  wind_mult_val <- .wind_mult(wind_mph, wind_dir)
+  wind_note_factor <- if (!is.na(wind_mph) && wind_mult_val != 1.0) {
+    paste0(round(wind_mph), " mph (", dplyr::coalesce(wind_dir, "unknown"), ")",
+           " (", if (wind_mult_val > 1) "+" else "",
+           round((wind_mult_val - 1) * 100, 1), "% run environment)")
+  } else NULL
+
+  # --- Defense adjustments ---
+  away_def_mult <- .team_defense_factor(gpk, "home")  # home team fields vs away batters
+  home_def_mult <- .team_defense_factor(gpk, "away")  # away team fields vs home batters
+
   # --- Expected runs ---
-  # Formula: lg_avg × (wRC+/100) × park_factor × temp_mult × (opp_blended_FIP / lg_avg_FIP)
-  # Both teams' offenses are boosted/suppressed equally by park and temperature.
-  away_exp_r <- LEAGUE_AVG_RUNS * (away_wrc / 100) * pf * weather_mult *
-                (home_blended_fip / LEAGUE_AVG_FIP) * away_form_mult
-  home_exp_r <- LEAGUE_AVG_RUNS * (home_wrc / 100) * pf * weather_mult *
-                (away_blended_fip / LEAGUE_AVG_FIP) * home_form_mult +
+  # Formula: lg_avg x (wRC+/100) x park_factor x temp_mult x wind_mult x (opp_blended_FIP / lg_avg_FIP)
+  #          x recent_form_adj x defense_factor
+  away_exp_r <- LEAGUE_AVG_RUNS * (away_wrc / 100) * pf * weather_mult * wind_mult_val *
+                (home_blended_fip / LEAGUE_AVG_FIP) * away_form_mult * away_def_mult
+  home_exp_r <- LEAGUE_AVG_RUNS * (home_wrc / 100) * pf * weather_mult * wind_mult_val *
+                (away_blended_fip / LEAGUE_AVG_FIP) * home_form_mult * home_def_mult +
                 HOME_FIELD_BONUS
   away_exp_r <- max(1.5, min(away_exp_r, 9.5))
   home_exp_r <- max(1.5, min(home_exp_r, 9.5))
@@ -1140,6 +1396,13 @@ make_prediction_html <- function(gpk) {
   )
   if (!is.null(pf_note))             factors <- c(factors, pf_note)
   if (!is.null(weather_note_factor)) factors <- c(factors, paste0("Temperature: ", weather_note_factor))
+  if (!is.null(wind_note_factor))    factors <- c(factors, paste0("Wind: ", wind_note_factor))
+  if (away_def_mult != 1.0) factors <- c(factors,
+    paste0(home_team, " defense adj: \u00d7", round(away_def_mult, 3),
+           " on ", away_team, " runs (OAA/DRS based, 30% signal weight)"))
+  if (home_def_mult != 1.0) factors <- c(factors,
+    paste0(away_team, " defense adj: \u00d7", round(home_def_mult, 3),
+           " on ", home_team, " runs (OAA/DRS based, 30% signal weight)"))
   away_form_note <- if (away_form_mult != 1.0)
     paste0(away_team, " recent form adj: \u00d7", round(away_form_mult, 3),
            " (L7 team OPS data)")
@@ -1236,9 +1499,11 @@ make_prediction_html <- function(gpk) {
     '<p style="font-size:11px; color:#888; padding:8px 10px; background:#f8f9fa; ',
     'border-radius:4px; border-left:3px solid #dee2e6; margin:0;">',
     '<strong>Model:</strong> E[runs] = ', LEAGUE_AVG_RUNS,
-    ' \u00d7 (wRC+/100) \u00d7 park_factor \u00d7 (blended_FIP/', LEAGUE_AVG_FIP, ')',
-    ' \u00d7 recent_form_adj. ',
+    ' \u00d7 (wRC+/100) \u00d7 park_factor \u00d7 temp_adj \u00d7 wind_adj \u00d7 (blended_FIP/', LEAGUE_AVG_FIP, ')'),
+    ' \u00d7 recent_form_adj \u00d7 defense_adj. ',
     'Blended FIP = SP_frac \u00d7 SP_xFIP + BP_frac \u00d7 bullpen_ERA. ',
+    'Wind adj: ±10% max (Out/In directions), ±2% crosswind, 0 under 8 mph. ',
+    'Defense adj: OAA > DRS > fg_Defense, 30% signal weight, ±5% hard cap. ',
     'Recent form adj (±8% max) from last-7-game team OPS; no adjustment when <5 batters have data. ',
     'Win probability via Poisson distribution. ',
     'Constants calibrated to 2022\u20132024 (n=7,300 games). ',

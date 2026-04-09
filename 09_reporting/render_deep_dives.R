@@ -205,3 +205,38 @@ for (i in seq_len(nrow(game_files))) {
 
 message("\nPrediction pages complete: ", length(pred_rendered), "/",
         nrow(game_files), " rendered.")
+
+# ------------------------------------------------------------
+# Render hitting pages (one per game)
+# ------------------------------------------------------------
+
+message("\nRendering hitting pages...")
+hitting_rendered <- character()
+
+for (i in seq_len(nrow(game_files))) {
+  row      <- game_files[i, ]
+  gpk      <- row$game_pk
+  matchup  <- sprintf("%s @ %s", row$away_team_name, row$home_team_name)
+  out_file <- paste0("hitting_", report_date, "_", row$away_abbr, "_", row$home_abbr, ".html")
+  final_path <- file.path("reports", out_file)
+
+  message(sprintf("  [%d/%d] %s...", i, nrow(game_files), matchup))
+
+  tryCatch({
+    quarto::quarto_render(
+      input          = "09_reporting/mlb_hitting.qmd",
+      execute_params = list(game_pk = gpk, game_date = report_date),
+      output_file    = out_file
+    )
+    if (file.exists(out_file)) {
+      file.rename(out_file, final_path)
+      hitting_rendered <- c(hitting_rendered, final_path)
+      message("    Saved: ", final_path)
+    }
+  }, error = function(e) {
+    message("    ERROR rendering hitting ", matchup, ": ", e$message)
+  })
+}
+
+message("\nHitting pages complete: ", length(hitting_rendered), "/",
+        nrow(game_files), " rendered.")

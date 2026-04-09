@@ -1,0 +1,206 @@
+---
+title: "Lineup Analysis"
+date: today
+params:
+  game_pk: null
+  game_date: null
+format:
+  html:
+    self-contained: true
+    embed-resources: true
+    theme: cosmo
+    toc: false
+    smooth-scroll: true
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+#| output: false
+if (basename(getwd()) == "09_reporting") setwd("..")
+
+library(gt)
+library(dplyr)
+
+cache_path <- "data/pipeline_cache.rds"
+cache_ok   <- file.exists(cache_path) &&
+              difftime(Sys.time(), file.mtime(cache_path), units = "hours") < 12
+
+if (cache_ok) {
+  cache <- readRDS(cache_path)
+  list2env(cache, envir = .GlobalEnv)
+  rm(cache)
+}
+
+source("09_reporting/_report_helpers.R")
+source("09_reporting/_deepdive_helpers.R")
+source("09_reporting/_game_narrative_helpers.R")
+
+gpk  <- as.integer(params$game_pk)
+game <- game_context %>% dplyr::filter(game_pk == gpk)
+
+away_team <- game$away_team_name
+home_team <- game$home_team_name
+matchup   <- sprintf("%s @ %s", away_team, home_team)
+```
+
+```{r header}
+#| output: asis
+cat(sprintf("# %s \u2014 Lineup Analysis\n\n", matchup))
+cat(paste0(
+  "> **", format(as.Date(params$game_date), "%A, %B %d, %Y"), "**",
+  " · ", game$venue_name, "\n\n"
+))
+```
+
+```{r nav-bar}
+#| output: asis
+scouting_file <- paste0("scouting_", params$game_date, ".html")
+
+away_abbr_str <- tryCatch({
+  team_ids %>% dplyr::filter(mlbam_team_id == game$away_team_id) %>%
+    dplyr::pull(team_abbr) %>% dplyr::first()
+}, error = function(e) "AWAY")
+home_abbr_str <- tryCatch({
+  team_ids %>% dplyr::filter(mlbam_team_id == game$home_team_id) %>%
+    dplyr::pull(team_abbr) %>% dplyr::first()
+}, error = function(e) "HOME")
+away_abbr_str <- if (length(away_abbr_str) == 0 || is.na(away_abbr_str)) "AWAY" else away_abbr_str
+home_abbr_str <- if (length(home_abbr_str) == 0 || is.na(home_abbr_str)) "HOME" else home_abbr_str
+
+deepdive_file   <- paste0("deepdive_",   params$game_date, "_", away_abbr_str, "_", home_abbr_str, ".html")
+matchup_file    <- paste0("matchup_",    params$game_date, "_", away_abbr_str, "_", home_abbr_str, ".html")
+prediction_file <- paste0("prediction_", params$game_date, "_", away_abbr_str, "_", home_abbr_str, ".html")
+
+cat(paste0(
+  '<div style="margin-bottom:1.5rem; padding:10px 14px; background:#f8f9fa; ',
+  'border-radius:6px; border:1px solid #dee2e6; font-size:13px;">',
+  '<a href="', scouting_file, '" style="color:#1a73e8; text-decoration:none;">',
+  '\u2190 Today\'s Games</a>',
+  '&nbsp;&nbsp;|&nbsp;&nbsp;',
+  '<a href="', deepdive_file, '" style="color:#1a73e8; text-decoration:none; font-weight:600;">',
+  'Deep Dive</a>',
+  '&nbsp;&nbsp;|&nbsp;&nbsp;',
+  '<a href="', matchup_file, '" style="color:#1a73e8; text-decoration:none; font-weight:600;">',
+  '\u26be Pitcher Matchup</a>',
+  '&nbsp;&nbsp;|&nbsp;&nbsp;',
+  '<a href="', prediction_file, '" style="color:#1a73e8; text-decoration:none; font-weight:600;">',
+  '\u26a1 Prediction</a>',
+  '</div>'
+), "\n\n")
+```
+
+---
+
+## Lineup Projections
+
+*Steamer true-talent wRC+ vs current season stats. wRC+ color scale: 130+ elite, 115–129 above average, 100–114 average, 85–99 below average, <85 weak.*
+
+```{r lineup-projections}
+#| output: asis
+proj_html <- tryCatch(make_lineup_projection_html(gpk), error = function(e) {
+  paste0('<p style="color:#888; font-style:italic;">Lineup projections unavailable: ',
+         conditionMessage(e), '</p>')
+})
+cat(proj_html, "\n\n")
+```
+
+---
+
+## Analytical Breakdown
+
+*Current season stats from MLB API, FanGraphs (all leaderboard types), and Statcast. Each section focuses on a different dimension of hitting.*
+
+### `r away_team`
+
+```{r lineup-away-full}
+#| output: asis
+tables_away <- tryCatch(make_lineup_full_gt(gpk, "away"), error = function(e) NULL)
+if (!is.null(tables_away)) {
+  for (nm in names(tables_away)) {
+    cat(sprintf('\n\n<h4 style="margin-top:1.4rem; margin-bottom:0.3rem; color:#2c3e50;">%s</h4>\n\n', nm))
+    cat(gt::as_raw_html(tables_away[[nm]]))
+    cat("\n\n")
+  }
+} else {
+  cat("*Analytical breakdown not available for ", away_team, ".*\n\n")
+}
+```
+
+### `r home_team`
+
+```{r lineup-home-full}
+#| output: asis
+tables_home <- tryCatch(make_lineup_full_gt(gpk, "home"), error = function(e) NULL)
+if (!is.null(tables_home)) {
+  for (nm in names(tables_home)) {
+    cat(sprintf('\n\n<h4 style="margin-top:1.4rem; margin-bottom:0.3rem; color:#2c3e50;">%s</h4>\n\n', nm))
+    cat(gt::as_raw_html(tables_home[[nm]]))
+    cat("\n\n")
+  }
+} else {
+  cat("*Analytical breakdown not available for ", home_team, ".*\n\n")
+}
+```
+
+---
+
+## Career History
+
+*Last 5 seasons + current season, totals aggregated across teams.*
+
+### `r away_team`
+
+```{r career-away}
+#| output: asis
+career_away <- tryCatch(make_career_offense_gt(gpk, "away"), error = function(e) NULL)
+if (!is.null(career_away)) {
+  cat(gt::as_raw_html(career_away))
+} else {
+  cat("*Career history not available for ", away_team, ".*\n\n")
+}
+```
+
+### `r home_team`
+
+```{r career-home}
+#| output: asis
+career_home <- tryCatch(make_career_offense_gt(gpk, "home"), error = function(e) NULL)
+if (!is.null(career_home)) {
+  cat(gt::as_raw_html(career_home))
+} else {
+  cat("*Career history not available for ", home_team, ".*\n\n")
+}
+```
+
+---
+
+## Matchup Splits
+
+*How each lineup fares vs today's opposing starter's arm side.*
+
+### `r away_team`
+
+```{r splits-away}
+#| output: asis
+splits_away <- tryCatch(make_lineup_splits_gt(gpk, "away"), error = function(e) NULL)
+if (!is.null(splits_away)) {
+  cat(gt::as_raw_html(splits_away))
+} else {
+  cat("*Matchup splits not available for ", away_team, ".*\n\n")
+}
+```
+
+### `r home_team`
+
+```{r splits-home}
+#| output: asis
+splits_home <- tryCatch(make_lineup_splits_gt(gpk, "home"), error = function(e) NULL)
+if (!is.null(splits_home)) {
+  cat(gt::as_raw_html(splits_home))
+} else {
+  cat("*Matchup splits not available for ", home_team, ".*\n\n")
+}
+```

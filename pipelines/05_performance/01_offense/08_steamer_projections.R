@@ -123,6 +123,12 @@ if (is.null(steamer_raw) || nrow(steamer_raw) < 100) {
   # Locate PA column
   pa_col <- intersect(c("PA", "pa", "PA_1"), names(steamer_raw))[1]
 
+  # Locate optional extra columns
+  hr_col  <- intersect(c("HR", "hr"),       names(steamer_raw))[1]
+  avg_col <- intersect(c("AVG", "avg"),     names(steamer_raw))[1]
+  obp_col <- intersect(c("OBP", "obp"),     names(steamer_raw))[1]
+  slg_col <- intersect(c("SLG", "slg"),     names(steamer_raw))[1]
+
   if (is.na(mlbam_col)) {
     # Try joining via FanGraphs playerid
     fg_id_col <- intersect(c("playerid", "PlayerId"), names(steamer_raw))[1]
@@ -153,14 +159,18 @@ if (is.null(steamer_raw) || nrow(steamer_raw) < 100) {
   } else {
     steamer_projections <- steamer_raw %>%
       dplyr::mutate(
-        mlbam_id        = suppressWarnings(as.integer(.data[[mlbam_col]])),
+        mlbam_id         = suppressWarnings(as.integer(.data[[mlbam_col]])),
         steamer_wrc_plus = suppressWarnings(as.numeric(.data[[wrc_col]])),
-        steamer_pa       = if (!is.na(pa_col))
-          suppressWarnings(as.integer(.data[[pa_col]])) else NA_integer_
+        steamer_pa       = if (!is.na(pa_col))  suppressWarnings(as.integer(.data[[pa_col]])) else NA_integer_,
+        steamer_hr       = if (!is.na(hr_col))  suppressWarnings(as.numeric(.data[[hr_col]]))  else NA_real_,
+        steamer_avg      = if (!is.na(avg_col)) suppressWarnings(as.numeric(.data[[avg_col]])) else NA_real_,
+        steamer_obp      = if (!is.na(obp_col)) suppressWarnings(as.numeric(.data[[obp_col]])) else NA_real_,
+        steamer_slg      = if (!is.na(slg_col)) suppressWarnings(as.numeric(.data[[slg_col]])) else NA_real_
       ) %>%
       dplyr::filter(!is.na(mlbam_id), mlbam_id > 0, !is.na(steamer_wrc_plus)) %>%
       dplyr::distinct(mlbam_id, .keep_all = TRUE) %>%
-      dplyr::select(mlbam_id, steamer_wrc_plus, steamer_pa)
+      dplyr::select(mlbam_id, steamer_wrc_plus, steamer_pa,
+                    dplyr::any_of(c("steamer_hr", "steamer_avg", "steamer_obp", "steamer_slg")))
 
     message("Steamer projections complete: ", nrow(steamer_projections),
             " players with projected wRC+ | ",
