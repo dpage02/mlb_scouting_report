@@ -125,7 +125,7 @@ current_season <- offense_master_season %>%
     hist_bb_pct, hist_k_pct,
     # Advanced — include whatever is available in offense_master_season
     dplyr::any_of(c(
-      "fg_wRC_plus", "fg_wOBA", "fg_WAR",
+      "fg_wRC_plus", "fg_wOBA", "fg_WAR", "fg_Age",
       "sc_avg_hit_speed", "sc_brl_percent", "sc_ev95percent",
       "sc_est_ba", "sc_est_slg", "sc_est_woba", "sc_woba"
     ))
@@ -232,33 +232,68 @@ if (nrow(gap_seasons) > 0) {
 # (current_year already has these from offense_master_season)
 # ------------------------------------------------------------
 
-fg_hist_list <- lapply(seq(hist_start, current_year - 1L), function(yr) {
-  fg <- tryCatch(
-    baseballr::fg_batter_leaders(
-      qual        = "0",
-      startseason = as.character(yr),
-      endseason   = as.character(yr),
-      type        = "8",
-      pageitems   = "10000"
-    ),
-    error = function(e) {
+# Use direct FanGraphs API — bypasses baseballr::fg_batter_leaders() bug
+# pull_fg_batting_api() is defined in 02_fangraphs_offense_season.R (already sourced)
+.fg_career_pull <- function(yr) {
+  raw <- if (exists("pull_fg_batting_api", mode = "function")) {
+    pull_fg_batting_api(yr, type_num = 8)
+  } else {
+    tryCatch({
+      resp <- httr::GET(
+        "https://www.fangraphs.com/api/leaders/major-league/data",
+        query = list(
+          age = "", pos = "all", stats = "bat", lg = "all",
+          season = yr, season1 = yr, ind = "0", qual = "0",
+          type = "8", pageitems = "2000000", pagenum = "1", rost = "0"
+        ),
+        httr::timeout(60)
+      )
+      if (is.null(resp) || httr::http_error(resp)) return(NULL)
+      parsed <- tryCatch(
+        jsonlite::fromJSON(httr::content(resp, as = "text", encoding = "UTF-8"), flatten = TRUE),
+        error = function(e) NULL
+      )
+      if (is.null(parsed) || !"data" %in% names(parsed)) return(NULL)
+      tryCatch(dplyr::as_tibble(parsed$data), error = function(e) NULL)
+    }, error = function(e) {
       message("FG career pull failed for ", yr, ": ", e$message)
       NULL
-    }
-  )
-  if (is.null(fg) || nrow(fg) == 0) return(NULL)
+    })
+  }
 
-  fg <- fg %>%
-    dplyr::rename_with(~ ifelse(.x %in% c("wRC.", "wRC+"), "wRC_plus", .x))
+  if (is.null(raw) || nrow(raw) < 10) {
+    message("FG career pull: no data for ", yr)
+    return(NULL)
+  }
+
+  # Normalize wRC+ column name (FanGraphs uses several variants)
+  names(raw) <- dplyr::case_when(
+    names(raw) %in% c("wRC+", "wRC.", "wRC_plus") ~ "wRC_plus",
+    TRUE ~ names(raw)
+  )
+
+  mlbam_col <- intersect(c("xMLBAMID", "mlbam_id"), names(raw))[1]
+  if (is.na(mlbam_col)) {
+    message("FG career pull: no mlbam_id column found for ", yr)
+    return(NULL)
+  }
 
   out <- dplyr::tibble(
-    mlbam_id = suppressWarnings(as.integer(fg$xMLBAMID)),
+    mlbam_id = suppressWarnings(as.integer(raw[[mlbam_col]])),
     season   = as.integer(yr)
   )
-  if ("wRC_plus" %in% names(fg)) out$fg_wRC_plus <- suppressWarnings(as.numeric(fg$wRC_plus))
-  if ("wOBA"     %in% names(fg)) out$fg_wOBA     <- suppressWarnings(as.numeric(fg$wOBA))
+  if ("wRC_plus" %in% names(raw))
+    out$fg_wRC_plus <- suppressWarnings(as.numeric(raw$wRC_plus))
+  if ("wOBA" %in% names(raw))
+    out$fg_wOBA <- suppressWarnings(as.numeric(raw$wOBA))
+  # Carry age for use in stabilized regression fallback
+  age_col <- intersect(c("Age", "fg_Age"), names(raw))[1]
+  if (!is.na(age_col))
+    out$fg_Age <- suppressWarnings(as.numeric(raw[[age_col]]))
   out %>% dplyr::filter(!is.na(mlbam_id))
-})
+}
+
+fg_hist_list <- lapply(seq(hist_start, current_year - 1L), .fg_career_pull)
 
 fg_hist <- dplyr::bind_rows(Filter(Negate(is.null), fg_hist_list))
 

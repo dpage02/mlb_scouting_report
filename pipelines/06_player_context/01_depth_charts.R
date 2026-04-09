@@ -31,10 +31,20 @@
 # Get all FanGraphs team IDs from initial call
 # ------------------------------------------------------------
 
+.fg_headers <- httr::add_headers(
+  `User-Agent`      = paste0("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) ",
+                             "AppleWebKit/537.36 (KHTML, like Gecko) ",
+                             "Chrome/124.0.0.0 Safari/537.36"),
+  `Accept`          = "application/json, text/plain, */*",
+  `Accept-Language` = "en-US,en;q=0.9",
+  `Referer`         = "https://www.fangraphs.com/depthcharts.aspx"
+)
+
 fg_depth_raw <- tryCatch(
   httr::GET(
     "https://www.fangraphs.com/api/depth-charts/data",
     query   = list(teamid = "16", position = "ALL"),
+    .fg_headers,
     httr::timeout(60)
   ),
   error = function(e) {
@@ -43,19 +53,41 @@ fg_depth_raw <- tryCatch(
   }
 )
 
+# Helper: fall back to depth_charts from the most recent pipeline cache
+.depth_charts_from_cache <- function() {
+  for (path in c("data/pipeline_cache.rds", "data/base_cache.rds")) {
+    if (!file.exists(path)) next
+    cached <- tryCatch(readRDS(path), error = function(e) NULL)
+    if (is.null(cached) || !"depth_charts" %in% names(cached)) next
+    dc <- cached$depth_charts
+    if (is.null(dc) || nrow(dc) == 0) next
+    message("  Using depth_charts from ", path, " (",
+            nrow(dc), " players, ",
+            dplyr::n_distinct(dc$fg_team_abbr), " teams)")
+    return(dc)
+  }
+  NULL
+}
+
 if (is.null(fg_depth_raw) || httr::http_error(fg_depth_raw)) {
-  message("WARNING: Cannot reach FanGraphs depth chart API. ",
-          "depth_charts will be empty — rotation/role data unavailable.")
-  depth_charts <- dplyr::tibble(
-    mlbam_id     = integer(),
-    player_name  = character(),
-    team_abbr    = character(),
-    fg_team_abbr = character(),
-    fg_role      = character(),
-    fg_position  = character(),
-    roster_type  = character()
-  )
-  message("01_depth_charts complete: 0 players (API unavailable)")
+  message("WARNING: Cannot reach FanGraphs depth chart API. Trying base cache fallback...")
+  fallback <- .depth_charts_from_cache()
+  if (!is.null(fallback)) {
+    depth_charts <- fallback
+    message("01_depth_charts complete: ", nrow(depth_charts),
+            " players (from base cache fallback)")
+  } else {
+    depth_charts <- dplyr::tibble(
+      mlbam_id     = integer(),
+      player_name  = character(),
+      team_abbr    = character(),
+      fg_team_abbr = character(),
+      fg_role      = character(),
+      fg_position  = character(),
+      roster_type  = character()
+    )
+    message("01_depth_charts complete: 0 players (API unavailable, no base cache)")
+  }
 } else {
 
 parsed_init <- jsonlite::fromJSON(
@@ -82,6 +114,7 @@ pull_team_depth_chart <- function(fg_team_id, fg_team_abbr, fg_team_name) {
     httr::GET(
       "https://www.fangraphs.com/api/depth-charts/data",
       query   = list(teamid = fg_team_id, position = "ALL"),
+      .fg_headers,
       httr::timeout(30)
     ),
     error = function(e) NULL
@@ -166,6 +199,19 @@ n_pitchers <- sum(depth_charts$fg_position %in% c("SP", "RP", "SP/RP"), na.rm = 
 
 if (n_teams < 28) {
   warning("Only ", n_teams, " teams in depth chart — expected 30")
+}
+
+# If the API responded but returned nothing useful, try base cache
+if (n_teams == 0) {
+  message("WARNING: Depth chart loop returned 0 teams. Trying base cache fallback...")
+  fallback <- .depth_charts_from_cache()
+  if (!is.null(fallback)) {
+    depth_charts <- fallback
+    n_teams    <- dplyr::n_distinct(depth_charts$fg_team_abbr)
+    n_pitchers <- sum(depth_charts$fg_position %in% c("SP", "RP", "SP/RP"), na.rm = TRUE)
+    message("01_depth_charts complete: ", nrow(depth_charts),
+            " players across ", n_teams, " teams (from base cache fallback)")
+  }
 }
 
 message("01_depth_charts complete: ",

@@ -67,6 +67,8 @@ suppressMessages({
   source("pipelines/05_performance/01_offense/05_lahman_offense_season.R")
   source("pipelines/05_performance/01_offense/99_offense_master_join.R")
   source("pipelines/05_performance/01_offense/06_player_career_offense.R")
+  source("pipelines/05_performance/01_offense/07_statcast_batter_vs_pitch.R")
+  source("pipelines/05_performance/01_offense/08_steamer_projections.R")
 })
 log_message("05 — offense complete")
 
@@ -119,7 +121,8 @@ log_message("05 — performance complete")
 base_cache_objects <- c(
   "target_season",
   "team_ids", "player_master_ids",
-  "park_factors",
+  "park_coordinates",
+  "park_factors", "depth_charts",
   # Final joined tables
   "offense_master_season",   "player_career_offense",
   "pitching_master_season",  "player_career_pitching",
@@ -137,7 +140,9 @@ base_cache_objects <- c(
   "player_season_statcast_pitching",
   "player_season_lahman_pitching",
   "player_season_bbref_pitching_advanced",
-  "player_season_fg_offense"
+  "player_season_fg_offense",
+  "batter_pitch_type_stats",
+  "steamer_projections"
 )
 
 base_cache <- mget(

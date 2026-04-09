@@ -31,18 +31,33 @@ sp_stat_cols <- c(
   "mlb_g", "mlb_gs", "mlb_ip", "mlb_era", "mlb_whip",
   "mlb_so", "mlb_bb", "mlb_hr", "mlb_sv",
   # FanGraphs advanced
-  "fg_era", "fg_whip", "fg_FIP", "fg_xFIP", "fg_xERA", "fg_SIERA",
+  "fg_ERA", "fg_era", "fg_WHIP", "fg_whip",
+  "fg_FIP", "fg_xFIP", "fg_xERA", "fg_SIERA",
   "fg_BABIP", "fg_LOB_pct",
-  "fg_K_9", "fg_BB_9", "fg_H_9", "fg_HR_9",
+  "fg_K_per_9", "fg_BB_per_9", "fg_H_per_9", "fg_HR_per_9",
   "fg_K_pct", "fg_BB_pct", "fg_K_BB_pct",
-  "fg_WAR", "fg_ERA_minus",
-  # FanGraphs batted ball (from type 2 extra pull)
-  "fg_GB.", "fg_LD.", "fg_FB.", "fg_IFFB.", "fg_HR.FB",
-  "fg_Hard.", "fg_Med.", "fg_Soft.",
-  # FanGraphs plate discipline (from type 5 extra pull)
-  "fg_O.Swing.", "fg_Z.Swing.", "fg_Zone.", "fg_F.Strike.",
-  "fg_SwStr.", "fg_CSW.",
-  # Statcast pitcher-against (from player_season_statcast_pitching)
+  "fg_WAR", "fg_ERA_minus", "fg_FIP_minus", "fg_xFIP_minus",
+  # FanGraphs batted ball
+  "fg_GB_pct", "fg_LD_pct", "fg_FB_pct", "fg_IFFB_pct", "fg_HR_per_FB",
+  "fg_Hard_pct", "fg_Med_pct", "fg_Soft_pct",
+  # FanGraphs plate discipline
+  "fg_O_Swing_pct", "fg_Z_Swing_pct", "fg_Zone_pct", "fg_F_Strike_pct",
+  "fg_SwStr_pct", "fg_C_plusSwStr_pct",
+  # FanGraphs Stuff+ model (overall)
+  "fg_sp_stuff", "fg_sp_location", "fg_sp_pitching",
+  # FanGraphs PitchingBot
+  "fg_pb_overall", "fg_pb_stuff", "fg_pb_command", "fg_pb_xRV100", "fg_pb_ERA",
+  # FanGraphs per-pitch Stuff+ / Location+ / Pitching+
+  "fg_sp_s_FF", "fg_sp_l_FF", "fg_sp_p_FF",
+  "fg_sp_s_SI", "fg_sp_l_SI", "fg_sp_p_SI",
+  "fg_sp_s_FC", "fg_sp_l_FC", "fg_sp_p_FC",
+  "fg_sp_s_SL", "fg_sp_l_SL", "fg_sp_p_SL",
+  "fg_sp_s_CU", "fg_sp_l_CU", "fg_sp_p_CU",
+  "fg_sp_s_CH", "fg_sp_l_CH", "fg_sp_p_CH",
+  "fg_sp_s_FS", "fg_sp_l_FS", "fg_sp_p_FS",
+  "fg_sp_s_KC", "fg_sp_l_KC", "fg_sp_p_KC",
+  "fg_sp_s_FO", "fg_sp_l_FO", "fg_sp_p_FO",
+  # Statcast pitcher-against
   "sc_avg_ev_allowed", "sc_ev95percent_allowed", "sc_barrel_pct_allowed",
   "sc_xba_allowed", "sc_xslg_allowed", "sc_xwoba_allowed", "sc_xera",
   "sc_woba_allowed",

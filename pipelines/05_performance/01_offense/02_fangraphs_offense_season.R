@@ -4,9 +4,11 @@
 # SCRIPT: 02_fangraphs_offense_season.R
 # ============================================================
 # PURPOSE:
-#   Pull season-level FanGraphs batting stats (type 8 dashboard).
-#   Bypasses baseballr::fg_batter_leaders() which has a known bug
-#   ("object 'leaders' not found"). Uses httr directly instead.
+#   Pull season-level FanGraphs batting stats.
+#   Uses a single type 3 pull which returns all ~475 columns
+#   in one request: standard, advanced, batted ball, pitch type
+#   run values, plate discipline, swing mechanics, Stuff+ faced, etc.
+#   Bypasses baseballr::fg_batter_leaders() (known bug).
 #
 # OUTPUT:
 #   player_season_fg_offense
@@ -20,10 +22,11 @@ source("pipelines/05_performance/00_schema/00_grain_definition.R")
 season_to_pull <- unique(player_season_mlb_offense$season)[1]
 
 # ------------------------------------------------------------
-# Direct FanGraphs API pull — bypasses fg_batter_leaders()
+# Direct FanGraphs API pull
+# type 3 returns all ~475 columns in a single request
 # ------------------------------------------------------------
 
-pull_fg_batting_api <- function(yr, type_num = 8) {
+pull_fg_batting_api <- function(yr, type_num = 3) {
   resp <- tryCatch(
     httr::GET(
       "https://www.fangraphs.com/api/leaders/major-league/data",
@@ -52,17 +55,23 @@ pull_fg_batting_api <- function(yr, type_num = 8) {
 }
 
 # ------------------------------------------------------------
-# Pull type 8 dashboard — fall back to prior season if sparse
+# Pull — fall back to prior season if wRC+ coverage is sparse
+# (Early season: FG returns rows but wRC+ is NA for most players)
 # ------------------------------------------------------------
 
-fg_raw <- pull_fg_batting_api(season_to_pull, type_num = 8)
+fg_raw <- pull_fg_batting_api(season_to_pull, type_num = 3)
 
-if (is.null(fg_raw) || nrow(fg_raw) < 100) {
-  message("FanGraphs batting data insufficient for ", season_to_pull,
-          " (", if (is.null(fg_raw)) "NULL" else nrow(fg_raw), " rows). ",
-          "Falling back to ", season_to_pull - 1)
+.wrc_col_raw <- if (!is.null(fg_raw))
+  intersect(c("wRC+", "wRC.", "wRC_plus"), names(fg_raw))[1] else NA_character_
+.wrc_coverage <- if (!is.na(.wrc_col_raw))
+  sum(!is.na(fg_raw[[.wrc_col_raw]])) else 0L
+
+if (is.null(fg_raw) || nrow(fg_raw) < 100 || .wrc_coverage < 150) {
+  message("FanGraphs batting insufficient for ", season_to_pull,
+          " (", if (is.null(fg_raw)) "NULL" else nrow(fg_raw), " rows | ",
+          .wrc_coverage, " with wRC+). Falling back to ", season_to_pull - 1)
   season_to_pull <- season_to_pull - 1
-  fg_raw <- pull_fg_batting_api(season_to_pull, type_num = 8)
+  fg_raw <- pull_fg_batting_api(season_to_pull, type_num = 3)
 }
 
 if (is.null(fg_raw) || nrow(fg_raw) == 0) {
@@ -72,24 +81,26 @@ if (is.null(fg_raw) || nrow(fg_raw) == 0) {
   )
 } else {
 
-  message("FanGraphs batting pull (type 8): ", nrow(fg_raw), " rows")
+  message("FanGraphs batting pull (type 3): ", nrow(fg_raw), " rows | ",
+          ncol(fg_raw), " columns")
 
-  # Extract IDs and team name BEFORE prefixing
-  # mlbam_id: try xMLBAMID directly, fall back to player_master_ids join
-  mlbam_col  <- intersect(c("xMLBAMID", "mlbam_id"), names(fg_raw))[1]
-  team_col   <- intersect(c("team_name", "Team"), names(fg_raw))[1]
+  # Extract identity columns before name normalization
+  mlbam_col <- intersect(c("xMLBAMID", "mlbam_id"), names(fg_raw))[1]
+  team_col  <- intersect(c("TeamNameAbb", "Team", "team_name"), names(fg_raw))[1]
 
   fg_work <- fg_raw %>%
     dplyr::mutate(
-      mlbam_id       = as.integer(if (!is.na(mlbam_col)) .data[[mlbam_col]] else NA_integer_),
-      fg_id          = as.character(playerid),
-      .team_name_raw = if (!is.na(team_col)) as.character(.data[[team_col]]) else NA_character_
+      tmp_mlbam_id = suppressWarnings(as.integer(
+        if (!is.na(mlbam_col)) .data[[mlbam_col]] else NA_integer_
+      )),
+      tmp_team  = if (!is.na(team_col)) as.character(.data[[team_col]]) else NA_character_,
+      tmp_fg_id = as.character(playerid)
     )
 
   # If xMLBAMID not available, join via player_master_ids
-  if (is.na(mlbam_col) || all(is.na(fg_work$mlbam_id))) {
+  if (is.na(mlbam_col) || all(is.na(fg_work$tmp_mlbam_id))) {
     fg_work <- fg_work %>%
-      dplyr::select(-mlbam_id) %>%
+      dplyr::select(-tmp_mlbam_id) %>%
       dplyr::left_join(
         player_master_ids %>%
           dplyr::filter(!is.na(fg_id), !is.na(mlbam_id)) %>%
@@ -97,96 +108,80 @@ if (is.null(fg_raw) || nrow(fg_raw) == 0) {
           dplyr::select(fg_id, mlbam_id),
         by = c("playerid" = "fg_id")
       ) %>%
-      dplyr::mutate(mlbam_id = as.integer(mlbam_id))
+      dplyr::rename(tmp_mlbam_id = mlbam_id) %>%
+      dplyr::mutate(tmp_mlbam_id = as.integer(tmp_mlbam_id))
   }
 
-  # Drop raw identity columns, then prefix stat columns with fg_
-  drop_raw <- c("playerid", "xMLBAMID", "team_name_abb", "team_name", "Team",
-                "Season", "Name", "PlayerName", mlbam_col, team_col)
+  # ------------------------------------------------------------
+  # Normalize column names
+  # Handle special cases first, then generic cleanup
+  # ------------------------------------------------------------
 
-  # Normalize wRC+ before prefix
   names(fg_work) <- dplyr::case_when(
+    names(fg_work) == "-WPA"                         ~ "neg_WPA",
+    names(fg_work) == "+WPA"                         ~ "pos_WPA",
+    names(fg_work) == "1B"                           ~ "X1B",
+    names(fg_work) == "K/9"                          ~ "K_per_9",
+    names(fg_work) == "BB/9"                         ~ "BB_per_9",
+    names(fg_work) == "H/9"                          ~ "H_per_9",
+    names(fg_work) == "HR/9"                         ~ "HR_per_9",
+    names(fg_work) == "K/BB"                         ~ "K_per_BB",
+    names(fg_work) == "LOB%"                         ~ "LOB_pct",
+    names(fg_work) == "HR/FB"                        ~ "HR_per_FB",
+    names(fg_work) == "GB/FB"                        ~ "GB_per_FB",
+    names(fg_work) == "FB%1"                         ~ "FB_usage_pct",
     names(fg_work) %in% c("wRC+", "wRC.", "wRC_plus") ~ "wRC_plus",
-    names(fg_work) == "BB%"   ~ "BB_pct",
-    names(fg_work) == "K%"    ~ "K_pct",
-    names(fg_work) == "K-BB%" ~ "K_BB_pct",
+    names(fg_work) == "BB%"                          ~ "BB_pct",
+    names(fg_work) == "K%"                           ~ "K_pct",
+    names(fg_work) == "K-BB%"                        ~ "K_BB_pct",
+    names(fg_work) == "C+SwStr%"                     ~ "C_plusSwStr_pct",
+    names(fg_work) == "ERA-"                         ~ "ERA_minus",
+    names(fg_work) == "FIP-"                         ~ "FIP_minus",
+    names(fg_work) == "xFIP-"                        ~ "xFIP_minus",
     TRUE ~ names(fg_work)
   )
 
+  # Generic cleanup: %, +, remaining special chars → underscores
+  names(fg_work) <- gsub("%", "_pct",   gsub("\\+", "_plus", names(fg_work)))
+  names(fg_work) <- gsub("[^A-Za-z0-9_]", "_", names(fg_work))
+  names(fg_work) <- gsub("_+", "_", gsub("^_|_$", "", names(fg_work)))
+
+  # Identity/metadata columns to drop before prefixing
+  drop_raw <- c(
+    "playerid", "xMLBAMID", "Name", "PlayerName", "PlayerNameRoute",
+    "Team", "TeamName", "TeamNameAbb", "teamid", "playerTeamId",
+    "Season", "SeasonMin", "SeasonMax", "Pos", "positionDB", "position",
+    "Bats", "AgeR", "TG", "TPA", "Q"
+  )
+
   player_season_fg_offense <- fg_work %>%
-    dplyr::filter(!is.na(mlbam_id)) %>%
+    dplyr::filter(!is.na(tmp_mlbam_id)) %>%
     dplyr::select(-dplyr::any_of(drop_raw)) %>%
     dplyr::rename_with(
       ~ paste0("fg_", .x),
-      -c(mlbam_id, fg_id, .team_name_raw)
+      -c(tmp_mlbam_id, tmp_team, tmp_fg_id)
     ) %>%
+    dplyr::rename(mlbam_id = tmp_mlbam_id, fg_id = tmp_fg_id) %>%
     dplyr::left_join(
       team_ids %>% dplyr::select(team_name, team_abbr),
-      by = c(".team_name_raw" = "team_name")
+      by = c("tmp_team" = "team_name")
     ) %>%
     dplyr::mutate(
-      team_abbr = dplyr::coalesce(team_abbr, .team_name_raw),
+      team_abbr = dplyr::coalesce(team_abbr, tmp_team),
       season    = as.integer(season_to_pull)
     ) %>%
-    dplyr::select(-.team_name_raw) %>%
+    dplyr::select(-tmp_team) %>%
     dplyr::distinct(mlbam_id, season, team_abbr, .keep_all = TRUE) %>%
     dplyr::select(mlbam_id, season, team_abbr, fg_id, dplyr::everything())
 
-  # ------------------------------------------------------------
-  # Additional FanGraphs type pulls
-  # ------------------------------------------------------------
-
-  pull_fg_batter_extra <- function(type_num) {
-    raw <- pull_fg_batting_api(season_to_pull, type_num = type_num)
-    if (is.null(raw) || nrow(raw) == 0) {
-      message("FG batter type ", type_num, ": no data")
-      return(NULL)
-    }
-    names(raw) <- gsub("\\+", "_plus", gsub("%", "_pct", gsub("-", "_", names(raw))))
-
-    mlbam_col_e <- intersect(c("xMLBAMID", "mlbam_id"), names(raw))[1]
-    if (is.na(mlbam_col_e)) return(NULL)
-
-    drop_cols <- c(
-      "playerid", "xMLBAMID", "team_name_abb", "team_name", "Team",
-      "Season", "Name", "PlayerName",
-      "G", "PA", "AB", "AVG", "OBP", "SLG", "OPS",
-      "HR", "R", "RBI", "SB", "BB_pct", "K_pct",
-      "ISO", "BABIP", "wOBA", "wRC_plus", "wRC.", "WAR",
-      "BsR", "Off", "Def", "xwOBA", "Age", "AgeRng"
-    )
-
-    result <- raw %>%
-      dplyr::mutate(mlbam_id = suppressWarnings(as.integer(.data[[mlbam_col_e]]))) %>%
-      dplyr::filter(!is.na(mlbam_id)) %>%
-      dplyr::select(-dplyr::any_of(drop_cols)) %>%
-      dplyr::rename_with(~ paste0("fg_", .x), -mlbam_id) %>%
-      dplyr::distinct(mlbam_id, .keep_all = TRUE)
-
-    message("FG batter type ", type_num, ": ", ncol(result) - 1,
-            " new columns for ", nrow(result), " players")
-    result
-  }
-
-  for (extra in list(
-    pull_fg_batter_extra(1),   # Advanced: Spd, UBR, wSB, wRAA
-    pull_fg_batter_extra(2),   # Batted Ball: Hard%, GB%, FB%, IFFB%
-    pull_fg_batter_extra(5)    # Plate Discipline: O-Swing%, Z-Contact%, CSW%
-  )) {
-    if (!is.null(extra)) {
-      player_season_fg_offense <- player_season_fg_offense %>%
-        dplyr::left_join(extra, by = "mlbam_id", suffix = c("", "_dup")) %>%
-        dplyr::select(-dplyr::ends_with("_dup"))
-    }
-  }
-
   validate_performance_table(player_season_fg_offense)
 
-} # end if fg_raw available
+}
 
 message("02_fangraphs_offense_season complete: ",
         nrow(player_season_fg_offense),
         " rows for season ", season_to_pull,
+        " | columns: ", ncol(player_season_fg_offense),
         " | fg_wRC_plus non-NA: ",
         if ("fg_wRC_plus" %in% names(player_season_fg_offense))
           sum(!is.na(player_season_fg_offense$fg_wRC_plus)) else 0)

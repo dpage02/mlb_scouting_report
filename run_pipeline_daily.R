@@ -27,7 +27,7 @@ suppressMessages({
   source("pipelines/00_setup/02_pipeline_config.R")  # sets target_date, target_season
 })
 
-cat("Starting daily pipeline —", format(target_date, "%A, %B %d %Y"), "\n\n")
+cat("Starting daily pipeline...\n\n")
 
 # ------------------------------------------------------------
 # Load base cache (season stats + IDs)
@@ -64,6 +64,10 @@ list2env(base_cache, envir = .GlobalEnv)
 rm(base_cache)
 
 log_message("Base cache loaded")
+
+# park_coordinates is static — source directly if not in cache
+if (!exists("park_coordinates"))
+  suppressMessages(source("pipelines/02_static_context/00_park_coordinates.R"))
 
 # ------------------------------------------------------------
 # 05_performance — stats refresh (MLB API + FanGraphs only)
@@ -112,6 +116,9 @@ log_message("03 — rosters complete")
 log_message("04 — Building game context...")
 suppressMessages({
   source("pipelines/04_game_context/01_schedule.R")
+})
+cat("Target date:", format(target_date, "%A, %B %d %Y"), "\n\n")
+suppressMessages({
   source("pipelines/04_game_context/02_game_meta.R")
   source("pipelines/04_game_context/03_probable_pitchers.R")
   source("pipelines/04_game_context/04_umpire_assignments.R")
@@ -141,6 +148,7 @@ suppressMessages({
   source("pipelines/07_bullpen_context/01_recent_pitching_logs.R")
   source("pipelines/07_bullpen_context/02_bullpen_availability.R")
   source("pipelines/07_bullpen_context/03_recent_batting_logs.R")
+  source("pipelines/07_bullpen_context/05_current_defense.R")
   source("pipelines/07_bullpen_context/99_bullpen_context_join.R")
 })
 log_message("07 — bullpen context complete")
@@ -171,8 +179,10 @@ pipeline_cache_objects <- c(
   "defense_master_season", "lineup_context_splits", "starter_splits",
   "player_season_fg_pitching", "player_season_mlb_pitching",
   "player_master_ids", "depth_charts",
-  "park_factors", "recent_batter_streaks", "value_master_season",
-  "player_season_mlb_offense_splits", "player_season_mlb_pitching_splits"
+  "park_factors", "recent_batter_streaks", "current_defense_stats", "value_master_season",
+  "player_season_mlb_offense_splits", "player_season_mlb_pitching_splits",
+  "batter_pitch_type_stats",
+  "steamer_projections"
 )
 
 pipeline_cache <- mget(

@@ -1,0 +1,135 @@
+---
+title: "Pitcher Matchup"
+date: today
+params:
+  game_pk: null
+  game_date: null
+format:
+  html:
+    self-contained: true
+    embed-resources: true
+    theme: cosmo
+    toc: false
+    smooth-scroll: true
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+#| output: false
+if (basename(getwd()) == "09_reporting") setwd("..")
+
+library(gt)
+library(dplyr)
+
+cache_path <- "data/pipeline_cache.rds"
+cache_ok   <- file.exists(cache_path) &&
+              difftime(Sys.time(), file.mtime(cache_path), units = "hours") < 12
+
+if (cache_ok) {
+  cache <- readRDS(cache_path)
+  list2env(cache, envir = .GlobalEnv)
+  rm(cache)
+}
+
+source("09_reporting/_report_helpers.R")
+source("09_reporting/_deepdive_helpers.R")
+source("09_reporting/_game_narrative_helpers.R")
+
+gpk  <- as.integer(params$game_pk)
+game <- game_context %>% dplyr::filter(game_pk == gpk)
+
+away_team <- game$away_team_name
+home_team <- game$home_team_name
+matchup   <- sprintf("%s @ %s", away_team, home_team)
+```
+
+```{r header}
+#| output: asis
+cat(sprintf("# %s \u2014 Pitcher Matchup\n\n", matchup))
+cat(paste0(
+  "> **", format(as.Date(params$game_date), "%A, %B %d, %Y"), "**",
+  " · ", game$venue_name, "\n\n"
+))
+```
+
+```{r nav-bar}
+#| output: asis
+scouting_file <- paste0("scouting_", params$game_date, ".html")
+
+away_abbr_str <- tryCatch({
+  team_ids %>% dplyr::filter(mlbam_team_id == game$away_team_id) %>%
+    dplyr::pull(team_abbr) %>% dplyr::first()
+}, error = function(e) "AWAY")
+home_abbr_str <- tryCatch({
+  team_ids %>% dplyr::filter(mlbam_team_id == game$home_team_id) %>%
+    dplyr::pull(team_abbr) %>% dplyr::first()
+}, error = function(e) "HOME")
+away_abbr_str <- if (length(away_abbr_str) == 0 || is.na(away_abbr_str)) "AWAY" else away_abbr_str
+home_abbr_str <- if (length(home_abbr_str) == 0 || is.na(home_abbr_str)) "HOME" else home_abbr_str
+
+deepdive_file  <- paste0("deepdive_",    params$game_date, "_", away_abbr_str, "_", home_abbr_str, ".html")
+prediction_file <- paste0("prediction_", params$game_date, "_", away_abbr_str, "_", home_abbr_str, ".html")
+
+cat(paste0(
+  '<div style="margin-bottom:1.5rem; padding:10px 14px; background:#f8f9fa; ',
+  'border-radius:6px; border:1px solid #dee2e6; font-size:13px;">',
+  '<a href="', scouting_file, '" style="color:#1a73e8; text-decoration:none;">',
+  '\u2190 Today\'s Games</a>',
+  '&nbsp;&nbsp;|&nbsp;&nbsp;',
+  '<a href="', deepdive_file, '" style="color:#1a73e8; text-decoration:none; font-weight:600;">',
+  'Deep Dive</a>',
+  '&nbsp;&nbsp;|&nbsp;&nbsp;',
+  '<a href="', prediction_file, '" style="color:#1a73e8; text-decoration:none; font-weight:600;">',
+  '\u26a1 Prediction</a>',
+  '</div>'
+), "\n\n")
+```
+
+---
+
+## SP Arsenal
+
+*Pitch mix, velocity, movement, and outcomes for today's starters. Sorted by usage.*
+
+```{r arsenal}
+#| output: asis
+arsenal_tbl <- tryCatch(make_arsenal_gt(gpk), error = function(e) NULL)
+if (!is.null(arsenal_tbl)) {
+  cat(gt::as_raw_html(arsenal_tbl))
+} else {
+  cat("*Pitch arsenal data not available.*\n\n")
+}
+```
+
+---
+
+## Batter vs. SP Handedness
+
+*How each lineup fares against today's opposing starter's arm side. Badges: 🔥 hot bat (last-7 OPS ≥ .900) · ⚡ 5+ game hit streak · ❄ cold bat.*
+
+```{r pitcher-matchup}
+#| output: asis
+pm_html <- tryCatch(make_pitcher_matchup_html(gpk), error = function(e) {
+  paste0('<p style="color:#888; font-style:italic;">Pitcher matchup unavailable: ',
+         conditionMessage(e), '</p>')
+})
+cat(pm_html, "\n\n")
+```
+
+---
+
+## Batter vs. Pitch Type
+
+*Career stats (last 3 seasons, weighted by PA) for each lineup batter against the specific pitches today's starter throws. Select a pitch type to see the full breakdown.*
+
+```{r batter-vs-pitch}
+#| output: asis
+bvp_html <- tryCatch(make_batter_vs_pitch_html(gpk), error = function(e) {
+  paste0('<p style="color:#888; font-style:italic;">Batter vs. pitch type unavailable: ',
+         conditionMessage(e), '</p>')
+})
+cat(bvp_html, "\n\n")
+```

@@ -38,6 +38,18 @@ LEAGUE_AVG_FIP   <- 4.15   # empirical avg SP xFIP 2022-2024
 HOME_FIELD_BONUS <- 0.02   # residual last-at-bat/crowd advantage (run differential ≈0 empirically)
 BLEND_GS_FLOOR   <- 15L    # GS needed to fully trust current-season stats; blend with prior below this
 
+# Expected PA per batting slot relative to lineup average (empirical MLB 2022-2024)
+# Slot 1 bats ~4.3×/game vs slot 9 ~3.5×/game; normalized so mean slot = 1.0
+# Used to weight each batter's wRC+ by how many times they'll actually bat
+SLOT_PA_WEIGHT <- c(
+  `1` = 1.103, `2` = 1.077, `3` = 1.051, `4` = 1.026, `5` = 1.000,
+  `6` = 0.974, `7` = 0.949, `8` = 0.923, `9` = 0.897
+)
+
+# Stabilization constant for wRC+ (empirical: ~550 PA = 50/50 signal vs noise)
+# Source: Baseball Prospectus / FanGraphs stabilization research
+WRC_STAB_PA <- 550L
+
 # ============================================================
 # Internal helpers
 # ============================================================
@@ -160,10 +172,203 @@ BLEND_GS_FLOOR   <- 15L    # GS needed to fully trust current-season stats; blen
   p_home_wins + 0.5 * p_tie      # ties split 50/50 (extra innings)
 }
 
-# Team lineup wRC+ (mean of available values, fallback 100 = league avg)
+# Age adjustment for wRC+ — empirical MLB career arc
+# Peak ~27-28; improvement in mid-20s; accelerating decline after 32
+# Returns a delta to add to the regressed estimate
+.age_adj_wrc <- function(age) {
+  if (is.na(age) || !is.finite(age) || age <= 0) return(0)
+  dplyr::case_when(
+    age <= 22 ~ -3L,   # raw, inconsistent production
+    age <= 24 ~ -1L,   # developing, below projection
+    age <= 29 ~ +1L,   # peak window
+    age <= 31 ~  0L,   # post-peak, holding
+    age <= 33 ~ -2L,   # noticeable decline
+    age <= 35 ~ -4L,   # steep decline
+    TRUE      ~ -6L    # late career
+  )
+}
+
+# Stabilization-based regression fallback — used when Steamer projection unavailable.
+#
+# How this works (and why it's better than Marcel's 3-2-1):
+#   Marcel applies fixed weights (1.0 / 0.6 / 0.3) regardless of sample size,
+#   then regresses by a fixed amount regardless of how much data exists.
+#
+#   Here we do it correctly:
+#     1. Weight each season's PA by recency (recent seasons more predictive)
+#     2. Compute the PA-weighted observed wRC+ across those seasons
+#     3. Regress toward 100 in proportion to sample size:
+#          regressed = (obs × total_eff_PA + 100 × STAB_PA) / (total_eff_PA + STAB_PA)
+#        At 0 PA  → fully regress to 100 (no information)
+#        At 550 PA → 50% observed / 50% mean  (stabilization point)
+#        At 1100 PA → 67% observed / 33% mean
+#        At 2200 PA → 80% observed / 20% mean  (established veteran)
+#     4. Apply age curve: +1 in peak years (26-29), -2 to -6 in decline
+#
+.stabilized_wrc <- function(pid) {
+  # ── Primary path: offense_master_season (rebuilt every daily run) ──────────
+  # Uses FG wRC+ + FG PA directly — no base rebuild required.
+  # fg_wRC_plus comes from 02_fangraphs_offense_season.R type-8 pull.
+  # fg_PA is the full prior-season (or YTD) PA behind that wRC+ estimate.
+  if (exists("offense_master_season") &&
+      "fg_wRC_plus" %in% names(offense_master_season)) {
+    oms_rows <- offense_master_season[
+      offense_master_season$mlbam_id == pid, , drop = FALSE]
+    if (nrow(oms_rows) > 0) {
+      # For traded players there may be multiple stint rows; pick highest FG PA
+      if ("fg_PA" %in% names(oms_rows)) {
+        best_idx <- which.max(suppressWarnings(as.numeric(oms_rows$fg_PA)))
+        best     <- oms_rows[best_idx, , drop = FALSE]
+      } else {
+        best <- oms_rows[1, , drop = FALSE]
+      }
+      obs_wrc <- suppressWarnings(as.numeric(best$fg_wRC_plus[1]))
+      if (!is.na(obs_wrc) && is.finite(obs_wrc)) {
+        pa <- if ("fg_PA" %in% names(best))
+                suppressWarnings(as.numeric(best$fg_PA[1])) else NA_real_
+        # mlb_pa as PA fallback (may be tiny early-season YTD)
+        if (is.na(pa) || pa < 1) {
+          pa <- if ("mlb_pa" %in% names(best))
+                  suppressWarnings(as.numeric(best$mlb_pa[1])) else NA_real_
+        }
+        if (is.na(pa) || pa < 1) pa <- 200  # default: treat as ~half-season data
+
+        # Stabilization regression: (obs × PA + 100 × STAB) / (PA + STAB)
+        regressed <- (obs_wrc * pa + 100 * WRC_STAB_PA) / (pa + WRC_STAB_PA)
+
+        # Age adjustment
+        age_val <- if ("fg_Age" %in% names(best))
+                     suppressWarnings(as.numeric(best$fg_Age[1])) else NA_real_
+
+        return(max(50, min(185, regressed + .age_adj_wrc(age_val))))
+      }
+    }
+  }
+
+  # ── Fallback: multi-year regression from player_career_offense ──────────────
+  # Used when offense_master_season is unavailable or has no wRC+ for this player.
+  # Requires base pipeline rebuild to have populated fg_wRC_plus in career table.
+  if (!exists("player_career_offense") || nrow(player_career_offense) == 0 ||
+      !"fg_wRC_plus" %in% names(player_career_offense)) return(NA_real_)
+
+  cur_yr  <- max(player_career_offense$season, na.rm = TRUE)
+  yr_map  <- c(cur_yr, cur_yr - 1L, cur_yr - 2L)
+  wt_map  <- c(1.00, 0.65, 0.45)
+
+  rows <- player_career_offense[
+    player_career_offense$mlbam_id == pid &
+    player_career_offense$season %in% yr_map &
+    !is.na(player_career_offense$fg_wRC_plus), , drop = FALSE]
+  if (nrow(rows) == 0) return(NA_real_)
+
+  pa_col <- intersect(c("hist_pa", "mlb_pa", "PA", "pa"), names(rows))[1]
+  pa_vec <- if (!is.na(pa_col)) suppressWarnings(as.numeric(rows[[pa_col]]))
+            else rep(200, nrow(rows))
+  pa_vec[is.na(pa_vec) | pa_vec < 0] <- 0
+
+  yr_idx   <- match(rows$season, yr_map)
+  eff_pa   <- pa_vec * wt_map[yr_idx]
+  total_pa <- sum(eff_pa, na.rm = TRUE)
+  if (total_pa < 1) return(NA_real_)
+
+  obs_wrc   <- sum(rows$fg_wRC_plus * eff_pa, na.rm = TRUE) / total_pa
+  regressed <- (obs_wrc * total_pa + 100 * WRC_STAB_PA) / (total_pa + WRC_STAB_PA)
+
+  age_val <- NA_real_
+  if ("fg_Age" %in% names(rows))
+    age_val <- suppressWarnings(as.numeric(rows$fg_Age[which.max(rows$season)]))
+  if ((is.na(age_val) || !is.finite(age_val)) &&
+      exists("offense_master_season") &&
+      "fg_Age" %in% names(offense_master_season)) {
+    age_row <- offense_master_season[offense_master_season$mlbam_id == pid, , drop = FALSE]
+    if (nrow(age_row) > 0)
+      age_val <- suppressWarnings(as.numeric(age_row$fg_Age[1]))
+  }
+
+  max(50, min(185, regressed + .age_adj_wrc(age_val)))
+}
+
+# Team lineup wRC+ — best-available estimate per batter, adjusted for:
+#   1. True talent: Steamer projected wRC+ > Marcel blend (PA-weighted 3-yr)
+#   2. Handedness: OPS ratio vs opposing SP's arm side (min 50 PA; cap ±25%)
+#   3. Batting order: PA-weighted by slot (slot 1 bats ~22% more than slot 9)
+# Returns slot-PA-weighted mean across the lineup; falls back to 100 when sparse.
 .team_wrc <- function(lineup_rows) {
-  vals <- lineup_rows$fg_wRC_plus[!is.na(lineup_rows$fg_wRC_plus)]
-  if (length(vals) < 3) 100 else mean(vals)
+  if (nrow(lineup_rows) == 0) return(100)
+
+  steamer_ok <- exists("steamer_projections") &&
+    is.data.frame(steamer_projections) &&
+    nrow(steamer_projections) > 0 &&
+    "steamer_wrc_plus" %in% names(steamer_projections)
+
+  # Locate this lineup's applicable split data (from 04_matchup_splits.R)
+  # lineup_context_splits has sp_ops (split OPS) and mlb_ops (overall OPS)
+  game_pk_val <- if ("game_pk" %in% names(lineup_rows)) lineup_rows$game_pk[1] else NA_integer_
+  side_val    <- if ("side"    %in% names(lineup_rows)) lineup_rows$side[1]    else NA_character_
+
+  applicable_splits <- NULL
+  if (!is.na(game_pk_val) && !is.na(side_val) &&
+      exists("lineup_context_splits") &&
+      is.data.frame(lineup_context_splits) && nrow(lineup_context_splits) > 0 &&
+      all(c("sp_ops", "sp_pa", "applicable_split") %in% names(lineup_context_splits))) {
+    applicable_splits <- lineup_context_splits %>%
+      dplyr::filter(game_pk == game_pk_val, side == side_val) %>%
+      dplyr::select(mlbam_id, sp_ops, sp_pa, applicable_split)
+  }
+
+  has_splits <- !is.null(applicable_splits) && nrow(applicable_splits) > 0 &&
+    any(!is.na(applicable_splits$applicable_split))
+
+  # Per-player adjusted wRC+ with slot weight
+  results <- lapply(seq_len(nrow(lineup_rows)), function(i) {
+    pid  <- lineup_rows$mlbam_id[i]
+    slot <- as.character(
+      if ("batting_slot" %in% names(lineup_rows)) lineup_rows$batting_slot[i] else NA_integer_
+    )
+
+    # 1. True-talent wRC+ (Steamer > Marcel)
+    base_wrc <- NA_real_
+    if (steamer_ok) {
+      st_row <- steamer_projections[steamer_projections$mlbam_id == pid, ]
+      if (nrow(st_row) > 0 && !is.na(st_row$steamer_wrc_plus[1]))
+        base_wrc <- as.numeric(st_row$steamer_wrc_plus[1])
+    }
+    if (is.na(base_wrc)) base_wrc <- .stabilized_wrc(pid)
+    if (is.na(base_wrc)) return(NULL)
+
+    # 2. Handedness adjustment: apply split OPS ratio to true-talent estimate
+    # Logic: if a batter hits .820 OPS overall but .680 vs RHP (vs .750 avg),
+    # their effective wRC+ against today's RH starter is ~(680/820) × base_wrc
+    # Minimum 50 PA in the split to apply; cap multiplier at ±25%
+    if (has_splits) {
+      sp_row <- applicable_splits[applicable_splits$mlbam_id == pid, ]
+      if (nrow(sp_row) > 0 && !is.na(sp_row$applicable_split[1])) {
+        sp_ops_val  <- sp_row$sp_ops[1]
+        sp_pa_val   <- if ("sp_pa" %in% names(sp_row)) sp_row$sp_pa[1] else NA_integer_
+        overall_ops <- if ("mlb_ops" %in% names(lineup_rows)) lineup_rows$mlb_ops[i] else NA_real_
+
+        if (!is.na(sp_ops_val) && !is.na(overall_ops) && overall_ops > 0.100 &&
+            !is.na(sp_pa_val) && sp_pa_val >= 50L) {
+          hand_mult <- max(0.75, min(1.25, sp_ops_val / overall_ops))
+          base_wrc  <- base_wrc * hand_mult
+        }
+      }
+    }
+
+    # 3. Batting order PA weight
+    slot_wt <- if (!is.na(slot) && slot %in% names(SLOT_PA_WEIGHT))
+      SLOT_PA_WEIGHT[[slot]] else 1.0
+
+    list(wrc = base_wrc, wt = slot_wt)
+  })
+
+  # Slot-PA-weighted mean
+  results  <- Filter(Negate(is.null), results)
+  wrc_vals <- sapply(results, `[[`, "wrc")
+  wt_vals  <- sapply(results, `[[`, "wt")
+  ok <- !is.na(wrc_vals)
+  if (sum(ok) < 3) return(100)
+  sum(wrc_vals[ok] * wt_vals[ok]) / sum(wt_vals[ok])
 }
 
 # ============================================================
@@ -699,7 +904,14 @@ make_game_preview_html <- function(gpk) {
 # Projection table + key factors for the deep dive
 # ============================================================
 
-# Internal: IP-weighted bullpen ERA for available/fresh arms (excludes LR, injured, unavailable)
+# Stabilization constant for bullpen ERA regression.
+# With ~120 total IP the team bullpen is at 50/50 signal vs noise.
+# April bullpens often have fluky 0.00 ERAs over 10-20 IP — must regress heavily.
+BP_STAB_IP <- 120
+
+# Internal: IP-weighted bullpen quality for available/fresh arms (excludes LR, injured, unavailable)
+# Regresses toward LEAGUE_AVG_FIP based on total IP to prevent early-season flukes.
+# Prefers xFIP (most stable for relievers) > ERA-based alternatives.
 .bullpen_era <- function(bp_rows) {
   rel <- bp_rows %>%
     dplyr::filter(
@@ -707,21 +919,44 @@ make_game_preview_html <- function(gpk) {
       !fg_role %in% c("LR"),
       !is.na(mlb_ip), mlb_ip > 0
     )
-  era_col <- dplyr::coalesce(
-    if ("bbref_ERA" %in% names(rel)) rel$bbref_ERA else rep(NA_real_, nrow(rel)),
+  # xFIP > bbref_ERA > mlb_ERA (xFIP normalizes HR rate — most predictive for relievers)
+  fip_col <- dplyr::coalesce(
+    if ("fg_xFIP"   %in% names(rel)) rel$fg_xFIP   else rep(NA_real_, nrow(rel)),
+    if ("bbref_ERA" %in% names(rel)) rel$bbref_ERA  else rep(NA_real_, nrow(rel)),
     rel$mlb_era
   )
-  if (length(era_col) == 0 || all(is.na(era_col))) return(LEAGUE_AVG_FIP)
-  valid <- !is.na(era_col) & is.finite(era_col) & era_col < 15
+  if (length(fip_col) == 0 || all(is.na(fip_col))) return(LEAGUE_AVG_FIP)
+  valid <- !is.na(fip_col) & is.finite(fip_col) & fip_col < 15
   if (!any(valid)) return(LEAGUE_AVG_FIP)
-  weighted.mean(era_col[valid], rel$mlb_ip[valid], na.rm = TRUE)
+  raw_era  <- weighted.mean(fip_col[valid], rel$mlb_ip[valid], na.rm = TRUE)
+  total_ip <- sum(rel$mlb_ip[valid], na.rm = TRUE)
+  # Regression: (observed × IP + league_avg × STAB) / (IP + STAB)
+  # At 40 IP → 75% regression; at 120 IP → 50%; at 240 IP → 33%
+  (raw_era * total_ip + LEAGUE_AVG_FIP * BP_STAB_IP) / (total_ip + BP_STAB_IP)
 }
 
-# Internal: expected SP IP per start from starter_matchup row
+# Internal: expected SP IP per start — blends current and prior season when sample is small.
+# At 0 GS → 100% prior; at BLEND_GS_FLOOR GS → 100% current; linear between.
 .sp_ip_per_gs <- function(sp_row) {
   ip <- .get_num(sp_row, "mlb_ip")
   gs <- .get_num(sp_row, "mlb_gs")
-  if (!is.na(ip) && !is.na(gs) && gs > 0) min(ip / gs, 7.5) else 5.5
+  cur_ipgs <- if (!is.na(ip) && !is.na(gs) && gs > 0) min(ip / gs, 7.5) else NA_real_
+
+  # Blend with prior season when current-season GS count is small
+  if (is.na(gs) || gs < BLEND_GS_FLOOR) {
+    prior_ip <- .get_num(sp_row, "prior_ip")
+    prior_gs <- .get_num(sp_row, "prior_gs")
+    prior_ipgs <- if (!is.na(prior_ip) && !is.na(prior_gs) && prior_gs > 0)
+      min(prior_ip / prior_gs, 7.5) else NA_real_
+
+    if (!is.na(prior_ipgs)) {
+      if (is.na(cur_ipgs) || is.na(gs)) return(prior_ipgs)
+      w_cur <- gs / BLEND_GS_FLOOR
+      return(w_cur * cur_ipgs + (1 - w_cur) * prior_ipgs)
+    }
+  }
+
+  dplyr::coalesce(cur_ipgs, 5.5)
 }
 
 # Internal: lookup park factor for home team (1.0 = neutral fallback)
@@ -801,10 +1036,28 @@ make_prediction_html <- function(gpk) {
   home_blended_fip <- home_sp_frac * home_sp_fip + (1 - home_sp_frac) * home_bp_era
 
   # --- Lineup offense ---
-  away_wrc <- .team_wrc(lineup %>% dplyr::filter(side == "away"))
-  home_wrc <- .team_wrc(lineup %>% dplyr::filter(side == "home"))
-  away_wrc_flag <- (away_wrc == 100 && sum(!is.na((lineup %>% dplyr::filter(side=="away"))$fg_wRC_plus)) < 3)
-  home_wrc_flag <- (home_wrc == 100 && sum(!is.na((lineup %>% dplyr::filter(side=="home"))$fg_wRC_plus)) < 3)
+  away_lineup_rows <- lineup %>% dplyr::filter(side == "away")
+  home_lineup_rows <- lineup %>% dplyr::filter(side == "home")
+  away_wrc <- .team_wrc(away_lineup_rows)
+  home_wrc <- .team_wrc(home_lineup_rows)
+
+  # Determine which method was used (Steamer available → no flag needed)
+  steamer_ok <- exists("steamer_projections") &&
+    is.data.frame(steamer_projections) && nrow(steamer_projections) > 0
+
+  .wrc_flag_label <- function(lr) {
+    if (steamer_ok) {
+      # Check if most players have Steamer coverage
+      ids_in_steamer <- sum(lr$mlbam_id %in% steamer_projections$mlbam_id, na.rm = TRUE)
+      if (ids_in_steamer >= 5) return(NULL)  # good Steamer coverage — no asterisk
+      return("marcel")  # few in Steamer, Marcel dominated
+    }
+    "marcel"  # no Steamer at all
+  }
+  away_wrc_note <- .wrc_flag_label(away_lineup_rows)
+  home_wrc_note <- .wrc_flag_label(home_lineup_rows)
+  away_wrc_flag <- !is.null(away_wrc_note)
+  home_wrc_flag <- !is.null(home_wrc_note)
 
   # Recent form multiplier (regressed toward 1.0 — small adjustment, not override)
   away_form_mult <- .team_form_mult(lineup %>% dplyr::filter(side == "away"))
@@ -819,12 +1072,33 @@ make_prediction_html <- function(gpk) {
            " (", if (pf > 1) "+" else "", round((pf - 1) * 100, 1), "% run environment)")
   } else NULL
 
+  # --- Temperature adjustment (affects both teams equally — same environment) ---
+  # Empirical run suppression/boost by temperature (calibrated to 2022-2024 data)
+  # Wind direction not available in pipeline — only temperature applied
+  temp_f       <- .get_num(game, "game_temp_f")
+  weather_mult <- if (!is.na(temp_f)) {
+    dplyr::case_when(
+      temp_f < 40 ~ 0.93,  # very cold: −7%
+      temp_f < 50 ~ 0.96,  # cold:      −4%
+      temp_f < 60 ~ 0.98,  # cool:      −2%
+      temp_f > 95 ~ 1.05,  # very hot:  +5%
+      temp_f > 85 ~ 1.03,  # hot:       +3%
+      temp_f > 75 ~ 1.01,  # warm:      +1%
+      TRUE        ~ 1.00
+    )
+  } else 1.0
+  weather_note_factor <- if (!is.na(temp_f) && weather_mult != 1.0) {
+    paste0(round(temp_f), "\u00b0F",
+           " (", if (weather_mult > 1) "+" else "",
+           round((weather_mult - 1) * 100), "% run environment)")
+  } else NULL
+
   # --- Expected runs ---
-  # Formula: lg_avg × (wRC+/100) × park_factor × (opp_blended_FIP / lg_avg_FIP)
-  # Both teams' offenses are boosted/suppressed equally by the park.
-  away_exp_r <- LEAGUE_AVG_RUNS * (away_wrc / 100) * pf *
+  # Formula: lg_avg × (wRC+/100) × park_factor × temp_mult × (opp_blended_FIP / lg_avg_FIP)
+  # Both teams' offenses are boosted/suppressed equally by park and temperature.
+  away_exp_r <- LEAGUE_AVG_RUNS * (away_wrc / 100) * pf * weather_mult *
                 (home_blended_fip / LEAGUE_AVG_FIP) * away_form_mult
-  home_exp_r <- LEAGUE_AVG_RUNS * (home_wrc / 100) * pf *
+  home_exp_r <- LEAGUE_AVG_RUNS * (home_wrc / 100) * pf * weather_mult *
                 (away_blended_fip / LEAGUE_AVG_FIP) * home_form_mult +
                 HOME_FIELD_BONUS
   away_exp_r <- max(1.5, min(away_exp_r, 9.5))
@@ -845,23 +1119,27 @@ make_prediction_html <- function(gpk) {
   bp_frac_away <- 1 - away_sp_frac
   bp_frac_home <- 1 - home_sp_frac
 
+  bp_label <- if (any(c("fg_xFIP") %in% names(bullpen))) "bullpen xFIP" else "bullpen ERA"
   factors <- c(factors,
     paste0(away_name, " ", away_fip_label, " = ", round(away_sp_fip, 2),
-           " \u00b7 bullpen ERA = ", round(away_bp_era, 2),
+           " \u00b7 ", bp_label, " = ", round(away_bp_era, 2),
            " \u2192 blended = ", round(away_blended_fip, 2),
            " (", round(away_sp_frac * 100), "% SP / ",
            round(bp_frac_away * 100), "% BP innings)"),
     paste0(home_name, " ", home_fip_label, " = ", round(home_sp_fip, 2),
-           " \u00b7 bullpen ERA = ", round(home_bp_era, 2),
+           " \u00b7 ", bp_label, " = ", round(home_bp_era, 2),
            " \u2192 blended = ", round(home_blended_fip, 2),
            " (", round(home_sp_frac * 100), "% SP / ",
            round(bp_frac_home * 100), "% BP innings)"),
     paste0(away_team, " lineup avg wRC+ = ", round(away_wrc),
-           if (away_wrc_flag) " <em>(insufficient data \u2014 using lg avg)</em>" else ""),
+           if (away_wrc_flag) " <em>(stabilized regression + age curve \u2014 Steamer not available)</em>" else
+             if (steamer_ok) " <em>(Steamer · hand-adjusted · slot-weighted)</em>" else ""),
     paste0(home_team, " lineup avg wRC+ = ", round(home_wrc),
-           if (home_wrc_flag) " <em>(insufficient data \u2014 using lg avg)</em>" else "")
+           if (home_wrc_flag) " <em>(stabilized regression + age curve \u2014 Steamer not available)</em>" else
+             if (steamer_ok) " <em>(Steamer · hand-adjusted · slot-weighted)</em>" else "")
   )
-  if (!is.null(pf_note)) factors <- c(factors, pf_note)
+  if (!is.null(pf_note))             factors <- c(factors, pf_note)
+  if (!is.null(weather_note_factor)) factors <- c(factors, paste0("Temperature: ", weather_note_factor))
   away_form_note <- if (away_form_mult != 1.0)
     paste0(away_team, " recent form adj: \u00d7", round(away_form_mult, 3),
            " (L7 team OPS data)")
@@ -916,10 +1194,20 @@ make_prediction_html <- function(gpk) {
     tr(blend_label,
        paste0("<strong>", round(away_blended_fip, 2), "</strong>"),
        paste0("<strong>", round(home_blended_fip, 2), "</strong>")),
-    tr("Lineup avg wRC+",
+    tr(paste0("Lineup avg wRC+",
+              if (steamer_ok && !away_wrc_flag && !home_wrc_flag)
+                ' <span style="font-size:10px;color:#888;">(Steamer)</span>'
+              else
+                ' <span style="font-size:10px;color:#888;">(*=regressed)</span>'),
        paste0(round(away_wrc), if (away_wrc_flag) "*" else ""),
        paste0(round(home_wrc), if (home_wrc_flag) "*" else "")),
-    if (!is.null(pf_display)) tr(pf_display, round(pf, 3), round(pf, 3)) else "",
+    if (!is.null(pf_display)) paste0(
+      '<tr><td style="padding:6px 14px; border-bottom:1px solid #eee; color:#555;">',
+      pf_display, '</td>',
+      '<td colspan="2" style="padding:6px 14px; border-bottom:1px solid #eee; ',
+      'text-align:center; color:#555; font-style:italic;">',
+      round(pf, 3), ' \u2014 applies to both teams</td></tr>'
+    ) else "",
     tr("<strong>Projected Runs</strong>",
        paste0("<strong>", round(away_exp_r, 1), "</strong>"),
        paste0("<strong>", round(home_exp_r, 1), "</strong>")),

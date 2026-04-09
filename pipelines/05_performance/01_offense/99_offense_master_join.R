@@ -64,10 +64,15 @@ fg_for_join <- dplyr::ungroup(fg_for_join)
 
 offense_master_season <- player_season_mlb_offense %>%
 
-  # FanGraphs (player-level join — team_abbr stays from MLB spine)
+  # FanGraphs — join by mlbam_id only (no season key).
+  # Early in the season, FanGraphs falls back to prior-year data
+  # (too few PA to compute wRC+), so the season in player_season_fg_offense
+  # may be current_year-1 while the MLB spine is current_year.
+  # Joining by mlbam_id only ensures advanced stats always attach.
+  # Same pattern used by 99_pitching_master_join.R.
   dplyr::left_join(
-    fg_for_join,
-    by = c("mlbam_id", "season")
+    fg_for_join %>% dplyr::select(-season),
+    by = "mlbam_id"
   ) %>%
 
   # Statcast (player-level, drop team_abbr = "TOT")

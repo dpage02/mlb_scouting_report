@@ -101,10 +101,17 @@ pivot_arsenal_wide <- function(df, value_col_name, is_count = FALSE) {
 
 pull_all_arsenal <- function(yr) {
   list(
-    counts    = fetch_arsenal_type(yr, "n_"),
-    avg_speed = fetch_arsenal_type(yr, "avg_speed"),
-    avg_spin  = fetch_arsenal_type(yr, "avg_spin"),
-    whiff_pct = fetch_arsenal_type(yr, "whiff_pct")
+    counts           = fetch_arsenal_type(yr, "n_"),
+    avg_speed        = fetch_arsenal_type(yr, "avg_speed"),
+    avg_spin         = fetch_arsenal_type(yr, "avg_spin"),
+    avg_break_x      = fetch_arsenal_type(yr, "avg_break_x"),       # horizontal break
+    avg_break_z      = fetch_arsenal_type(yr, "avg_break_z_induced"), # induced vertical break
+    whiff_pct        = fetch_arsenal_type(yr, "whiff_pct"),
+    put_away         = fetch_arsenal_type(yr, "put_away"),
+    hard_hit_pct     = fetch_arsenal_type(yr, "hard_hit_pct"),
+    xba              = fetch_arsenal_type(yr, "xba"),
+    xwoba            = fetch_arsenal_type(yr, "xwoba"),
+    run_value_per100 = fetch_arsenal_type(yr, "run_value_per100")
   )
 }
 
@@ -128,15 +135,22 @@ if (n_pitchers < 100) {
 if (n_pitchers == 0) {
   message("No pitch arsenal data available. Creating empty table.")
   pitcher_arsenal <- dplyr::tibble(
-    mlbam_id  = integer(),
-    season    = integer(),
-    pitch_code = character(),
-    pitch_name = character(),
-    n_pitches  = integer(),
-    usage_pct  = numeric(),
-    avg_speed  = numeric(),
-    avg_spin   = numeric(),
-    whiff_pct  = numeric()
+    mlbam_id         = integer(),
+    season           = integer(),
+    pitch_code       = character(),
+    pitch_name       = character(),
+    n_pitches        = integer(),
+    usage_pct        = numeric(),
+    avg_speed        = numeric(),
+    avg_spin         = numeric(),
+    h_break          = numeric(),
+    v_break          = numeric(),
+    whiff_pct        = numeric(),
+    put_away         = numeric(),
+    hard_hit_pct     = numeric(),
+    xba              = numeric(),
+    xwoba            = numeric(),
+    run_value_per100 = numeric()
   )
 } else {
   message("Pitch arsenal: ", n_pitchers, " pitchers for ", season_to_pull)
@@ -152,13 +166,21 @@ if (n_pitchers == 0) {
   }
 
   # Other metrics → long
-  speed_long <- pivot_arsenal_wide(metrics$avg_speed, "avg_speed",  is_count = FALSE)
-  spin_long  <- pivot_arsenal_wide(metrics$avg_spin,  "avg_spin",   is_count = FALSE)
-  whiff_long <- pivot_arsenal_wide(metrics$whiff_pct, "whiff_pct",  is_count = FALSE)
+  speed_long    <- pivot_arsenal_wide(metrics$avg_speed,        "avg_speed",        is_count = FALSE)
+  spin_long     <- pivot_arsenal_wide(metrics$avg_spin,         "avg_spin",         is_count = FALSE)
+  hbreak_long   <- pivot_arsenal_wide(metrics$avg_break_x,      "avg_break_x",      is_count = FALSE)
+  vbreak_long   <- pivot_arsenal_wide(metrics$avg_break_z,      "avg_break_z_induced", is_count = FALSE)
+  whiff_long    <- pivot_arsenal_wide(metrics$whiff_pct,        "whiff_pct",        is_count = FALSE)
+  putaway_long  <- pivot_arsenal_wide(metrics$put_away,         "put_away",         is_count = FALSE)
+  hh_long       <- pivot_arsenal_wide(metrics$hard_hit_pct,     "hard_hit_pct",     is_count = FALSE)
+  xba_long      <- pivot_arsenal_wide(metrics$xba,              "xba",              is_count = FALSE)
+  xwoba_long    <- pivot_arsenal_wide(metrics$xwoba,            "xwoba",            is_count = FALSE)
+  rv100_long    <- pivot_arsenal_wide(metrics$run_value_per100, "run_value_per100", is_count = FALSE)
 
   # Join all metrics
   pitcher_arsenal <- counts_long
-  for (extra in list(speed_long, spin_long, whiff_long)) {
+  for (extra in list(speed_long, spin_long, hbreak_long, vbreak_long,
+                     whiff_long, putaway_long, hh_long, xba_long, xwoba_long, rv100_long)) {
     if (!is.null(extra)) {
       pitcher_arsenal <- dplyr::left_join(
         pitcher_arsenal, extra, by = c("mlbam_id", "pitch_code")
@@ -173,16 +195,21 @@ if (n_pitchers == 0) {
         nm <- unname(pitch_name_map[code])
         if (is.na(nm)) code else nm
       }),
-      # whiff_pct from Savant is already 0-100; convert to decimal
-      whiff_pct = dplyr::if_else(
-        !is.na(whiff_pct) & whiff_pct > 1, whiff_pct / 100, whiff_pct
-      )
+      # Savant returns pct metrics as 0-100; convert to decimal
+      whiff_pct    = dplyr::if_else(!is.na(whiff_pct)    & whiff_pct    > 1, whiff_pct    / 100, whiff_pct),
+      put_away     = dplyr::if_else(!is.na(put_away)     & put_away     > 1, put_away     / 100, put_away),
+      hard_hit_pct = dplyr::if_else(!is.na(hard_hit_pct) & hard_hit_pct > 1, hard_hit_pct / 100, hard_hit_pct),
+      # Rename break columns to match display helper expectations
+      h_break      = avg_break_x,
+      v_break      = avg_break_z_induced
     ) %>%
     dplyr::filter(!is.na(usage_pct), usage_pct >= 0.005) %>%
     dplyr::select(
       mlbam_id, season, pitch_code, pitch_name,
       n_pitches, usage_pct,
-      dplyr::any_of(c("avg_speed", "avg_spin", "whiff_pct"))
+      dplyr::any_of(c("avg_speed", "avg_spin", "h_break", "v_break",
+                       "whiff_pct", "put_away", "hard_hit_pct",
+                       "xba", "xwoba", "run_value_per100"))
     ) %>%
     dplyr::arrange(mlbam_id, dplyr::desc(usage_pct))
 }

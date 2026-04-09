@@ -107,7 +107,7 @@ bullpen_grid <- team_game_bridge %>%
     dplyr::any_of(c("last_outing_date")),
     dplyr::any_of(c("mlb_g", "mlb_ip", "mlb_era", "mlb_whip",
                     "mlb_so", "mlb_bb", "mlb_sv", "mlb_hld")),
-    dplyr::any_of(c("fg_WAR", "fg_Dollars", "bbref_ERA", "bbref_WHIP")),
+    dplyr::any_of(c("fg_WAR", "fg_Dollars", "bbref_ERA", "bbref_WHIP", "fg_xFIP")),
     role_sort
   ) %>%
   dplyr::arrange(game_pk, side, role_sort)

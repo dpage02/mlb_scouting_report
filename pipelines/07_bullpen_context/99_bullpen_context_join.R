@@ -97,6 +97,26 @@ bullpen_context <- active_pitchers %>%
     by = "mlbam_id"
   ) %>%
 
+  # Join xFIP for bullpen quality estimate (best FIP-based metric for relievers)
+  dplyr::left_join(
+    if (exists("player_season_fg_pitching") &&
+        "fg_xFIP" %in% names(player_season_fg_pitching)) {
+      player_season_fg_pitching %>%
+        dplyr::arrange(mlbam_id, dplyr::desc(
+          dplyr::coalesce(
+            if ("fg_ip" %in% names(player_season_fg_pitching))
+              player_season_fg_pitching$fg_ip else rep(0, nrow(player_season_fg_pitching)),
+            0
+          )
+        )) %>%
+        dplyr::distinct(mlbam_id, .keep_all = TRUE) %>%
+        dplyr::select(mlbam_id, fg_xFIP)
+    } else {
+      dplyr::tibble(mlbam_id = integer(), fg_xFIP = numeric())
+    },
+    by = "mlbam_id"
+  ) %>%
+
   # -------------------------------------------------------
   # Role-aware, month-aware availability classification
   # 5 tiers: fresh / available / limited / doubtful / unavailable

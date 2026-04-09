@@ -135,3 +135,73 @@ for (i in seq_len(nrow(game_files))) {
 
 message("\nTeam deep dives complete: ", length(team_rendered), "/",
         nrow(game_files) * 2, " rendered.")
+
+# ------------------------------------------------------------
+# Render pitcher matchup pages (one per game)
+# ------------------------------------------------------------
+
+message("\nRendering pitcher matchup pages...")
+matchup_rendered <- character()
+
+for (i in seq_len(nrow(game_files))) {
+  row      <- game_files[i, ]
+  gpk      <- row$game_pk
+  matchup  <- sprintf("%s @ %s", row$away_team_name, row$home_team_name)
+  out_file <- paste0("matchup_", report_date, "_", row$away_abbr, "_", row$home_abbr, ".html")
+  final_path <- file.path("reports", out_file)
+
+  message(sprintf("  [%d/%d] %s...", i, nrow(game_files), matchup))
+
+  tryCatch({
+    quarto::quarto_render(
+      input          = "09_reporting/mlb_pitcher_matchup.qmd",
+      execute_params = list(game_pk = gpk, game_date = report_date),
+      output_file    = out_file
+    )
+    if (file.exists(out_file)) {
+      file.rename(out_file, final_path)
+      matchup_rendered <- c(matchup_rendered, final_path)
+      message("    Saved: ", final_path)
+    }
+  }, error = function(e) {
+    message("    ERROR rendering matchup ", matchup, ": ", e$message)
+  })
+}
+
+message("\nMatchup pages complete: ", length(matchup_rendered), "/",
+        nrow(game_files), " rendered.")
+
+# ------------------------------------------------------------
+# Render prediction pages (one per game)
+# ------------------------------------------------------------
+
+message("\nRendering prediction pages...")
+pred_rendered <- character()
+
+for (i in seq_len(nrow(game_files))) {
+  row      <- game_files[i, ]
+  gpk      <- row$game_pk
+  matchup  <- sprintf("%s @ %s", row$away_team_name, row$home_team_name)
+  out_file <- paste0("prediction_", report_date, "_", row$away_abbr, "_", row$home_abbr, ".html")
+  final_path <- file.path("reports", out_file)
+
+  message(sprintf("  [%d/%d] %s...", i, nrow(game_files), matchup))
+
+  tryCatch({
+    quarto::quarto_render(
+      input          = "09_reporting/mlb_prediction.qmd",
+      execute_params = list(game_pk = gpk, game_date = report_date),
+      output_file    = out_file
+    )
+    if (file.exists(out_file)) {
+      file.rename(out_file, final_path)
+      pred_rendered <- c(pred_rendered, final_path)
+      message("    Saved: ", final_path)
+    }
+  }, error = function(e) {
+    message("    ERROR rendering prediction ", matchup, ": ", e$message)
+  })
+}
+
+message("\nPrediction pages complete: ", length(pred_rendered), "/",
+        nrow(game_files), " rendered.")

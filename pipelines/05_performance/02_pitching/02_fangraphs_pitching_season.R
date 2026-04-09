@@ -4,47 +4,36 @@
 # SCRIPT: 02_fangraphs_pitching_season.R
 # ============================================================
 # PURPOSE:
-#   Pull season-level FanGraphs pitching leaderboard (league-wide).
-#   Bypasses baseballr::fg_pitcher_leaders() which has a known bug
-#   ("object 'leaders' not found"). Uses httr directly instead,
-#   following the same pattern as 01_depth_charts.R.
+#   Pull season-level FanGraphs pitching stats.
+#   Uses a single type 3 pull which returns all ~544 columns
+#   in one request: standard, advanced, batted ball, pitch type
+#   run values, plate discipline, Stuff+/Location+/Pitching+,
+#   PitchingBot scores, per-pitch movement, etc.
+#   Bypasses baseballr::fg_pitcher_leaders() (known bug).
 #
 # OUTPUT:
 #   player_season_fg_pitching
 #
 # GRAIN:
-#   One row per mlbam_id / season / team_abbr
+#   One row per mlbam_id per season per team_abbr
 # ============================================================
 
 season_to_pull <- unique(player_season_mlb_pitching$season)[1]
 
 # ------------------------------------------------------------
-# Direct FanGraphs API pull — bypasses fg_pitcher_leaders()
-# type 8  = Dashboard  (ERA, FIP, xFIP, xERA, SIERA, WAR, K%, BB%, etc.)
-# type 1  = Advanced   (ERA-, FIP-, xFIP-, K%, BB%, K-BB%)
-# type 2  = Batted Ball (GB%, LD%, FB%, IFFB%, HR/FB, Hard%, Med%, Soft%)
-# type 5  = Plate Disc. (O-Swing%, Z-Swing%, Zone%, SwStr%, CSW%)
-# qual=0  → all pitchers, no IP minimum
-# ind=0   → aggregate across teams for multi-team players
+# Direct FanGraphs API pull
+# type 3 returns all ~544 pitching columns in a single request
 # ------------------------------------------------------------
 
-pull_fg_pitching_api <- function(yr, type_num = 8) {
+pull_fg_pitching_api <- function(yr, type_num = 3) {
   resp <- tryCatch(
     httr::GET(
       "https://www.fangraphs.com/api/leaders/major-league/data",
       query = list(
-        age       = "",
-        pos       = "all",
-        stats     = "pit",
-        lg        = "all",
-        season    = yr,
-        season1   = yr,
-        ind       = "0",
-        qual      = "0",
-        type      = as.character(type_num),
-        pageitems = "2000000",
-        pagenum   = "1",
-        rost      = "0"
+        age = "", pos = "all", stats = "pit", lg = "all",
+        season = yr, season1 = yr, ind = "0", qual = "0",
+        type = as.character(type_num),
+        pageitems = "2000000", pagenum = "1", rost = "0"
       ),
       httr::timeout(60)
     ),
@@ -53,215 +42,143 @@ pull_fg_pitching_api <- function(yr, type_num = 8) {
       NULL
     }
   )
-
-  if (is.null(resp) || httr::http_error(resp)) {
-    message("FanGraphs pitching API error (type=", type_num, ", yr=", yr, ")")
-    return(NULL)
-  }
-
+  if (is.null(resp) || httr::http_error(resp)) return(NULL)
   parsed <- tryCatch(
-    jsonlite::fromJSON(
-      httr::content(resp, as = "text", encoding = "UTF-8"),
-      flatten = TRUE
-    ),
-    error = function(e) {
-      message("FanGraphs JSON parse failed: ", e$message)
-      NULL
-    }
+    jsonlite::fromJSON(httr::content(resp, as = "text", encoding = "UTF-8"), flatten = TRUE),
+    error = function(e) NULL
   )
-
   if (is.null(parsed) || !"data" %in% names(parsed)) return(NULL)
-
   result <- tryCatch(dplyr::as_tibble(parsed$data), error = function(e) NULL)
   if (is.null(result) || nrow(result) == 0) return(NULL)
   result
 }
 
 # ------------------------------------------------------------
-# Pull dashboard (type 8) — main metrics + WAR
-# Fall back to prior season if current is too sparse
+# Pull — fall back to prior season if data is sparse
 # ------------------------------------------------------------
 
-fg_raw <- pull_fg_pitching_api(season_to_pull, type_num = 8)
+fg_raw <- pull_fg_pitching_api(season_to_pull, type_num = 3)
 
 if (is.null(fg_raw) || nrow(fg_raw) < 50) {
-  fallback_yr <- season_to_pull - 1L
-  message("FanGraphs pitching data insufficient for ", season_to_pull,
+  message("FanGraphs pitching insufficient for ", season_to_pull,
           " (", if (is.null(fg_raw)) "NULL" else nrow(fg_raw), " rows). ",
-          "Falling back to ", fallback_yr, ".")
-  fg_raw <- pull_fg_pitching_api(fallback_yr, type_num = 8)
-  if (!is.null(fg_raw) && nrow(fg_raw) >= 50) {
-    season_to_pull <- fallback_yr
-  } else {
-    fg_raw <- NULL
-  }
+          "Falling back to ", season_to_pull - 1)
+  season_to_pull <- season_to_pull - 1L
+  fg_raw <- pull_fg_pitching_api(season_to_pull, type_num = 3)
 }
 
 if (is.null(fg_raw) || nrow(fg_raw) == 0) {
-  message("No FanGraphs pitching data available. Creating empty table.")
+  message("FanGraphs pitching completely unavailable. Creating empty table.")
   player_season_fg_pitching <- dplyr::tibble(
-    mlbam_id  = integer(),
-    season    = integer(),
-    team_abbr = character()
+    mlbam_id = integer(), season = integer(), team_abbr = character()
   )
 } else {
 
-  message("FanGraphs pitching pull (type 8): ", nrow(fg_raw), " rows | columns: ",
-          paste(names(fg_raw), collapse = ", "))
+  message("FanGraphs pitching pull (type 3): ", nrow(fg_raw), " rows | ",
+          ncol(fg_raw), " columns")
 
-  # ------------------------------------------------------------
-  # Normalize column names — FanGraphs uses %, /, - in names
-  # ------------------------------------------------------------
-  names(fg_raw) <- dplyr::case_when(
-    names(fg_raw) == "LOB%"    ~ "LOB_pct",
-    names(fg_raw) == "K/9"     ~ "K_per_9",
-    names(fg_raw) == "BB/9"    ~ "BB_per_9",
-    names(fg_raw) == "H/9"     ~ "H_per_9",
-    names(fg_raw) == "HR/9"    ~ "HR_per_9",
-    names(fg_raw) == "K%"      ~ "K_pct",
-    names(fg_raw) == "BB%"     ~ "BB_pct",
-    names(fg_raw) == "K-BB%"   ~ "K_BB_pct",
-    names(fg_raw) == "ERA-"    ~ "ERA_minus",
-    names(fg_raw) == "FIP-"    ~ "FIP_minus",
-    names(fg_raw) == "xFIP-"   ~ "xFIP_minus",
-    TRUE                       ~ names(fg_raw)
-  )
+  # Extract identity columns before name normalization
+  mlbam_col <- intersect(c("xMLBAMID", "mlbam_id"), names(fg_raw))[1]
+  team_col  <- intersect(c("TeamNameAbb", "Team", "team_name"), names(fg_raw))[1]
 
-  # Helper: safe numeric column extraction
-  safe_num <- function(df, ...) {
-    cols <- c(...)
-    found <- intersect(cols, names(df))
-    if (length(found) == 0) return(rep(NA_real_, nrow(df)))
-    suppressWarnings(as.numeric(df[[found[1]]]))
-  }
-
-  # ------------------------------------------------------------
-  # Join to player_master_ids to get mlbam_id
-  # FanGraphs returns fg player ID as "playerid"
-  # ------------------------------------------------------------
-  fg_joined <- fg_raw %>%
-    dplyr::left_join(
-      player_master_ids %>%
-        dplyr::filter(!is.na(fg_id), !is.na(mlbam_id)) %>%
-        dplyr::distinct(fg_id, .keep_all = TRUE) %>%
-        dplyr::select(fg_id, mlbam_id),
-      by = c("playerid" = "fg_id")
-    ) %>%
-    dplyr::filter(!is.na(mlbam_id)) %>%
+  fg_work <- fg_raw %>%
     dplyr::mutate(
-      mlbam_id  = as.integer(mlbam_id),
-      season    = as.integer(season_to_pull),
-      team_abbr = dplyr::coalesce(as.character(Team), "TOT")
+      tmp_mlbam_id = suppressWarnings(as.integer(
+        if (!is.na(mlbam_col)) .data[[mlbam_col]] else NA_integer_
+      )),
+      tmp_team = if (!is.na(team_col)) as.character(.data[[team_col]]) else NA_character_
     )
 
-  # ------------------------------------------------------------
-  # Build canonical table with fg_ prefix
-  # ------------------------------------------------------------
-  player_season_fg_pitching <- dplyr::tibble(
-    mlbam_id  = fg_joined$mlbam_id,
-    season    = fg_joined$season,
-    team_abbr = fg_joined$team_abbr,
+  # If xMLBAMID not available, join via player_master_ids
+  if (is.na(mlbam_col) || all(is.na(fg_work$tmp_mlbam_id))) {
+    fg_id_map <- player_master_ids %>%
+      dplyr::filter(!is.na(fg_id), !is.na(mlbam_id)) %>%
+      dplyr::distinct(fg_id, .keep_all = TRUE) %>%
+      dplyr::select(fg_id, mlbam_id)
 
-    # Workload
-    fg_g  = suppressWarnings(as.integer(safe_num(fg_joined, "G"))),
-    fg_gs = suppressWarnings(as.integer(safe_num(fg_joined, "GS"))),
-    fg_ip = safe_num(fg_joined, "IP"),
-
-    # Classic rates
-    fg_era  = safe_num(fg_joined, "ERA"),
-    fg_whip = safe_num(fg_joined, "WHIP"),
-
-    # Advanced ERA estimators
-    fg_FIP   = safe_num(fg_joined, "FIP"),
-    fg_xFIP  = safe_num(fg_joined, "xFIP"),
-    fg_xERA  = safe_num(fg_joined, "xERA"),
-    fg_SIERA = safe_num(fg_joined, "SIERA"),
-
-    # BABIP / Strand rate
-    fg_BABIP   = safe_num(fg_joined, "BABIP"),
-    fg_LOB_pct = safe_num(fg_joined, "LOB_pct"),
-
-    # Per-9 rates
-    fg_K_9  = safe_num(fg_joined, "K_per_9",  "K.9"),
-    fg_BB_9 = safe_num(fg_joined, "BB_per_9", "BB.9"),
-    fg_H_9  = safe_num(fg_joined, "H_per_9",  "H.9"),
-    fg_HR_9 = safe_num(fg_joined, "HR_per_9", "HR.9"),
-
-    # Rate percentages
-    fg_K_pct    = safe_num(fg_joined, "K_pct",    "SO_pct"),
-    fg_BB_pct   = safe_num(fg_joined, "BB_pct"),
-    fg_K_BB_pct = safe_num(fg_joined, "K_BB_pct"),
-
-    # Value
-    fg_WAR       = safe_num(fg_joined, "WAR"),
-    fg_ERA_minus = safe_num(fg_joined, "ERA_minus", "ERA-")
-  ) %>%
-    dplyr::filter(!is.na(mlbam_id)) %>%
-    dplyr::distinct(mlbam_id, season, team_abbr, .keep_all = TRUE)
-
-  message("fg_WAR non-NA: ", sum(!is.na(player_season_fg_pitching$fg_WAR)),
-          " | fg_ERA_minus non-NA: ", sum(!is.na(player_season_fg_pitching$fg_ERA_minus)))
-
-  # ------------------------------------------------------------
-  # Pull additional stat types and join on mlbam_id
-  # ------------------------------------------------------------
-
-  fg_id_map <- player_master_ids %>%
-    dplyr::filter(!is.na(fg_id), !is.na(mlbam_id)) %>%
-    dplyr::distinct(fg_id, .keep_all = TRUE) %>%
-    dplyr::select(fg_id, mlbam_id)
-
-  pull_fg_pitcher_extra <- function(type_num) {
-    raw <- pull_fg_pitching_api(season_to_pull, type_num = type_num)
-    if (is.null(raw) || nrow(raw) == 0) {
-      message("FG pitcher type ", type_num, ": no data")
-      return(NULL)
-    }
-
-    # Normalize special characters in column names
-    names(raw) <- gsub("%", "_pct", gsub("/", "_per_", gsub("-", "_", names(raw))))
-
-    drop_cols <- c(
-      "playerid", "Season", "Name", "PlayerName", "Team", "Tm",
-      "G", "GS", "IP", "W", "L", "SV",
-      "ERA", "FIP", "xFIP", "SIERA", "xERA",
-      "WHIP", "BABIP", "WAR", "K.9", "BB.9", "HR.9",
-      "LOB.", "GB.", "Age", "AgeRng"
-    )
-
-    result <- raw %>%
+    fg_work <- fg_work %>%
+      dplyr::select(-tmp_mlbam_id) %>%
       dplyr::left_join(fg_id_map, by = c("playerid" = "fg_id")) %>%
-      dplyr::filter(!is.na(mlbam_id)) %>%
-      dplyr::mutate(mlbam_id = as.integer(mlbam_id)) %>%
-      dplyr::select(-dplyr::any_of(drop_cols), -dplyr::any_of("playerid")) %>%
-      dplyr::rename_with(~ paste0("fg_", .x), -mlbam_id) %>%
-      dplyr::distinct(mlbam_id, .keep_all = TRUE)
-
-    message("FG pitcher type ", type_num, ": ", ncol(result) - 1,
-            " new columns for ", nrow(result), " pitchers")
-    result
+      dplyr::rename(tmp_mlbam_id = mlbam_id) %>%
+      dplyr::mutate(tmp_mlbam_id = as.integer(tmp_mlbam_id))
   }
 
-  # Type 1 = Advanced (ERA-, FIP-, K%, BB%)
-  # Type 2 = Batted Ball (Hard%, GB%, FB%, IFFB%, HR/FB)
-  # Type 5 = Plate Discipline (O-Swing%, SwStr%, CSW%, Zone%)
-  extra_types <- list(
-    pull_fg_pitcher_extra(1),
-    pull_fg_pitcher_extra(2),
-    pull_fg_pitcher_extra(5)
+  # ------------------------------------------------------------
+  # Normalize column names
+  # Handle special cases first, then generic cleanup
+  # ------------------------------------------------------------
+
+  names(fg_work) <- dplyr::case_when(
+    names(fg_work) == "-WPA"                           ~ "neg_WPA",
+    names(fg_work) == "+WPA"                           ~ "pos_WPA",
+    names(fg_work) == "K/9"                            ~ "K_per_9",
+    names(fg_work) == "BB/9"                           ~ "BB_per_9",
+    names(fg_work) == "H/9"                            ~ "H_per_9",
+    names(fg_work) == "HR/9"                           ~ "HR_per_9",
+    names(fg_work) == "K/BB"                           ~ "K_per_BB",
+    names(fg_work) == "LOB%"                           ~ "LOB_pct",
+    names(fg_work) == "HR/FB"                          ~ "HR_per_FB",
+    names(fg_work) == "GB/FB"                          ~ "GB_per_FB",
+    names(fg_work) == "FB%1"                           ~ "FB_usage_pct",
+    names(fg_work) == "K%"                             ~ "K_pct",
+    names(fg_work) == "BB%"                            ~ "BB_pct",
+    names(fg_work) == "K-BB%"                          ~ "K_BB_pct",
+    names(fg_work) == "C+SwStr%"                       ~ "C_plusSwStr_pct",
+    names(fg_work) == "ERA-"                           ~ "ERA_minus",
+    names(fg_work) == "FIP-"                           ~ "FIP_minus",
+    names(fg_work) == "xFIP-"                          ~ "xFIP_minus",
+    names(fg_work) == "Start-IP"                       ~ "Start_IP",
+    names(fg_work) == "Relief-IP"                      ~ "Relief_IP",
+    names(fg_work) == "RA9-Wins"                       ~ "RA9_Wins",
+    names(fg_work) == "LOB-Wins"                       ~ "LOB_Wins",
+    names(fg_work) == "BIP-Wins"                       ~ "BIP_Wins",
+    names(fg_work) == "BS-Wins"                        ~ "BS_Wins",
+    names(fg_work) == "RS/9"                           ~ "RS_per_9",
+    names(fg_work) == "E-F"                            ~ "E_F",
+    TRUE ~ names(fg_work)
   )
 
-  for (extra in extra_types) {
-    if (!is.null(extra)) {
-      player_season_fg_pitching <- player_season_fg_pitching %>%
-        dplyr::left_join(extra, by = "mlbam_id", suffix = c("", "_dup")) %>%
-        dplyr::select(-dplyr::ends_with("_dup"))
-    }
-  }
-}
+  # Generic cleanup: %, +, remaining special chars → underscores
+  names(fg_work) <- gsub("%", "_pct",   gsub("\\+", "_plus", names(fg_work)))
+  names(fg_work) <- gsub("[^A-Za-z0-9_]", "_", names(fg_work))
+  names(fg_work) <- gsub("_+", "_", gsub("^_|_$", "", names(fg_work)))
 
-validate_performance_table(player_season_fg_pitching)
+  # Identity/metadata columns to drop before prefixing
+  drop_raw <- c(
+    "playerid", "xMLBAMID", "Name", "PlayerName", "PlayerNameRoute",
+    "Team", "TeamName", "TeamNameAbb", "teamid", "playerTeamId",
+    "Season", "SeasonMin", "SeasonMax", "Pos", "positionDB", "position",
+    "Throws", "AgeR", "TG", "TIP", "Q"
+  )
+
+  player_season_fg_pitching <- fg_work %>%
+    dplyr::filter(!is.na(tmp_mlbam_id)) %>%
+    dplyr::select(-dplyr::any_of(drop_raw)) %>%
+    dplyr::rename_with(
+      ~ paste0("fg_", .x),
+      -c(tmp_mlbam_id, tmp_team)
+    ) %>%
+    dplyr::rename(mlbam_id = tmp_mlbam_id) %>%
+    dplyr::left_join(
+      team_ids %>% dplyr::select(team_name, team_abbr),
+      by = c("tmp_team" = "team_name")
+    ) %>%
+    dplyr::mutate(
+      team_abbr = dplyr::coalesce(team_abbr, tmp_team),
+      season    = as.integer(season_to_pull)
+    ) %>%
+    dplyr::select(-tmp_team) %>%
+    dplyr::distinct(mlbam_id, season, team_abbr, .keep_all = TRUE) %>%
+    dplyr::select(mlbam_id, season, team_abbr, dplyr::everything())
+
+  validate_performance_table(player_season_fg_pitching)
+
+}
 
 message("02_fangraphs_pitching_season complete: ",
         nrow(player_season_fg_pitching),
-        " rows for season ", season_to_pull, ".")
+        " rows for season ", season_to_pull,
+        " | columns: ", ncol(player_season_fg_pitching),
+        " | fg_WAR non-NA: ",
+        if ("fg_WAR" %in% names(player_season_fg_pitching))
+          sum(!is.na(player_season_fg_pitching$fg_WAR)) else 0)
