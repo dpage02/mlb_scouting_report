@@ -125,6 +125,7 @@ suppressMessages({
   source("pipelines/04_game_context/05_weather_forecast.R")
   source("pipelines/04_game_context/06_series_context.R")
   source("pipelines/04_game_context/99_game_context.R")
+  source("pipelines/04_game_context/07_team_standings.R")
 })
 log_message("04 — game context complete")
 
@@ -182,7 +183,8 @@ pipeline_cache_objects <- c(
   "park_factors", "recent_batter_streaks", "current_defense_stats", "value_master_season",
   "player_season_mlb_offense_splits", "player_season_mlb_pitching_splits",
   "batter_pitch_type_stats",
-  "steamer_projections"
+  "steamer_projections",
+  "team_standings"
 )
 
 pipeline_cache <- mget(

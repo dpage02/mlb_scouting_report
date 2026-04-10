@@ -131,8 +131,15 @@ cat(nav_html, "\n\n")
 
 ```{r game-preview}
 #| output: asis
-preview <- tryCatch(make_game_preview_html(gpk), error = function(e) "")
-if (nchar(preview) > 0) cat(preview, "\n\n")
+# Series overview (only shows for series openers)
+series_html <- tryCatch(make_series_overview_html(gpk), error = function(e) "")
+if (nchar(series_html) > 0) cat(series_html, "\n\n")
+
+# Enhanced game narrative
+narrative_html <- tryCatch(make_game_narrative_html(gpk), error = function(e) {
+  tryCatch(make_game_preview_html(gpk), error = function(e2) "")
+})
+if (nchar(narrative_html) > 0) cat(narrative_html, "\n\n")
 ```
 
 ---
