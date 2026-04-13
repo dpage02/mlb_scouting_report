@@ -1071,13 +1071,29 @@ make_series_overview_html <- function(gpk) {
       paste0("Rotation: ", .era_tier_label(rot_era), " (", round(rot_era, 2), " ERA)")
     } else "Rotation: data pending"
 
-    # Recent form
+    # Recent form — show actual last-7 team OPS when data is available
     form_mult <- tryCatch(.team_form_mult(lu_rows), error = function(e) 1.0)
-    form_note <- dplyr::case_when(
-      form_mult > 1.02 ~ "Running hot (L7)",
-      form_mult < 0.98 ~ "Running cold (L7)",
-      TRUE             ~ "Steady recent form"
-    )
+    form_note <- tryCatch({
+      if (exists("recent_batter_streaks") && nrow(recent_batter_streaks) > 0 &&
+          nrow(lu_rows) > 0) {
+        ids <- lu_rows$mlbam_id[!is.na(lu_rows$mlbam_id)]
+        form_rows <- recent_batter_streaks %>%
+          dplyr::filter(mlbam_id %in% ids, !is.na(last7_ops), last7_g >= 3)
+        if (nrow(form_rows) >= 5) {
+          avg_ops <- round(mean(form_rows$last7_ops, na.rm = TRUE), 3)
+          n_g     <- round(mean(form_rows$last7_g,  na.rm = TRUE))
+          label   <- if (form_mult > 1.02) "Trending up"
+                     else if (form_mult < 0.98) "Trending down"
+                     else "Steady"
+          paste0("Recent form: ", label, " — team avg .OPS ", sprintf("%.3f", avg_ops),
+                 " last ", n_g, "G")
+        } else {
+          if (form_mult > 1.02) "Recent form: trending up (last 7G)"
+          else if (form_mult < 0.98) "Recent form: trending down (last 7G)"
+          else "Recent form: steady"
+        }
+      } else "Recent form: insufficient data"
+    }, error = function(e) "Recent form: data unavailable")
 
     # Key bat: top batter in lineup by Steamer wRC+ or current wRC+
     key_bat_line <- tryCatch({
