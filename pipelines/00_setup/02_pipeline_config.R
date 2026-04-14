@@ -15,7 +15,8 @@ PIPELINE_PHASE <- "pipeline"
 PIPELINE_VERSION <- "v1.0"
 
 # ---- Runtime defaults ----
-DEFAULT_SEASON <- year(Sys.Date())
+DEFAULT_SEASON  <- as.integer(format(Sys.Date(), "%Y"))
+target_season   <- DEFAULT_SEASON        # alias used throughout pipeline
 DEFAULT_TIMEZONE <- "America/New_York"
 
 # ---- API safety ----
