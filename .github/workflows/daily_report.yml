@@ -80,7 +80,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.RENV_PATHS_LIBRARY }}
-          key: r-pkgs-${{ runner.os }}-${{ hashFiles('**/DESCRIPTION') }}-v2
+          key: r-pkgs-${{ runner.os }}-${{ hashFiles('**/DESCRIPTION') }}-v4
           restore-keys: |
             r-pkgs-${{ runner.os }}-
 
@@ -90,19 +90,17 @@ jobs:
       - name: Install R packages
         run: |
           Rscript -e "
+            if (!requireNamespace('pak', quietly = TRUE)) {
+              install.packages('pak',
+                repos = 'https://r-lib.github.io/p/pak/stable/')
+            }
             pkgs <- c(
               'tidyverse', 'lubridate', 'jsonlite', 'httr', 'readr',
               'stringr', 'glue', 'here', 'gt', 'quarto', 'R.utils',
               'rvest', 'DT', 'purrr', 'dplyr', 'tibble',
               'baseballr', 'Lahman', 'qs'
             )
-            installed <- rownames(installed.packages())
-            missing   <- setdiff(pkgs, installed)
-            if (length(missing) > 0) {
-              install.packages(missing,
-                repos = 'https://cloud.r-project.org',
-                dependencies = TRUE)
-            }
+            pak::pak(pkgs, ask = FALSE)
             cat('All R packages ready.\n')
           "
 
