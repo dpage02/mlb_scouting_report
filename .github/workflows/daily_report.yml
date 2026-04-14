@@ -69,7 +69,9 @@ jobs:
             libpng-dev \
             libtiff5-dev \
             libjpeg-dev \
-            libgit2-dev
+            libgit2-dev \
+            libzstd-dev \
+            liblz4-dev
 
       # --------------------------------------------------------
       # 5. Cache R packages
@@ -92,7 +94,7 @@ jobs:
               'tidyverse', 'lubridate', 'jsonlite', 'httr', 'readr',
               'stringr', 'glue', 'here', 'gt', 'quarto', 'R.utils',
               'rvest', 'DT', 'purrr', 'dplyr', 'tibble',
-              'baseballr', 'Lahman'
+              'baseballr', 'Lahman', 'qs'
             )
             installed <- rownames(installed.packages())
             missing   <- setdiff(pkgs, installed)
