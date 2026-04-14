@@ -1,0 +1,29 @@
+Package: mlbscoutingreport
+Title: MLB Daily Scouting Report
+Version: 0.0.1
+Authors@R: person("Davis", "Page", role = c("aut", "cre"))
+Description: Daily MLB game scouting reports with pipeline and Quarto rendering.
+License: MIT
+Imports:
+    dplyr,
+    tidyr,
+    purrr,
+    stringr,
+    readr,
+    tibble,
+    lubridate,
+    jsonlite,
+    httr,
+    glue,
+    here,
+    gt,
+    quarto,
+    R.utils,
+    rvest,
+    DT,
+    ggplot2,
+    baseballr,
+    Lahman
+Suggests:
+    qs
+Encoding: UTF-8
