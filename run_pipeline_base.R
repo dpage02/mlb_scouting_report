@@ -30,6 +30,8 @@ suppressMessages({
   source("pipelines/00_setup/02_pipeline_config.R")
 })
 
+target_season <- as.integer(format(Sys.Date(), "%Y"))
+
 cat("Starting base pipeline build — IDs + season stats\n")
 cat("(Run weekly or when you need fresh season stats)\n\n")
 

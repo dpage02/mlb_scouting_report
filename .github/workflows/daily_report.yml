@@ -109,8 +109,8 @@ jobs:
       # --------------------------------------------------------
       # 7. Cache base pipeline data (season stats, refreshed weekly)
       # --------------------------------------------------------
-      - name: Ensure data directory exists
-        run: mkdir -p data
+      - name: Ensure data and logs directories exist
+        run: mkdir -p data logs
 
       - name: Get ISO week number
         id: week
