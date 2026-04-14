@@ -1,0 +1,521 @@
+---
+title: "Game Scouting Report"
+date: today
+params:
+  game_pk: null
+  game_date: null
+format:
+  html:
+    self-contained: true
+    embed-resources: true
+    theme: cosmo
+    toc: false
+    smooth-scroll: false
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+#| output: false
+if (basename(getwd()) == "09_reporting") setwd("..")
+
+library(gt)
+library(dplyr)
+
+cache_path <- "data/pipeline_cache.rds"
+cache_ok   <- file.exists(cache_path) &&
+              difftime(Sys.time(), file.mtime(cache_path), units = "hours") < 12
+
+if (cache_ok) {
+  cache <- readRDS(cache_path)
+  list2env(cache, envir = .GlobalEnv)
+  rm(cache)
+}
+
+source("09_reporting/_report_helpers.R")
+source("09_reporting/_deepdive_helpers.R")
+source("09_reporting/_game_narrative_helpers.R")
+
+gpk  <- as.integer(params$game_pk)
+game <- game_context %>% dplyr::filter(game_pk == gpk)
+
+away_team  <- game$away_team_name
+home_team  <- game$home_team_name
+matchup    <- sprintf("%s @ %s", away_team, home_team)
+game_label <- format(as.Date(params$game_date), "%A, %B %d, %Y")
+
+away_sp_name <- tryCatch({
+  r <- starter_matchup %>% dplyr::filter(game_pk == gpk, side == "away")
+  if (nrow(r) > 0) dplyr::coalesce(r$pitcher_name[1], "TBD") else "TBD"
+}, error = function(e) "TBD")
+
+home_sp_name <- tryCatch({
+  r <- starter_matchup %>% dplyr::filter(game_pk == gpk, side == "home")
+  if (nrow(r) > 0) dplyr::coalesce(r$pitcher_name[1], "TBD") else "TBD"
+}, error = function(e) "TBD")
+```
+
+```{=html}
+<style>
+/* ── Print globals ─────────────────────────────── */
+@page {
+  size: letter;
+  margin: 0.55in 0.5in 0.55in 0.5in;
+}
+
+body {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 11pt;
+  color: #222;
+  background: #fff;
+}
+
+/* Tighten Quarto default padding in print context */
+.quarto-title-meta, .quarto-title { display: none; }
+
+/* ── Page-break helpers ────────────────────────── */
+.page-break       { page-break-after: always; break-after: page; }
+.no-break         { page-break-inside: avoid; break-inside: avoid; }
+.print-section    { margin-bottom: 0.35in; }
+
+/* ── Report header ─────────────────────────────── */
+.print-header {
+  border-bottom: 2pt solid #1a73e8;
+  margin-bottom: 10pt;
+  padding-bottom: 6pt;
+}
+.print-header h1 {
+  font-size: 18pt;
+  font-weight: 700;
+  margin: 0;
+  color: #1a1a1a;
+}
+.print-header .sub {
+  font-size: 10pt;
+  color: #555;
+  margin-top: 2pt;
+}
+
+/* ── Two-column lineup layout ──────────────────── */
+.lineup-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14pt;
+  page-break-inside: avoid;
+}
+.lineup-grid .gt_table { font-size: 9pt !important; }
+
+/* ── Compact game info ─────────────────────────── */
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6pt;
+  margin-bottom: 10pt;
+}
+.info-cell {
+  padding: 5pt 7pt;
+  background: #f4f7fb;
+  border-radius: 4pt;
+  border: 0.5pt solid #d0dce8;
+}
+.info-cell .lbl {
+  font-size: 7.5pt;
+  text-transform: uppercase;
+  letter-spacing: 0.4pt;
+  color: #888;
+  font-weight: 600;
+}
+.info-cell .val {
+  font-size: 10pt;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-top: 1pt;
+}
+
+/* ── Section headings ──────────────────────────── */
+.print-h2 {
+  font-size: 11pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5pt;
+  color: #1a73e8;
+  border-bottom: 0.5pt solid #c0d4f0;
+  padding-bottom: 2pt;
+  margin: 10pt 0 5pt 0;
+}
+
+/* ── Prediction row ────────────────────────────── */
+.pred-row {
+  display: flex;
+  gap: 10pt;
+  flex-wrap: wrap;
+}
+.pred-cell {
+  flex: 1 1 100pt;
+  padding: 6pt 10pt;
+  background: #f4f7fb;
+  border-left: 3pt solid #1a73e8;
+  border-radius: 3pt;
+}
+.pred-cell .lbl { font-size: 8pt; color: #666; font-weight: 600; }
+.pred-cell .val { font-size: 13pt; font-weight: 700; color: #1a1a1a; }
+
+/* ── League/park reference ─────────────────────── */
+.ref-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8pt;
+}
+.ref-section { margin-bottom: 8pt; }
+.ref-section h4 {
+  font-size: 9pt;
+  text-transform: uppercase;
+  color: #888;
+  margin: 0 0 3pt 0;
+  border-bottom: 0.5pt solid #ddd;
+  padding-bottom: 2pt;
+}
+.ref-row { display: flex; justify-content: space-between; font-size: 9pt; padding: 1pt 0; }
+.ref-stat { color: #333; }
+.ref-val  { font-weight: 600; color: #1a1a1a; }
+
+/* ── Hide screen-only elements on print ────────── */
+@media screen {
+  body { max-width: 850px; margin: 0 auto; padding: 20px; }
+}
+@media print {
+  .no-print { display: none !important; }
+  a { text-decoration: none !important; color: inherit !important; }
+}
+</style>
+```
+
+```{r helper-defs, include=FALSE}
+.ic <- function(lbl, val) {
+  paste0('<div class="info-cell"><div class="lbl">', lbl,
+         '</div><div class="val">', val, '</div></div>')
+}
+
+.pred_cell <- function(lbl, val) {
+  paste0('<div class="pred-cell"><div class="lbl">', lbl,
+         '</div><div class="val">', val, '</div></div>')
+}
+
+.ref_row <- function(stat, val) {
+  paste0('<div class="ref-row"><span class="ref-stat">', stat,
+         '</span><span class="ref-val">', val, '</span></div>')
+}
+
+make_lineup_print_gt <- function(gpk, side_filter) {
+  tryCatch({
+    game <- game_context %>% dplyr::filter(game_pk == gpk)
+    team <- if (side_filter == "home") game$home_team_name else game$away_team_name
+
+    opp_sp <- if (side_filter == "away") {
+      r <- starter_matchup %>% dplyr::filter(game_pk == gpk, side == "home")
+      if (nrow(r) > 0) dplyr::coalesce(r$pitcher_name[1], "Home SP") else "Home SP"
+    } else {
+      r <- starter_matchup %>% dplyr::filter(game_pk == gpk, side == "away")
+      if (nrow(r) > 0) dplyr::coalesce(r$pitcher_name[1], "Away SP") else "Away SP"
+    }
+
+    stats_yr <- if (exists("offense_master_season") && nrow(offense_master_season) > 0)
+      unique(offense_master_season$season)[1] else as.integer(format(Sys.Date(), "%Y"))
+
+    full_stats <- offense_master_season %>%
+      dplyr::arrange(mlbam_id, dplyr::desc(dplyr::coalesce(mlb_pa, 0L))) %>%
+      dplyr::distinct(mlbam_id, .keep_all = TRUE)
+
+    raw <- lineup_context %>%
+      dplyr::filter(game_pk == gpk, side == side_filter) %>%
+      dplyr::arrange(batting_slot) %>%
+      dplyr::left_join(full_stats, by = "mlbam_id", suffix = c("", "_dup")) %>%
+      dplyr::select(-dplyr::ends_with("_dup"))
+
+    if (nrow(raw) == 0) return(NULL)
+
+    col1 <- function(df, cands) {
+      found <- intersect(cands, names(df))
+      if (length(found) == 0) rep(NA_real_, nrow(df)) else df[[found[1]]]
+    }
+
+    display <- dplyr::tibble(
+      `#`    = raw$batting_slot,
+      Name   = raw$player_name,
+      Pos    = raw$fg_position,
+      PA     = dplyr::coalesce(raw$mlb_pa, NA_integer_),
+      `wRC+` = col1(raw, c("fg_wRC_plus", "fg_wRC.")),
+      ISO    = col1(raw, c("fg_ISO")),
+      AVG    = col1(raw, c("mlb_avg", "fg_AVG")),
+      OBP    = col1(raw, c("mlb_obp", "fg_OBP")),
+      SLG    = col1(raw, c("mlb_slg", "fg_SLG")),
+      `BB%`  = col1(raw, c("fg_BB_pct", "fg_BB.")),
+      `K%`   = col1(raw, c("fg_K_pct",  "fg_K."))
+    )
+
+    display %>%
+      gt::gt() %>%
+      gt::tab_header(
+        title    = gt::md(paste0("**", team, "**")),
+        subtitle = paste0("vs ", opp_sp, " \u00b7 ", stats_yr, " season")
+      ) %>%
+      gt::fmt_integer(columns = dplyr::any_of(c("PA", "wRC+"))) %>%
+      gt::fmt_number(columns  = dplyr::any_of(c("ISO", "AVG", "OBP", "SLG")), decimals = 3) %>%
+      gt::fmt_percent(columns = dplyr::any_of(c("BB%", "K%")), decimals = 1) %>%
+      gt::fmt_missing(columns = dplyr::everything(), missing_text = "\u2014") %>%
+      gt::tab_spanner(label = "Core",       columns = dplyr::any_of(c("wRC+", "ISO"))) %>%
+      gt::tab_spanner(label = "Slash",      columns = dplyr::any_of(c("AVG", "OBP", "SLG"))) %>%
+      gt::tab_spanner(label = "Approach",   columns = dplyr::any_of(c("BB%", "K%"))) %>%
+      {
+        tbl <- .
+        vals <- display[["wRC+"]]
+        if (sum(!is.na(vals) & is.finite(vals)) >= 2)
+          tbl <- tbl %>% gt::data_color(
+            columns = "wRC+",
+            palette = c("#f8d7da", "#f8f9fa", "#d4edda"),
+            domain  = c(70, 140), na_color = "white"
+          )
+        tbl
+      } %>%
+      gt::cols_width(`#` ~ gt::px(24), Pos ~ gt::px(32)) %>%
+      gt::tab_options(
+        table.font.size           = 10,
+        heading.align             = "left",
+        data_row.padding          = gt::px(3),
+        column_labels.font.weight = "bold",
+        table.width               = gt::pct(100)
+      ) %>%
+      gt::opt_stylize(style = 1, color = "blue")
+
+  }, error = function(e) NULL)
+}
+
+.build_pred_data <- function(gpk) {
+  tryCatch({
+    game    <- game_context %>% dplyr::filter(game_pk == gpk)
+    sm      <- starter_matchup %>% dplyr::filter(game_pk == gpk)
+    away_sm <- sm %>% dplyr::filter(side == "away")
+    home_sm <- sm %>% dplyr::filter(side == "home")
+
+    .get_blended_fip <- function(row) {
+      cur_fip   <- dplyr::coalesce(row$fg_FIP[1],  row$fg_xFIP[1], 4.20)
+      prior_fip <- dplyr::coalesce(row$prior_xfip[1], cur_fip)
+      gs        <- dplyr::coalesce(row$mlb_gs[1], 0L)
+      w_cur     <- min(gs / 15, 1)
+      cur_fip * w_cur + prior_fip * (1 - w_cur)
+    }
+
+    away_fip <- if (nrow(away_sm) > 0) .get_blended_fip(away_sm) else 4.20
+    home_fip <- if (nrow(home_sm) > 0) .get_blended_fip(home_sm) else 4.20
+
+    pf <- 1.0
+    wm <- .wind_mult(game$wind_speed_mph[1], game$wind_direction[1])
+
+    away_wrc <- tryCatch(.team_wrc(
+      lineup_context %>% dplyr::filter(game_pk == gpk, side == "away")
+    ), error = function(e) 100)
+    home_wrc <- tryCatch(.team_wrc(
+      lineup_context %>% dplyr::filter(game_pk == gpk, side == "home")
+    ), error = function(e) 100)
+
+    LEAGUE_AVG_RUNS <- 4.43; LEAGUE_AVG_FIP <- 4.15
+    away_runs <- LEAGUE_AVG_RUNS * (away_wrc / 100) * pf * (1 + wm * 0.5) *
+                 (home_fip / LEAGUE_AVG_FIP)
+    home_runs <- LEAGUE_AVG_RUNS * (home_wrc / 100) * pf * (1 + wm * 0.5) *
+                 (away_fip / LEAGUE_AVG_FIP)
+
+    away_runs <- max(away_runs, 0.5); home_runs <- max(home_runs, 0.5)
+
+    ppois_win <- function(mu_a, mu_h, max_r = 20) {
+      r <- seq(0, max_r)
+      p_a <- dpois(r, mu_a); p_h <- dpois(r, mu_h)
+      win <- sum(outer(p_a, p_h, "*") * lower.tri(matrix(1, max_r+1, max_r+1), diag=FALSE))
+      tie <- sum(p_a * p_h)
+      c(win = win, tie = tie, loss = 1 - win - tie)
+    }
+    res <- ppois_win(away_runs, home_runs)
+    away_wp <- res["win"]  + 0.5 * res["tie"]
+    home_wp <- res["loss"] + 0.5 * res["tie"]
+
+    list(away_runs = away_runs, home_runs = home_runs,
+         away_win_pct = away_wp, home_win_pct = home_wp)
+  }, error = function(e) NULL)
+}
+```
+
+```{r page1-header}
+#| output: asis
+
+# Build compact info cells — use isTRUE(!is.na()) everywhere so NULL columns don't crash
+.g <- function(col) { v <- game[[col]]; if (length(v) == 0) NA else v[1] }
+
+time_str    <- if (isTRUE(!is.na(.g("game_time")))) .g("game_time") else "TBD"
+venue_str   <- dplyr::coalesce(game$venue_name[1], "—")
+weather_str <- if (isTRUE(!is.na(.g("game_temp_f"))))    paste0(.g("game_temp_f"), "\u00b0F") else "—"
+wind_str    <- if (isTRUE(!is.na(.g("wind_speed_mph")))) {
+  dir_part <- if (isTRUE(!is.na(.g("wind_direction")))) paste0(", ", .g("wind_direction")) else ""
+  paste0(.g("wind_speed_mph"), " mph", dir_part)
+} else "—"
+umpire_str  <- dplyr::coalesce(game$home_plate_umpire[1], "TBD")
+series_str  <- if (isTRUE(!is.na(.g("game_in_series"))) && isTRUE(!is.na(.g("series_length")))) {
+  flags <- c(
+    if (isTRUE(game$is_series_opener[1])) "Series Opener",
+    if (isTRUE(game$is_series_finale[1])) "Series Finale",
+    if (isTRUE(game$is_rubber_match[1]))  "Rubber Match"
+  )
+  lbl <- paste0("Game ", .g("game_in_series"), " of ", .g("series_length"))
+  if (length(flags) > 0) paste0(lbl, " \u2014 ", flags[1]) else lbl
+} else "—"
+type_flags  <- c(
+  if (isTRUE(game$is_interleague[1]))   "Interleague",
+  if (isTRUE(game$is_division_game[1])) "Division Game",
+  if (isTRUE(game$is_doubleheader[1]))  "Doubleheader"
+)
+type_str <- if (length(type_flags) > 0) paste(type_flags, collapse = " \u00b7 ") else "League Game"
+
+cat(paste0(
+  '<div class="print-header no-break">',
+  '<h1>', away_team, ' @ ', home_team, '</h1>',
+  '<div class="sub">', game_label,
+  ' &nbsp;\u00b7&nbsp; ', away_sp_name, ' vs ', home_sp_name,
+  '</div>',
+  '</div>',
+
+  # Info grid — 4 columns × 2 rows
+  '<div class="info-grid no-break">',
+
+  .ic("First Pitch", time_str),
+  .ic("Venue",       venue_str),
+  .ic("Weather",     weather_str),
+  .ic("Wind",        wind_str),
+  .ic("HP Umpire",   umpire_str),
+  .ic("Series",      series_str),
+  .ic("Game Type",   type_str),
+
+  '</div>'
+))
+```
+
+```{r narrative-section}
+#| output: asis
+cat('<div class="print-h2">Game Narrative</div>\n')
+narrative_html <- tryCatch(make_game_narrative_html(gpk), error = function(e) "")
+if (nchar(narrative_html) > 0) cat(narrative_html, "\n\n")
+```
+
+```{r projection-section}
+#| output: asis
+tryCatch({
+  pred_raw <- .build_pred_data(gpk)
+  if (!is.null(pred_raw)) {
+    away_runs <- sprintf("%.1f", pred_raw$away_runs)
+    home_runs <- sprintf("%.1f", pred_raw$home_runs)
+    total     <- sprintf("%.1f", pred_raw$away_runs + pred_raw$home_runs)
+    away_pct  <- sprintf("%.0f%%", pred_raw$away_win_pct * 100)
+    home_pct  <- sprintf("%.0f%%", pred_raw$home_win_pct * 100)
+
+    cat(paste0(
+      '<div class="print-h2">Game Projection</div>',
+      '<div class="pred-row no-break">',
+      .pred_cell(paste0(away_team, " Runs"),  away_runs),
+      .pred_cell(paste0(home_team, " Runs"),  home_runs),
+      .pred_cell("Total",                     total),
+      .pred_cell(paste0(away_team, " Win%"),  away_pct),
+      .pred_cell(paste0(home_team, " Win%"),  home_pct),
+      '</div>'
+    ))
+  }
+}, error = function(e) invisible(NULL))
+```
+
+<div class="page-break"></div>
+
+```{r pitchers-section}
+#| output: asis
+cat('<div class="print-h2">Starting Pitchers</div>\n')
+
+# Pitch arsenal compact list
+tryCatch({
+  if (exists("pitcher_arsenal") && nrow(pitcher_arsenal) > 0) {
+    sm_rows <- starter_matchup %>% dplyr::filter(game_pk == gpk)
+    if (nrow(sm_rows) > 0) {
+      arsenal_lines <- vapply(seq_len(nrow(sm_rows)), function(i) {
+        sp <- sm_rows[i, ]
+        sp_id   <- sp$mlbam_id[1]
+        sp_name <- dplyr::coalesce(sp$pitcher_name[1], "SP")
+        ars <- pitcher_arsenal %>%
+          dplyr::filter(mlbam_id == sp_id) %>%
+          dplyr::arrange(dplyr::desc(dplyr::coalesce(usage_pct, 0))) %>%
+          dplyr::slice_head(n = 4)
+        if (nrow(ars) == 0) return("")
+        pitch_str <- paste(
+          vapply(seq_len(nrow(ars)), function(j) {
+            pname <- dplyr::coalesce(ars$pitch_type[j], ars$pitch_name[j], "?")
+            upct  <- ars$usage_pct[j]
+            if (!is.na(upct)) paste0(pname, " (", round(upct * 100), "%)")
+            else pname
+          }, character(1)),
+          collapse = ", "
+        )
+        paste0("<strong>", sp_name, ":</strong> ", pitch_str)
+      }, character(1))
+      arsenal_lines <- arsenal_lines[nchar(arsenal_lines) > 0]
+      if (length(arsenal_lines) > 0) {
+        cat(paste0(
+          '<p style="font-size:10pt; margin:4pt 0 6pt 0; color:#333;">',
+          paste(arsenal_lines, collapse = " &nbsp;|&nbsp; "),
+          '</p>\n'
+        ))
+      }
+    }
+  }
+}, error = function(e) invisible(NULL))
+
+sp_tbl <- tryCatch(make_starter_gt(gpk), error = function(e) NULL)
+if (!is.null(sp_tbl)) {
+  sp_tbl <- sp_tbl %>%
+    gt::tab_options(
+      table.font.size  = 11,
+      data_row.padding = gt::px(3),
+      table.width      = gt::pct(100)
+    )
+  cat(gt::as_raw_html(sp_tbl), "\n\n")
+} else {
+  cat("*Starting pitcher data unavailable.*\n\n")
+}
+
+# Pitcher platoon splits
+splits_tbl <- tryCatch(make_starter_splits_gt(gpk), error = function(e) NULL)
+if (!is.null(splits_tbl)) {
+  splits_tbl <- splits_tbl %>%
+    gt::tab_options(table.font.size = 11, data_row.padding = gt::px(3),
+                    table.width = gt::pct(100))
+  cat(gt::as_raw_html(splits_tbl), "\n\n")
+}
+```
+
+<div class="page-break"></div>
+
+```{r lineups-section}
+#| output: asis
+cat('<div class="print-h2">Lineups</div>\n')
+
+away_lt <- tryCatch(make_lineup_print_gt(gpk, "away"), error = function(e) NULL)
+home_lt <- tryCatch(make_lineup_print_gt(gpk, "home"), error = function(e) NULL)
+
+cat('<div class="lineup-grid">\n')
+
+cat('<div>\n')
+if (!is.null(away_lt)) cat(gt::as_raw_html(away_lt), "\n\n") else
+  cat("*Away lineup not available.*\n\n")
+cat('</div>\n')
+
+cat('<div>\n')
+if (!is.null(home_lt)) cat(gt::as_raw_html(home_lt), "\n\n") else
+  cat("*Home lineup not available.*\n\n")
+cat('</div>\n')
+
+cat('</div>\n')
+```

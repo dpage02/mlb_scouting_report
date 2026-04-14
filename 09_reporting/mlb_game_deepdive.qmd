@@ -103,6 +103,7 @@ home_abbr_nav <- if (length(home_abbr_nav) == 0 || is.na(home_abbr_nav)) "HOME" 
 matchup_file   <- paste0("matchup_",    params$game_date, "_", away_abbr_nav, "_", home_abbr_nav, ".html")
 prediction_file <- paste0("prediction_", params$game_date, "_", away_abbr_nav, "_", home_abbr_nav, ".html")
 hitting_file   <- paste0("hitting_",    params$game_date, "_", away_abbr_nav, "_", home_abbr_nav, ".html")
+print_file     <- paste0("print_",      params$game_date, "_", away_abbr_str,  "_", home_abbr_str,  ".html")
 
 nav_html <- paste0(
   '<div style="margin-bottom:1.5rem; padding:10px 14px; background:#f8f9fa; ',
@@ -124,6 +125,9 @@ nav_html <- paste0(
   '&nbsp;&nbsp;|&nbsp;&nbsp;',
   '<a href="', home_team_file, '" style="color:#1a73e8; text-decoration:none; font-weight:600;">',
   home_team, ' Team Deep Dive \u2197</a>',
+  '&nbsp;&nbsp;|&nbsp;&nbsp;',
+  '<a href="', print_file, '" style="color:#1a73e8; text-decoration:none; font-weight:600;">',
+  '\U0001f5a8 Print</a>',
   '</div>'
 )
 cat(nav_html, "\n\n")

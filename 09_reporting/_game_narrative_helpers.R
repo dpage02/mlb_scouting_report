@@ -1426,7 +1426,127 @@ make_game_narrative_html <- function(gpk) {
       }
     }
 
-    if (nchar(off_intro) == 0 && nchar(split_note) == 0) "" else paste0(off_intro, split_note)
+    # ---- Matchup insights block ----
+    matchup_insights <- tryCatch({
+      insights <- character(0)
+
+      for (sp_side in c("away", "home")) {
+        bat_side <- if (sp_side == "away") "home" else "away"
+        sp_row   <- sps %>% dplyr::filter(side == sp_side)
+        bat_lu   <- if (bat_side == "away") away_lu else home_lu
+        bat_team <- if (bat_side == "away") away_team else home_team
+        if (nrow(sp_row) == 0 || nrow(bat_lu) == 0) next
+
+        sp_name  <- dplyr::coalesce(sp_row$pitcher_name[1], "The starter")
+
+        # Get lineup stats joined from offense_master_season
+        lu_stats <- tryCatch({
+          if (!exists("offense_master_season") || nrow(offense_master_season) == 0)
+            return(dplyr::tibble())
+          full_stats <- offense_master_season %>%
+            dplyr::arrange(mlbam_id, dplyr::desc(dplyr::coalesce(mlb_pa, 0L))) %>%
+            dplyr::distinct(mlbam_id, .keep_all = TRUE)
+          bat_lu %>%
+            dplyr::left_join(full_stats, by = "mlbam_id", suffix = c("", "_dup")) %>%
+            dplyr::select(-dplyr::ends_with("_dup")) %>%
+            dplyr::filter(dplyr::coalesce(mlb_pa, 0L) >= 10)
+        }, error = function(e) dplyr::tibble())
+
+        # 1. K pitcher vs K lineup
+        tryCatch({
+          sp_kpct <- .get_num(sp_row, "fg_K_pct")
+          if (!is.na(sp_kpct) && sp_kpct >= 0.24 && nrow(lu_stats) >= 3) {
+            lu_kpct_vals <- lu_stats[["fg_K_pct"]]
+            if (!is.null(lu_kpct_vals)) {
+              lu_kpct <- mean(lu_kpct_vals, na.rm = TRUE)
+              if (!is.na(lu_kpct)) {
+                if (lu_kpct >= 0.22) {
+                  insights <- c(insights, paste0(
+                    sp_name, " is a punch-out arm (", .fmt_pct(sp_kpct), "% K) going against a ",
+                    bat_team, " lineup that whiffs frequently (", .fmt_pct(lu_kpct),
+                    "% K rate) \u2014 this could be a strikeout-heavy afternoon."
+                  ))
+                } else if (lu_kpct < 0.18) {
+                  insights <- c(insights, paste0(
+                    sp_name, "'s strikeout stuff (", .fmt_pct(sp_kpct), "% K) faces a contact-oriented ",
+                    bat_team, " lineup (", .fmt_pct(lu_kpct),
+                    "% K rate) \u2014 a tough test for his put-away ability."
+                  ))
+                }
+              }
+            }
+          }
+        }, error = function(e) invisible(NULL))
+
+        # 2. GB pitcher vs power lineup
+        tryCatch({
+          sp_gbpct <- dplyr::coalesce(.get_num(sp_row, "fg_GB_pct"), .get_num(sp_row, "fg_GB."))
+          if (!is.na(sp_gbpct) && sp_gbpct >= 0.50 && nrow(lu_stats) >= 3) {
+            lu_iso_vals <- lu_stats[["fg_ISO"]]
+            if (!is.null(lu_iso_vals)) {
+              lu_iso <- mean(lu_iso_vals, na.rm = TRUE)
+              if (!is.na(lu_iso) && lu_iso >= 0.175) {
+                insights <- c(insights, paste0(
+                  sp_name, " generates groundballs at a high rate (", .fmt_pct(sp_gbpct), "% GB), ",
+                  "but faces a ", bat_team, " lineup with real pop (avg ISO ",
+                  sprintf("%.3f", lu_iso), ") \u2014 keeping the ball down will be critical."
+                ))
+              }
+            }
+          }
+        }, error = function(e) invisible(NULL))
+
+        # 3. Wild SP vs patient lineup
+        tryCatch({
+          sp_bbpct <- .get_num(sp_row, "fg_BB_pct")
+          if (!is.na(sp_bbpct) && sp_bbpct >= 0.10 && nrow(lu_stats) >= 3) {
+            lu_bbpct_vals <- lu_stats[["fg_BB_pct"]]
+            if (!is.null(lu_bbpct_vals)) {
+              lu_bbpct <- mean(lu_bbpct_vals, na.rm = TRUE)
+              if (!is.na(lu_bbpct) && lu_bbpct >= 0.095) {
+                insights <- c(insights, paste0(
+                  sp_name, "'s command has been shaky this season (", .fmt_pct(sp_bbpct), "% BB), ",
+                  "and ", bat_team, "'s patient approach (", .fmt_pct(lu_bbpct),
+                  "% BB) could inflate pitch counts early."
+                ))
+              }
+            }
+          }
+        }, error = function(e) invisible(NULL))
+
+        # 4. Fly-ball pitcher in hitter-friendly/wind-out conditions
+        tryCatch({
+          sp_fbpct <- dplyr::coalesce(.get_num(sp_row, "fg_FB_pct"), .get_num(sp_row, "fg_FB."))
+          if (!is.na(sp_fbpct) && sp_fbpct >= 0.38) {
+            wind_mult_val <- tryCatch(
+              .wind_mult(game$wind_speed_mph[1], game$wind_direction[1]),
+              error = function(e) 0
+            )
+            home_team_id_mi <- dplyr::coalesce(game$home_team_id[1], NA_integer_)
+            pf_val_mi <- tryCatch(.park_factor(home_team_id_mi), error = function(e) 1.0)
+            if (!is.na(wind_mult_val) && !is.na(pf_val_mi) &&
+                (wind_mult_val >= 0.05 || pf_val_mi >= 1.05)) {
+              cond_note <- if (!is.na(wind_mult_val) && wind_mult_val >= 0.05) {
+                paste0(round(game$wind_speed_mph[1]), " mph wind blowing out")
+              } else {
+                paste0("a hitter-friendly park (PF ", round(pf_val_mi * 100), ")")
+              }
+              insights <- c(insights, paste0(
+                sp_name, " is a fly-ball pitcher (", .fmt_pct(sp_fbpct), "% FB) \u2014 ",
+                cond_note, " could turn routine fly balls into extra bases."
+              ))
+            }
+          }
+        }, error = function(e) invisible(NULL))
+      }
+      insights
+    }, error = function(e) character(0))
+
+    insight_text <- if (length(matchup_insights) > 0)
+      paste(" ", paste(matchup_insights, collapse = " ")) else ""
+
+    if (nchar(off_intro) == 0 && nchar(split_note) == 0 && nchar(insight_text) == 0) ""
+    else paste0(off_intro, split_note, insight_text)
   }, error = function(e) "")
 
   # ---- Paragraph 3: Bullpen, weather, watch-for ----
@@ -1481,22 +1601,26 @@ make_game_narrative_html <- function(gpk) {
       parts <- c(parts, paste0("Conditions: ", paste(env_parts, collapse = "; "), "."))
 
     # Watch-for close: most interesting angle
+    # NOTE: no return() inside tryCatch — return() exits the outer function in R
     watch_close <- tryCatch({
+      result <- NULL
       # Regression candidate?
       for (sp_r in list(away_sp, home_sp)) {
-        if (nrow(sp_r) == 0) next
+        if (nrow(sp_r) == 0 || !is.null(result)) next
         era  <- .get_num(sp_r, "mlb_era")
         xfip <- .get_num(sp_r, "fg_xFIP")
         gs   <- .get_num(sp_r, "mlb_gs")
         if (!is.na(era) && !is.na(xfip) && !is.na(gs) && gs >= 3 && (era - xfip) >= 1.2) {
-          nm_r <- dplyr::coalesce(sp_r$pitcher_name[1], "the starter")
-          return(paste0("Watch for ", nm_r, " \u2014 ERA (", round(era, 2),
-                        ") is running well above xFIP (", round(xfip, 2),
-                        "), suggesting positive regression ahead."))
+          nm_r   <- dplyr::coalesce(sp_r$pitcher_name[1], "the starter")
+          result <- paste0("Watch for ", nm_r, " \u2014 ERA (", round(era, 2),
+                           ") is running well above xFIP (", round(xfip, 2),
+                           "), suggesting positive regression ahead.")
         }
       }
       # Hot bat from streaks?
-      if (exists("recent_batter_streaks") && nrow(recent_batter_streaks) > 0 && nrow(lineup) > 0) {
+      if (is.null(result) &&
+          exists("recent_batter_streaks") && nrow(recent_batter_streaks) > 0 &&
+          nrow(lineup) > 0) {
         ids <- lineup$mlbam_id[!is.na(lineup$mlbam_id)]
         hot <- recent_batter_streaks %>%
           dplyr::filter(mlbam_id %in% ids, !is.na(hit_streak), hit_streak >= 6) %>%
@@ -1511,20 +1635,24 @@ make_game_narrative_html <- function(gpk) {
             dplyr::pull(side) %>% dplyr::first()
           team_lbl <- if (!is.na(team_nm) && team_nm == "away") away_team else home_team
           if (!is.na(bat_nm))
-            return(paste0("Watch ", bat_nm, " (", team_lbl, ") \u2014 active ",
-                          hot$hit_streak[1], "-game hit streak."))
+            result <- paste0("Watch ", bat_nm, " (", team_lbl, ") \u2014 active ",
+                             hot$hit_streak[1], "-game hit streak.")
         }
       }
       # Series context note
-      is_opener <- isTRUE("is_series_opener" %in% names(game) && game$is_series_opener[1] == TRUE)
-      if (is_opener) {
-        series_len <- if ("series_length" %in% names(game) && !is.na(game$series_length[1]))
-                        as.integer(game$series_length[1]) else NA_integer_
-        if (!is.na(series_len))
-          return(paste0("Series opener: tone-setting game 1 of ", series_len,
-                        " at ", venue, "."))
+      if (is.null(result)) {
+        is_opener <- isTRUE("is_series_opener" %in% names(game) &&
+                             game$is_series_opener[1] == TRUE)
+        if (is_opener) {
+          series_len <- if ("series_length" %in% names(game) &&
+                            !is.na(game$series_length[1]))
+                          as.integer(game$series_length[1]) else NA_integer_
+          if (!is.na(series_len))
+            result <- paste0("Series opener: tone-setting game 1 of ", series_len,
+                             " at ", venue, ".")
+        }
       }
-      NULL
+      result
     }, error = function(e) NULL)
 
     if (!is.null(watch_close)) parts <- c(parts, watch_close)

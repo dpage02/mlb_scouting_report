@@ -1,0 +1,113 @@
+[2026-04-09 09:20:39.019526] Pipeline configuration loaded 
+[2026-04-09 09:22:16.706912] Pipeline configuration loaded 
+[2026-04-09 09:22:31.7445] Pipeline configuration loaded 
+[2026-04-09 09:23:39.694744] Pipeline configuration loaded 
+[2026-04-09 09:23:39.71069] Loading base cache (1.5 MB, 2 days old)... 
+[2026-04-09 09:23:39.810393] Base cache loaded 
+[2026-04-09 09:23:39.811032] 05 — Refreshing season stats (MLB API + FanGraphs)... 
+[2026-04-09 09:24:58.43737] 05 — stats refresh complete 
+[2026-04-09 09:24:58.438959] 03 — Refreshing rosters... 
+[2026-04-09 09:25:44.990092] 03 — rosters complete 
+[2026-04-09 09:25:44.99176] 04 — Building game context... 
+[2026-04-09 09:31:26.328177] Pipeline configuration loaded 
+[2026-04-09 09:31:26.337334] Loading base cache (1.5 MB, 2 days old)... 
+[2026-04-09 09:31:26.433181] Base cache loaded 
+[2026-04-09 09:31:26.439963] 05 — Refreshing season stats (MLB API + FanGraphs)... 
+[2026-04-09 09:32:27.363137] 05 — stats refresh complete 
+[2026-04-09 09:32:27.364644] 03 — Refreshing rosters... 
+[2026-04-09 09:32:32.874371] 03 — rosters complete 
+[2026-04-09 09:32:32.875181] 04 — Building game context... 
+[2026-04-09 09:32:40.467079] 04 — game context complete 
+[2026-04-09 09:32:40.467755] 06 — Building player context... 
+[2026-04-09 09:33:25.084529] 06 — player context complete 
+[2026-04-09 09:33:25.08584] 07 — Building bullpen context... 
+[2026-04-09 09:34:00.555096] 07 — bullpen context complete 
+[2026-04-09 09:34:00.555759] 08 — Building game model... 
+[2026-04-09 09:34:00.916473] 08 — game model complete 
+[2026-04-09 09:34:01.451498] Pipeline cache saved — 26 objects | 3.3 MB 
+[2026-04-09 09:34:01.452265] Daily pipeline complete 
+[2026-04-09 09:55:03.901212] Pipeline configuration loaded 
+[2026-04-09 09:55:03.920004] 01 — Building ID layer... 
+[2026-04-09 09:55:14.823446] park_ids built: 348 rows 
+[2026-04-09 09:55:14.976358] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-04-09 09:55:15.219319] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-04-09 09:55:15.59532] league_ids built: 47 rows 
+[2026-04-09 09:55:15.608469] Wrote team_ids to data/ids/team_ids.csv (30 rows) 
+[2026-04-09 09:55:15.625047] Wrote league_ids to data/ids/league_ids.csv (47 rows) 
+[2026-04-09 09:55:15.644204] Wrote park_ids to data/ids/park_ids.csv (348 rows) 
+[2026-04-09 09:55:15.656784] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-04-09 09:55:15.65797] Phase 01_ids complete: all ID tables written 
+[2026-04-09 09:55:15.658581] 01 — IDs complete 
+[2026-04-09 09:55:15.673866] 05 — Building offense... 
+[2026-04-09 09:56:09.713382] 05 — offense complete 
+[2026-04-09 09:56:09.714436] 05 — Building pitching... 
+[2026-04-09 09:57:11.828028] 05 — pitching complete 
+[2026-04-09 09:57:50.983041] 05 — performance complete 
+[2026-04-09 09:57:51.770512] Base cache saved — 25 objects, 4.6 MB 
+[2026-04-09 09:57:51.771299] Base pipeline complete — run run_pipeline_daily.R to build today's games 
+[2026-04-09 10:38:32.618664] Pipeline configuration loaded 
+[2026-04-09 10:38:32.630392] 01 — Building ID layer... 
+[2026-04-09 10:38:47.267744] park_ids built: 348 rows 
+[2026-04-09 10:38:47.408326] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-04-09 10:38:47.582476] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-04-09 10:38:48.020965] league_ids built: 47 rows 
+[2026-04-09 10:38:48.030087] Wrote team_ids to data/ids/team_ids.csv (30 rows) 
+[2026-04-09 10:38:48.046033] Wrote league_ids to data/ids/league_ids.csv (47 rows) 
+[2026-04-09 10:38:48.066284] Wrote park_ids to data/ids/park_ids.csv (348 rows) 
+[2026-04-09 10:38:48.077606] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-04-09 10:38:48.078874] Phase 01_ids complete: all ID tables written 
+[2026-04-09 10:38:48.079704] 01 — IDs complete 
+[2026-04-09 10:38:48.0979] 05 — Building offense... 
+[2026-04-09 10:42:34.846136] Pipeline configuration loaded 
+[2026-04-09 10:42:34.85371] 01 — Building ID layer... 
+[2026-04-09 10:42:44.14589] park_ids built: 348 rows 
+[2026-04-09 10:42:44.294619] Retrosheet umpire file not found for season 2026. Falling back to 2025. 
+[2026-04-09 10:42:44.451475] umpire_ids_retrosheet built for season 2025: 93 rows 
+[2026-04-09 10:42:44.662293] league_ids built: 47 rows 
+[2026-04-09 10:42:44.672212] Wrote team_ids to data/ids/team_ids.csv (30 rows) 
+[2026-04-09 10:42:44.684747] Wrote league_ids to data/ids/league_ids.csv (47 rows) 
+[2026-04-09 10:42:44.702955] Wrote park_ids to data/ids/park_ids.csv (348 rows) 
+[2026-04-09 10:42:44.714084] Wrote umpire_ids_retrosheet to data/ids/umpire_ids_retrosheet.csv (93 rows) 
+[2026-04-09 10:42:44.715603] Phase 01_ids complete: all ID tables written 
+[2026-04-09 10:42:44.716505] 01 — IDs complete 
+[2026-04-09 10:42:44.732693] 05 — Building offense... 
+[2026-04-09 10:43:15.12313] 05 — offense complete 
+[2026-04-09 10:43:15.124752] 05 — Building pitching... 
+[2026-04-09 10:44:12.907833] 05 — pitching complete 
+[2026-04-09 10:44:52.308915] 05 — performance complete 
+[2026-04-09 10:44:52.941891] Base cache saved — 25 objects, 4.1 MB 
+[2026-04-09 10:44:52.94355] Base pipeline complete — run run_pipeline_daily.R to build today's games 
+[2026-04-09 16:18:20.376268] Pipeline configuration loaded 
+[2026-04-09 16:18:20.39942] Loading base cache (4.1 MB, 0 days old)... 
+[2026-04-09 16:18:20.666363] Base cache loaded 
+[2026-04-09 16:18:20.670278] 05 — Refreshing season stats (MLB API + FanGraphs)... 
+[2026-04-09 16:19:20.517489] 05 — stats refresh complete 
+[2026-04-09 16:19:20.520671] 03 — Refreshing rosters... 
+[2026-04-09 16:20:19.482761] 03 — rosters complete 
+[2026-04-09 16:20:19.486075] 04 — Building game context... 
+[2026-04-09 16:20:29.07045] 04 — game context complete 
+[2026-04-09 16:20:29.071105] 06 — Building player context... 
+[2026-04-09 16:21:33.593739] 06 — player context complete 
+[2026-04-09 16:21:33.594439] 07 — Building bullpen context... 
+[2026-04-09 16:22:10.81267] 07 — bullpen context complete 
+[2026-04-09 16:22:10.813409] 08 — Building game model... 
+[2026-04-09 16:22:11.105295] 08 — game model complete 
+[2026-04-09 16:22:11.633113] Pipeline cache saved — 27 objects | 3.4 MB 
+[2026-04-09 16:22:11.633771] Daily pipeline complete 
+[2026-04-09 16:38:11.033939] Pipeline configuration loaded 
+[2026-04-09 16:38:11.046102] Loading base cache (4.1 MB, 0 days old)... 
+[2026-04-09 16:38:11.173744] Base cache loaded 
+[2026-04-09 16:38:11.174371] 05 — Refreshing season stats (MLB API + FanGraphs)... 
+[2026-04-09 16:39:05.028072] 05 — stats refresh complete 
+[2026-04-09 16:39:05.029596] 03 — Refreshing rosters... 
+[2026-04-09 16:39:10.220263] 03 — rosters complete 
+[2026-04-09 16:39:10.220916] 04 — Building game context... 
+[2026-04-09 16:39:20.363266] 04 — game context complete 
+[2026-04-09 16:39:20.364168] 06 — Building player context... 
+[2026-04-09 16:40:06.547802] 06 — player context complete 
+[2026-04-09 16:40:06.548489] 07 — Building bullpen context... 
+[2026-04-09 16:40:43.018954] 07 — bullpen context complete 
+[2026-04-09 16:40:43.019676] 08 — Building game model... 
+[2026-04-09 16:40:43.345295] 08 — game model complete 
+[2026-04-09 16:40:43.87925] Pipeline cache saved — 27 objects | 3.4 MB 
+[2026-04-09 16:40:43.880321] Daily pipeline complete 

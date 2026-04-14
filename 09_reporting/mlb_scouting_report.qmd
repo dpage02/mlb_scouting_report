@@ -85,6 +85,17 @@ cat(paste0(
 ))
 ```
 
+```{r stat-ref-link}
+#| output: asis
+cat(paste0(
+  '<p style="margin-top:-4px; margin-bottom:10px; font-size:13px;">',
+  '<a href="stat_reference.html" style="color:#1a73e8; text-decoration:none; font-weight:600;">',
+  '\U0001f4ca Stat Reference</a>',
+  ' &nbsp;\u00b7&nbsp; Grade ranges and 2026 MLB averages for hitting, pitching, and baserunning.',
+  '</p>\n'
+))
+```
+
 ```{r game-summary}
 #| output: asis
 

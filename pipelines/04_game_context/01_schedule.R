@@ -141,10 +141,33 @@ if (!is.null(TARGET_TEAM_ABBR)) {
 # 6. Construct schedule_context
 # ------------------------------------------------------------
 
+# Compute game_time vector outside transmute (avoids dplyr scoping issues)
+.dt_col  <- intersect(c("game_datetime", "reschedule_game_date",
+                         "resume_game_date"), names(schedule_day))[1]
+.tbd_col <- intersect(c("status_start_time_tbd", "start_time_tbd"),
+                       names(schedule_day))[1]
+
+.game_time_vec <- if (!is.na(.dt_col)) {
+  dt_raw   <- schedule_day[[.dt_col]]
+  dt_utc   <- suppressWarnings(
+    as.POSIXct(dt_raw, format = "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
+  )
+  tbd_flag <- if (!is.na(.tbd_col)) schedule_day[[.tbd_col]] else FALSE
+  dplyr::if_else(
+    !is.na(dt_utc) & !tbd_flag,
+    format(dt_utc, "%I:%M %p ET", tz = "America/New_York"),
+    "TBD"
+  )
+} else {
+  rep("TBD", nrow(schedule_day))
+}
+
 schedule_context <- schedule_day %>%
+  dplyr::mutate(.game_time_tmp = .game_time_vec) %>%
   transmute(
     game_pk          = game_pk,
     game_date        = as.Date(official_date),
+    game_time        = .game_time_tmp,
     home_team_id     = teams_home_team_id,
     home_team_name   = teams_home_team_name,
     away_team_id     = teams_away_team_id,

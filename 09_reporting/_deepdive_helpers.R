@@ -2432,13 +2432,13 @@ make_batter_intelligence_gt <- function(gpk, side_filter) {
     d3 <- dplyr::tibble(
       `#`     = raw$batting_slot,
       Name    = raw$player_name,
-      `GB%`   = if ("fg_GB."   %in% names(raw)) raw$fg_GB.   else NA_real_,
-      `LD%`   = if ("fg_LD."   %in% names(raw)) raw$fg_LD.   else NA_real_,
-      `FB%`   = if ("fg_FB."   %in% names(raw)) raw$fg_FB.   else NA_real_,
-      `HR/FB` = if ("fg_HR.FB" %in% names(raw)) raw$fg_HR.FB else NA_real_,
-      `Pull%` = if ("fg_Pull." %in% names(raw)) raw$fg_Pull. else NA_real_,
-      `Cent%` = if ("fg_Cent." %in% names(raw)) raw$fg_Cent. else NA_real_,
-      `Oppo%` = if ("fg_Oppo." %in% names(raw)) raw$fg_Oppo. else NA_real_
+      `GB%`   = col1(raw, c("fg_GB_pct",    "fg_GB.")),
+      `LD%`   = col1(raw, c("fg_LD_pct",    "fg_LD.")),
+      `FB%`   = col1(raw, c("fg_FB_pct",    "fg_FB.")),
+      `HR/FB` = col1(raw, c("fg_HR_per_FB", "fg_HR.FB")),
+      `Pull%` = col1(raw, c("fg_Pull_pct",  "fg_Pull.")),
+      `Cent%` = col1(raw, c("fg_Cent_pct",  "fg_Cent.")),
+      `Oppo%` = col1(raw, c("fg_Oppo_pct",  "fg_Oppo."))
     )
 
     t3 <- d3 %>%
@@ -2810,16 +2810,21 @@ make_baserunning_gt <- function(gpk, side_filter) {
       NA_real_
     }
 
+    col1_br <- function(candidates) {
+      found <- intersect(candidates, names(raw))
+      if (length(found) == 0) rep(NA_real_, nrow(raw)) else raw[[found[1]]]
+    }
+
     display <- dplyr::tibble(
       `#`     = raw$batting_slot,
       Name    = raw$player_name,
       SB      = sb_vals,
       CS      = cs_vals,
       `SB%`   = sbpct_vals,
-      Sprint  = if ("sc_sprint_speed" %in% names(raw)) raw$sc_sprint_speed else NA_real_,
-      Spd     = if ("fg_Spd"          %in% names(raw)) raw$fg_Spd          else NA_real_,
-      UBR     = if ("fg_UBR"          %in% names(raw)) raw$fg_UBR          else NA_real_,
-      BsR     = if ("fg_wBsR"         %in% names(raw)) raw$fg_wBsR         else NA_real_
+      Sprint  = col1_br(c("sc_sprint_speed")),
+      Spd     = col1_br(c("fg_Spd", "fg_spd")),
+      UBR     = col1_br(c("fg_UBR", "fg_ubr", "fg_UBR_x", "fg_UBR_y")),
+      BsR     = col1_br(c("fg_wBsR", "fg_BsR", "fg_bsr", "fg_wBSR"))
     )
 
     tbl <- display %>%

@@ -15,7 +15,20 @@
       "Bash(cd:*)",
       "Bash(wc:*)",
       "Bash(mkdir:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(for f:*)",
+      "Bash(do echo:*)",
+      "Read(//Users/davispage/Documents/Baseball Analytics/mlb_scouting_report/**)",
+      "Bash(done)",
+      "Bash(ls:*)",
+      "Bash(grep:*)",
+      "Bash(Rscript -e \"library\\(baseballr\\); s <- mlb_standings\\(season=2026\\); print\\(names\\(s\\)\\); print\\(head\\(s[,c\\('team_records_team_name','team_records_wins','team_records_losses','team_records_runs_scored','team_records_runs_allowed'\\)], 3\\)\\)\" 2>&1 | grep -v \"^Loading\\\\|masked\\\\|^The\\\\|deprecated\\\\|Use \" | head -30)",
+      "Bash(Rscript -e \"library\\(baseballr\\); s <- mlb_standings\\(season=2026, date='2026-04-09'\\); print\\(names\\(s\\)[1:20]\\)\" 2>&1 | grep -v \"^Loading\\\\|masked\\\\|^The\\\\|deprecated\\\\|Use \" | head -20)",
+      "Bash(Rscript -e \"library\\(baseballr\\); s <- mlb_standings\\(standingsTypes='regularSeason', season=2026, date='2026-04-09'\\); print\\(names\\(s\\)[1:25]\\)\" 2>&1 | grep -v \"^Loading\\\\|masked\\\\|^The\\\\|deprecated\\\\|Use \" | head -20)",
+      "Bash(Rscript -e \"library\\(baseballr\\); ?mlb_standings\" 2>&1 | grep \"Usage\\\\|Arguments\\\\|season\\\\|date\\\\|standing\" | head -20)",
+      "Bash(Rscript -e \"\nlibrary\\(baseballr\\)\ns <- mlb_standings\\(season=2026, standings_type='regularSeason'\\)\ncat\\(names\\(s\\), sep='\\\\n'\\)\n\" 2>&1 | grep -v \"^Loading\\\\|masked\\\\|^The\\\\|deprecated\\\\|Use \" | head -30)",
+      "Bash(Rscript -e \"\nlibrary\\(baseballr\\)\ns <- mlb_standings\\(season=2026, standings_type='byLeague'\\)\nif \\(!is.null\\(s\\) && nrow\\(s\\) > 0\\) { cat\\(names\\(s\\), sep='\\\\n'\\) } else { cat\\('empty\\\\n'\\) }\n\" 2>&1 | grep -v \"^Loading\\\\|masked\\\\|^The\\\\|deprecated\\\\|Use \" | head -30)",
+      "Bash(find:*)"
     ]
   }
 }

@@ -1,0 +1,305 @@
+---
+title: "MLB Stat Reference"
+date: today
+format:
+  html:
+    self-contained: true
+    embed-resources: true
+    theme: cosmo
+    toc: true
+    toc-depth: 2
+    toc-title: "Sections"
+    toc-location: left
+    smooth-scroll: true
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+#| output: false
+if (basename(getwd()) == "09_reporting") setwd("..")
+library(gt)
+library(dplyr)
+source("09_reporting/_report_helpers.R")
+```
+
+```{r page-header}
+#| output: asis
+cat(paste0(
+  '# MLB Stat Reference\n\n',
+  '> **2026 MLB context** \u00b7 ',
+  'wRC+ and ERA+ are league-normalized to 100. ',
+  'Grades reflect typical MLB production ranges based on 2022\u20132024 empirical averages.\n\n'
+))
+```
+
+---
+
+## 2026 MLB Averages
+
+```{r league-averages}
+#| output: asis
+
+hit_avgs <- dplyr::tibble(
+  Stat  = c("AVG", "OBP", "SLG", "OPS", "wRC+", "ISO",
+            "BB%", "K%", "BABIP", "EV (mph)", "Brl%"),
+  Value = c(".244", ".313", ".399", ".712", "100", ".155",
+            "8.5%", "22.6%", ".295", "88.5", "7.8%")
+)
+
+pitch_avgs <- dplyr::tibble(
+  Stat  = c("ERA", "FIP", "xFIP", "WHIP", "K%", "BB%",
+            "K-BB%", "ERA+", "GB%", "SwStr%"),
+  Value = c("4.15", "4.10", "4.12", "1.27", "22.6%", "8.5%",
+            "14.1%", "100", "43.2%", "11.2%")
+)
+
+cat('<div style="display:flex; gap:2rem; flex-wrap:wrap; margin-bottom:1.5rem;">\n')
+
+cat('<div style="flex:1; min-width:240px;">\n')
+hit_tbl <- hit_avgs %>%
+  gt::gt() %>%
+  gt::tab_header(title = "Hitting Averages") %>%
+  gt::tab_options(
+    table.font.size           = 13,
+    heading.align             = "left",
+    data_row.padding          = gt::px(4),
+    column_labels.font.weight = "bold",
+    table.width               = gt::pct(100)
+  ) %>%
+  gt::opt_stylize(style = 1, color = "blue")
+cat(gt::as_raw_html(hit_tbl), "\n")
+cat('</div>\n')
+
+cat('<div style="flex:1; min-width:240px;">\n')
+pitch_tbl <- pitch_avgs %>%
+  gt::gt() %>%
+  gt::tab_header(title = "Pitching Averages") %>%
+  gt::tab_options(
+    table.font.size           = 13,
+    heading.align             = "left",
+    data_row.padding          = gt::px(4),
+    column_labels.font.weight = "bold",
+    table.width               = gt::pct(100)
+  ) %>%
+  gt::opt_stylize(style = 1, color = "blue")
+cat(gt::as_raw_html(pitch_tbl), "\n")
+cat('</div>\n')
+
+cat('</div>\n')
+```
+
+---
+
+## Hitting Grades
+
+```{r hitting-grades}
+hitting_grades <- dplyr::tibble(
+  Stat        = c("wRC+", "ISO", "OBP", "BB%", "K%", "BABIP", "EV (mph)", "Brl%", "Sprint (mph)"),
+  Poor        = c("<70",    "<.080",  "<.290",  "<5%",   "25%+",  "<.260",  "<86",   "<2%",   "<23"),
+  `Below Avg` = c("70-84",  ".080-.119", ".290-.319", "5-7%",  "22-25%", ".260-.279", "86-87.9", "2-4%",  "23-25.9"),
+  Average     = c("85-100", ".120-.149", ".320-.339", "7-9%",  "18-22%", ".280-.300", "88-89.9", "4-6%",  "26-27.9"),
+  `Above Avg` = c("101-115",".150-.189", ".340-.359", "9-11%", "14-18%", ".301-.320", "90-91.9", "6-9%",  "28-29.9"),
+  Great       = c("116-130",".190-.229", ".360-.379", "11-13%","10-14%", ".321-.340", "92-93.9", "9-12%", "30-30.9"),
+  Elite       = c("131+",   ".230+",     ".380+",     "13%+",  "<10%",   ".341+",     "94+",     "12%+",  "31+")
+)
+
+hitting_grades %>%
+  gt::gt() %>%
+  gt::tab_header(
+    title    = "Hitting Stat Grade Ranges",
+    subtitle = "Higher is better for all stats except K% (lower = better)"
+  ) %>%
+  gt::tab_source_note(
+    gt::md("2026 MLB context \u00b7 wRC+ and ERA+ are league-normalized to 100")
+  ) %>%
+  gt::data_color(
+    columns = c("Poor"),
+    palette = "#f8d7da",
+    na_color = "white"
+  ) %>%
+  gt::data_color(
+    columns = c("Below Avg"),
+    palette = "#fde8d0",
+    na_color = "white"
+  ) %>%
+  gt::data_color(
+    columns = c("Average"),
+    palette = "#fff3cd",
+    na_color = "white"
+  ) %>%
+  gt::data_color(
+    columns = c("Above Avg"),
+    palette = "#d4f0d4",
+    na_color = "white"
+  ) %>%
+  gt::data_color(
+    columns = c("Great"),
+    palette = "#a8dba8",
+    na_color = "white"
+  ) %>%
+  gt::data_color(
+    columns = c("Elite"),
+    palette = "#5cb85c",
+    na_color = "white"
+  ) %>%
+  gt::tab_style(
+    style = gt::cell_text(color = "white", weight = "bold"),
+    locations = gt::cells_body(columns = "Elite")
+  ) %>%
+  gt::tab_style(
+    style = gt::cell_text(weight = "bold"),
+    locations = gt::cells_column_labels()
+  ) %>%
+  gt::tab_options(
+    table.font.size           = 13,
+    heading.align             = "left",
+    data_row.padding          = gt::px(5),
+    table.width               = gt::pct(100)
+  ) %>%
+  gt::opt_stylize(style = 1, color = "blue")
+```
+
+---
+
+## Pitching Grades
+
+```{r pitching-grades}
+pitching_grades <- dplyr::tibble(
+  Stat        = c("ERA", "FIP / xFIP", "ERA+", "WHIP", "K%", "BB%", "SwStr%", "GB%", "fWAR/season"),
+  Elite       = c("<2.50",   "<2.80",   "150+",   "<0.95",  "30%+",  "<4%",   "16%+",  "55%+",  "5+"),
+  Great       = c("2.50-3.24","2.80-3.29","130-149","0.95-1.09","26-30%","4-5.5%","14-16%","50-55%","3-5"),
+  `Above Avg` = c("3.25-3.74","3.30-3.74","115-129","1.10-1.19","22-26%","5.5-7%","12-14%","45-50%","2-3"),
+  Average     = c("3.75-4.24","3.75-4.24","95-114", "1.20-1.34","18-22%","7-9%",  "9-12%", "40-45%","1-2"),
+  `Below Avg` = c("4.25-5.00","4.25-4.99","80-94",  "1.35-1.49","14-18%","9-11%", "7-9%",  "35-40%","0-1"),
+  Poor        = c("5.00+",   "5.00+",   "<80",    "1.50+",  "<14%",  "11%+",  "<7%",   "<35%",  "<0")
+)
+
+pitching_grades %>%
+  gt::gt() %>%
+  gt::tab_header(
+    title    = "Pitching Stat Grade Ranges",
+    subtitle = "Lower is better for ERA, FIP, WHIP, BB% — higher is better for K%, SwStr%, GB%, fWAR"
+  ) %>%
+  gt::tab_source_note(
+    gt::md("2026 MLB context \u00b7 wRC+ and ERA+ are league-normalized to 100")
+  ) %>%
+  gt::data_color(
+    columns = c("Elite"),
+    palette = "#5cb85c",
+    na_color = "white"
+  ) %>%
+  gt::data_color(
+    columns = c("Great"),
+    palette = "#a8dba8",
+    na_color = "white"
+  ) %>%
+  gt::data_color(
+    columns = c("Above Avg"),
+    palette = "#d4f0d4",
+    na_color = "white"
+  ) %>%
+  gt::data_color(
+    columns = c("Average"),
+    palette = "#fff3cd",
+    na_color = "white"
+  ) %>%
+  gt::data_color(
+    columns = c("Below Avg"),
+    palette = "#fde8d0",
+    na_color = "white"
+  ) %>%
+  gt::data_color(
+    columns = c("Poor"),
+    palette = "#f8d7da",
+    na_color = "white"
+  ) %>%
+  gt::tab_style(
+    style = gt::cell_text(color = "white", weight = "bold"),
+    locations = gt::cells_body(columns = "Elite")
+  ) %>%
+  gt::tab_style(
+    style = gt::cell_text(weight = "bold"),
+    locations = gt::cells_column_labels()
+  ) %>%
+  gt::tab_options(
+    table.font.size           = 13,
+    heading.align             = "left",
+    data_row.padding          = gt::px(5),
+    table.width               = gt::pct(100)
+  ) %>%
+  gt::opt_stylize(style = 1, color = "blue")
+```
+
+---
+
+## Baserunning Grades
+
+```{r baserunning-grades}
+baserunning_grades <- dplyr::tibble(
+  Stat            = c("Sprint Speed (mph)", "Stolen Base %", "Extra Bases Taken %"),
+  Poor            = c("<23",   "<55%",  "<25%"),
+  `Below Avg`     = c("23-25.9","55-64%","25-34%"),
+  Average         = c("26-27.9","65-74%","35-44%"),
+  `Above Avg`     = c("28-29.9","75-82%","45-54%"),
+  Great           = c("30-30.9","83-88%","55-64%"),
+  Elite           = c("31+",    "89%+",  "65%+")
+)
+
+baserunning_grades %>%
+  gt::gt() %>%
+  gt::tab_header(
+    title    = "Baserunning Stat Grade Ranges",
+    subtitle = "Higher is better for all baserunning stats"
+  ) %>%
+  gt::tab_source_note(
+    gt::md("2026 MLB context \u00b7 Sprint Speed sourced from Statcast")
+  ) %>%
+  gt::data_color(
+    columns = c("Poor"),
+    palette = "#f8d7da",
+    na_color = "white"
+  ) %>%
+  gt::data_color(
+    columns = c("Below Avg"),
+    palette = "#fde8d0",
+    na_color = "white"
+  ) %>%
+  gt::data_color(
+    columns = c("Average"),
+    palette = "#fff3cd",
+    na_color = "white"
+  ) %>%
+  gt::data_color(
+    columns = c("Above Avg"),
+    palette = "#d4f0d4",
+    na_color = "white"
+  ) %>%
+  gt::data_color(
+    columns = c("Great"),
+    palette = "#a8dba8",
+    na_color = "white"
+  ) %>%
+  gt::data_color(
+    columns = c("Elite"),
+    palette = "#5cb85c",
+    na_color = "white"
+  ) %>%
+  gt::tab_style(
+    style = gt::cell_text(color = "white", weight = "bold"),
+    locations = gt::cells_body(columns = "Elite")
+  ) %>%
+  gt::tab_style(
+    style = gt::cell_text(weight = "bold"),
+    locations = gt::cells_column_labels()
+  ) %>%
+  gt::tab_options(
+    table.font.size           = 13,
+    heading.align             = "left",
+    data_row.padding          = gt::px(5),
+    table.width               = gt::pct(100)
+  ) %>%
+  gt::opt_stylize(style = 1, color = "blue")
+```

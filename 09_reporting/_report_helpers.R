@@ -81,9 +81,13 @@ make_game_header_gt <- function(gpk) {
   )
   type_str <- if (length(type_flags) > 0) paste(type_flags, collapse = " · ") else league_label
 
+  time_str <- if ("game_time" %in% names(game) && !is.na(game$game_time))
+    game$game_time else "TBD"
+
   dplyr::tibble(
-    Label = c("Venue", "Weather", "Wind", "HP Umpire", "Series", "Game Type"),
+    Label = c("First Pitch", "Venue", "Weather", "Wind", "HP Umpire", "Series", "Game Type"),
     Value = c(
+      time_str,
       dplyr::coalesce(game$venue_name, "—"),
       weather_str,
       wind_str,
