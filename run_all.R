@@ -60,4 +60,6 @@ source("run_pipeline_daily.R")
 
 source("09_reporting/render_report.R")
 source("09_reporting/render_deep_dives.R")
-browseURL(file.path(getwd(), paste0("reports/scouting_", Sys.Date(), ".html")))
+if (interactive()) {
+  browseURL(file.path(getwd(), paste0("reports/scouting_", Sys.Date(), ".html")))
+}

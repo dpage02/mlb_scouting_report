@@ -1,0 +1,167 @@
+# ============================================================
+# MLB Scouting Report — GitHub Actions CI/CD
+# ============================================================
+# Runs the pipeline and renders all HTML reports, then
+# deploys them to GitHub Pages (gh-pages branch).
+#
+# Schedules (all UTC, converts to US/Eastern EDT UTC-4):
+#   10:00 AM ET  →  14:00 UTC
+#    4:00 PM ET  →  20:00 UTC
+#    6:30 PM ET  →  22:30 UTC
+#
+# To trigger manually: Actions tab → Run workflow
+# ============================================================
+
+name: Daily MLB Report
+
+on:
+  schedule:
+    - cron: "0 14 * * *"    # 10:00 AM ET (EDT)
+    - cron: "0 20 * * *"    #  4:00 PM ET (EDT)
+    - cron: "30 22 * * *"   #  6:30 PM ET (EDT)
+  workflow_dispatch:          # manual trigger from Actions tab
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      RENV_PATHS_LIBRARY: ~/.local/share/renv
+
+    steps:
+      # --------------------------------------------------------
+      # 1. Checkout repo
+      # --------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # --------------------------------------------------------
+      # 2. Install Quarto
+      # --------------------------------------------------------
+      - name: Install Quarto
+        uses: quarto-dev/quarto-actions/setup@v2
+
+      # --------------------------------------------------------
+      # 3. Install R
+      # --------------------------------------------------------
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: "4.4"
+          use-public-rspm: true
+
+      # --------------------------------------------------------
+      # 4. System dependencies (for R packages that need them)
+      # --------------------------------------------------------
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y \
+            libcurl4-openssl-dev \
+            libssl-dev \
+            libxml2-dev \
+            libfontconfig1-dev \
+            libharfbuzz-dev \
+            libfribidi-dev \
+            libfreetype6-dev \
+            libpng-dev \
+            libtiff5-dev \
+            libjpeg-dev \
+            libgit2-dev
+
+      # --------------------------------------------------------
+      # 5. Cache R packages
+      # --------------------------------------------------------
+      - name: Cache R packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.RENV_PATHS_LIBRARY }}
+          key: r-pkgs-${{ runner.os }}-${{ hashFiles('**/DESCRIPTION') }}-v2
+          restore-keys: |
+            r-pkgs-${{ runner.os }}-
+
+      # --------------------------------------------------------
+      # 6. Install R packages
+      # --------------------------------------------------------
+      - name: Install R packages
+        run: |
+          Rscript -e "
+            pkgs <- c(
+              'tidyverse', 'lubridate', 'jsonlite', 'httr', 'readr',
+              'stringr', 'glue', 'here', 'gt', 'quarto', 'R.utils',
+              'rvest', 'DT', 'purrr', 'dplyr', 'tibble',
+              'baseballr', 'Lahman'
+            )
+            installed <- rownames(installed.packages())
+            missing   <- setdiff(pkgs, installed)
+            if (length(missing) > 0) {
+              install.packages(missing,
+                repos = 'https://cloud.r-project.org',
+                dependencies = TRUE)
+            }
+            cat('All R packages ready.\n')
+          "
+
+      # --------------------------------------------------------
+      # 7. Cache base pipeline data (season stats, refreshed weekly)
+      # --------------------------------------------------------
+      - name: Ensure data directory exists
+        run: mkdir -p data
+
+      - name: Get ISO week number
+        id: week
+        run: echo "week=$(date +%V)" >> $GITHUB_OUTPUT
+
+      - name: Cache base pipeline data
+        uses: actions/cache@v4
+        with:
+          path: data/base_cache.rds
+          key: base-cache-${{ runner.os }}-week-${{ steps.week.outputs.week }}
+          restore-keys: |
+            base-cache-${{ runner.os }}-week-
+
+      # --------------------------------------------------------
+      # 8. Run full pipeline + render all reports
+      # --------------------------------------------------------
+      - name: Run pipeline and render reports
+        run: |
+          Rscript -e "
+            setwd('${{ github.workspace }}')
+            tryCatch(
+              source('run_all.R'),
+              error = function(e) {
+                cat('Pipeline error:', conditionMessage(e), '\n')
+                quit(status = 1)
+              }
+            )
+          "
+
+      # --------------------------------------------------------
+      # 9. Generate index.html landing page
+      # --------------------------------------------------------
+      - name: Generate index page
+        run: |
+          Rscript -e "
+            setwd('${{ github.workspace }}')
+            source('generate_index.R')
+          "
+
+      # --------------------------------------------------------
+      # 10. Deploy reports/ to GitHub Pages (gh-pages branch)
+      # --------------------------------------------------------
+      - name: Get report date
+        id: date
+        run: echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./reports
+          publish_branch: gh-pages
+          force_orphan: false
+          user_name: "github-actions[bot]"
+          user_email: "github-actions[bot]@users.noreply.github.com"
+          commit_message: "Deploy MLB reports ${{ steps.date.outputs.date }}"
