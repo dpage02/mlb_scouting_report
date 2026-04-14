@@ -117,12 +117,23 @@ jobs:
         run: echo "week=$(date +%V)" >> $GITHUB_OUTPUT
 
       - name: Cache base pipeline data
+        id: base-cache
         uses: actions/cache@v4
         with:
           path: data/base_cache.rds
           key: base-cache-${{ runner.os }}-week-${{ steps.week.outputs.week }}
           restore-keys: |
             base-cache-${{ runner.os }}-week-
+
+      - name: Bootstrap base cache from release (first run only)
+        if: steps.base-cache.outputs.cache-hit != 'true'
+        run: |
+          gh release download cache-bootstrap \
+            --pattern "base_cache.rds" \
+            --dir data \
+            --clobber 2>/dev/null || echo "No bootstrap release found — will do full rebuild"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # --------------------------------------------------------
       # 8. Run full pipeline + render all reports
