@@ -2018,6 +2018,74 @@ make_lineup_projection_html <- function(gpk) {
   )
 }
 
+# make_prediction_data(gpk)
+# Returns the raw numeric projection used by both make_prediction_html
+# and mlb_print.qmd — single source of truth for the model.
+make_prediction_data <- function(gpk) {
+  game   <- game_context    %>% dplyr::filter(game_pk == gpk)
+  sps    <- starter_matchup %>% dplyr::filter(game_pk == gpk)
+  lineup <- lineup_context  %>% dplyr::filter(game_pk == gpk)
+  bullpen <- if (exists("bullpen_grid")) bullpen_grid %>% dplyr::filter(game_pk == gpk) else
+             dplyr::tibble()
+
+  away_sp <- sps %>% dplyr::filter(side == "away")
+  home_sp <- sps %>% dplyr::filter(side == "home")
+
+  away_team <- dplyr::coalesce(game$away_team_name[1], "Away")
+  home_team <- dplyr::coalesce(game$home_team_name[1], "Home")
+
+  away_sp_fip  <- if (nrow(away_sp) > 0) .best_fip_val(away_sp) else LEAGUE_AVG_FIP
+  home_sp_fip  <- if (nrow(home_sp) > 0) .best_fip_val(home_sp) else LEAGUE_AVG_FIP
+
+  away_sp_ipgs <- if (nrow(away_sp) > 0) .sp_ip_per_gs(away_sp) else 5.5
+  home_sp_ipgs <- if (nrow(home_sp) > 0) .sp_ip_per_gs(home_sp) else 5.5
+  away_sp_frac <- min(away_sp_ipgs / 9, 0.85)
+  home_sp_frac <- min(home_sp_ipgs / 9, 0.85)
+
+  away_bp_era  <- if (nrow(bullpen) > 0) .bullpen_era(bullpen %>% dplyr::filter(side == "away")) else LEAGUE_AVG_FIP
+  home_bp_era  <- if (nrow(bullpen) > 0) .bullpen_era(bullpen %>% dplyr::filter(side == "home")) else LEAGUE_AVG_FIP
+
+  away_blended <- away_sp_frac * away_sp_fip + (1 - away_sp_frac) * away_bp_era
+  home_blended <- home_sp_frac * home_sp_fip + (1 - home_sp_frac) * home_bp_era
+
+  away_wrc <- tryCatch(.team_wrc(lineup %>% dplyr::filter(side == "away")), error = function(e) 100)
+  home_wrc <- tryCatch(.team_wrc(lineup %>% dplyr::filter(side == "home")), error = function(e) 100)
+
+  pf            <- .park_factor(dplyr::coalesce(game$home_team_id[1], NA_integer_))
+  temp_f        <- .get_num(game, "game_temp_f")
+  weather_mult  <- if (!is.na(temp_f)) dplyr::case_when(
+    temp_f < 40 ~ 0.93, temp_f < 50 ~ 0.96, temp_f < 60 ~ 0.98,
+    temp_f > 95 ~ 1.05, temp_f > 85 ~ 1.03, temp_f > 75 ~ 1.01, TRUE ~ 1.00
+  ) else 1.0
+  wind_mult_val <- .wind_mult(.get_num(game, "wind_speed_mph"),
+                              if ("wind_direction" %in% names(game) && !is.na(game$wind_direction[1]))
+                                as.character(game$wind_direction[1]) else NA_character_)
+
+  away_def_mult <- .team_defense_factor(gpk, "home")
+  home_def_mult <- .team_defense_factor(gpk, "away")
+  away_form     <- .team_form_mult(lineup %>% dplyr::filter(side == "away"))
+  home_form     <- .team_form_mult(lineup %>% dplyr::filter(side == "home"))
+
+  away_exp_r <- LEAGUE_AVG_RUNS * (away_wrc / 100) * pf * weather_mult * wind_mult_val *
+                (home_blended / LEAGUE_AVG_FIP) * away_form * away_def_mult
+  home_exp_r <- LEAGUE_AVG_RUNS * (home_wrc / 100) * pf * weather_mult * wind_mult_val *
+                (away_blended / LEAGUE_AVG_FIP) * home_form * home_def_mult + HOME_FIELD_BONUS
+  away_exp_r <- max(1.5, min(away_exp_r, 9.5))
+  home_exp_r <- max(1.5, min(home_exp_r, 9.5))
+
+  p_home   <- .poisson_win_prob(home_exp_r, away_exp_r)
+  p_away   <- 1 - p_home
+
+  list(
+    away_runs     = away_exp_r,
+    home_runs     = home_exp_r,
+    away_win_pct  = p_away,
+    home_win_pct  = p_home,
+    away_team     = away_team,
+    home_team     = home_team
+  )
+}
+
 make_prediction_html <- function(gpk) {
   game   <- game_context    %>% dplyr::filter(game_pk == gpk)
   sps    <- starter_matchup %>% dplyr::filter(game_pk == gpk)

@@ -292,57 +292,8 @@ make_lineup_print_gt <- function(gpk, side_filter) {
   }, error = function(e) NULL)
 }
 
-.build_pred_data <- function(gpk) {
-  tryCatch({
-    game    <- game_context %>% dplyr::filter(game_pk == gpk)
-    sm      <- starter_matchup %>% dplyr::filter(game_pk == gpk)
-    away_sm <- sm %>% dplyr::filter(side == "away")
-    home_sm <- sm %>% dplyr::filter(side == "home")
-
-    .get_blended_fip <- function(row) {
-      cur_fip   <- dplyr::coalesce(row$fg_FIP[1],  row$fg_xFIP[1], 4.20)
-      prior_fip <- dplyr::coalesce(row$prior_xfip[1], cur_fip)
-      gs        <- dplyr::coalesce(row$mlb_gs[1], 0L)
-      w_cur     <- min(gs / 15, 1)
-      cur_fip * w_cur + prior_fip * (1 - w_cur)
-    }
-
-    away_fip <- if (nrow(away_sm) > 0) .get_blended_fip(away_sm) else 4.20
-    home_fip <- if (nrow(home_sm) > 0) .get_blended_fip(home_sm) else 4.20
-
-    pf <- 1.0
-    wm <- .wind_mult(game$wind_speed_mph[1], game$wind_direction[1])
-
-    away_wrc <- tryCatch(.team_wrc(
-      lineup_context %>% dplyr::filter(game_pk == gpk, side == "away")
-    ), error = function(e) 100)
-    home_wrc <- tryCatch(.team_wrc(
-      lineup_context %>% dplyr::filter(game_pk == gpk, side == "home")
-    ), error = function(e) 100)
-
-    LEAGUE_AVG_RUNS <- 4.43; LEAGUE_AVG_FIP <- 4.15
-    away_runs <- LEAGUE_AVG_RUNS * (away_wrc / 100) * pf * (1 + wm * 0.5) *
-                 (home_fip / LEAGUE_AVG_FIP)
-    home_runs <- LEAGUE_AVG_RUNS * (home_wrc / 100) * pf * (1 + wm * 0.5) *
-                 (away_fip / LEAGUE_AVG_FIP)
-
-    away_runs <- max(away_runs, 0.5); home_runs <- max(home_runs, 0.5)
-
-    ppois_win <- function(mu_a, mu_h, max_r = 20) {
-      r <- seq(0, max_r)
-      p_a <- dpois(r, mu_a); p_h <- dpois(r, mu_h)
-      win <- sum(outer(p_a, p_h, "*") * lower.tri(matrix(1, max_r+1, max_r+1), diag=FALSE))
-      tie <- sum(p_a * p_h)
-      c(win = win, tie = tie, loss = 1 - win - tie)
-    }
-    res <- ppois_win(away_runs, home_runs)
-    away_wp <- res["win"]  + 0.5 * res["tie"]
-    home_wp <- res["loss"] + 0.5 * res["tie"]
-
-    list(away_runs = away_runs, home_runs = home_runs,
-         away_win_pct = away_wp, home_win_pct = home_wp)
-  }, error = function(e) NULL)
-}
+# Prediction data comes from make_prediction_data() in _game_narrative_helpers.R
+# (single source of truth — same model as the prediction page)
 ```
 
 ```{r page1-header}
@@ -408,7 +359,7 @@ if (nchar(narrative_html) > 0) cat(narrative_html, "\n\n")
 ```{r projection-section}
 #| output: asis
 tryCatch({
-  pred_raw <- .build_pred_data(gpk)
+  pred_raw <- make_prediction_data(gpk)
   if (!is.null(pred_raw)) {
     away_runs <- sprintf("%.1f", pred_raw$away_runs)
     home_runs <- sprintf("%.1f", pred_raw$home_runs)
