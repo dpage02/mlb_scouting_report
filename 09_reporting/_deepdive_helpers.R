@@ -7,7 +7,8 @@
 #   gt builder functions for the game deep dive report.
 #
 # FUNCTIONS:
-#   make_lineup_full_gt(gpk, side)      — full stat table per side
+#   make_lineup_full_gt(gpk, side)      — three-tier stat tables (Overview/Advanced/Stat Nerd)
+#   make_lineup_tabset_html(tables, uid) — Bootstrap 5 tab wrapper for lineup tables
 #   make_career_offense_gt(gpk, side)   — multi-year batting history per side
 #   make_career_pitching_gt(gpk)        — multi-year pitching history for starters
 #   make_pitcher_full_gt(gpk)           — batted ball + pitch discipline for starters
