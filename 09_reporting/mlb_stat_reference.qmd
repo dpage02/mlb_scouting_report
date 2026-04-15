@@ -93,6 +93,137 @@ cat('</div>\n')
 
 ---
 
+## Stat Definitions
+
+```{r stat-defs}
+#| output: asis
+
+make_def_table <- function(data, title) {
+  data %>%
+    gt::gt() %>%
+    gt::tab_header(title = title) %>%
+    gt::cols_label(
+      Stat     = "Stat",
+      Full     = "Full Name",
+      Measures = "What It Measures",
+      Better   = gt::md("&#x2191; Better?")
+    ) %>%
+    gt::cols_width(
+      Stat     ~ gt::px(90),
+      Full     ~ gt::px(170),
+      Better   ~ gt::px(70)
+    ) %>%
+    gt::tab_style(
+      style    = gt::cell_text(weight = "bold", color = "#1a73e8"),
+      locations = gt::cells_body(columns = "Stat")
+    ) %>%
+    gt::tab_style(
+      style    = list(gt::cell_fill(color = "#d4edda"),
+                      gt::cell_text(weight = "bold", color = "#155724")),
+      locations = gt::cells_body(columns = "Better",
+                                  rows = Better == "Yes")
+    ) %>%
+    gt::tab_style(
+      style    = list(gt::cell_fill(color = "#f8d7da"),
+                      gt::cell_text(weight = "bold", color = "#721c24")),
+      locations = gt::cells_body(columns = "Better",
+                                  rows = Better == "No")
+    ) %>%
+    gt::tab_style(
+      style    = gt::cell_fill(color = "#fff3cd"),
+      locations = gt::cells_body(columns = "Better",
+                                  rows = Better == "Context")
+    ) %>%
+    gt::fmt_missing(columns = dplyr::everything(), missing_text = "—") %>%
+    gt::tab_options(
+      table.font.size           = 12,
+      heading.align             = "left",
+      data_row.padding          = gt::px(5),
+      column_labels.font.weight = "bold",
+      table.width               = gt::pct(100)
+    ) %>%
+    gt::opt_stylize(style = 1, color = "blue")
+}
+
+# ── Hitting definitions ──────────────────────────────────────
+hitting_defs <- dplyr::tribble(
+  ~Stat,      ~Full,                          ~Measures,                                                                                              ~Better,
+  "AVG",      "Batting Average",              "Hits per at-bat. Simple but ignores walks and power.",                                                 "Yes",
+  "OBP",      "On-Base Percentage",           "How often a batter reaches base (H + BB + HBP). Better measure of plate skill than AVG.",              "Yes",
+  "SLG",      "Slugging Percentage",          "Total bases per at-bat. Rewards extra-base hits over singles.",                                         "Yes",
+  "OPS",      "On-Base + Slugging",           "OBP + SLG combined. Quick proxy for overall offensive value.",                                          "Yes",
+  "wRC+",     "Weighted Runs Created Plus",   "Runs created above average, park & league adjusted. 100 = league average. Best single offensive stat.", "Yes",
+  "wOBA",     "Weighted On-Base Average",     "Weights each outcome (walk, single, HR) by actual run value. Correlates tightly with run scoring.",     "Yes",
+  "xwOBA",    "Expected wOBA",                "wOBA based on exit velocity & launch angle, not actual outcomes. Strips luck from batted balls.",        "Yes",
+  "ISO",      "Isolated Power",               "SLG minus AVG. Pure extra-base hit power — eliminates singles from the equation.",                      "Yes",
+  "BABIP",    "Batting Avg on Balls in Play", "AVG on non-HR batted balls. League avg ~.295. High BABIP may signal luck or speed.",                    "Context",
+  "BB%",      "Walk Rate",                    "Unintentional walks per plate appearance. Measures plate discipline and pitch recognition.",              "Yes",
+  "K%",       "Strikeout Rate",               "Strikeouts per plate appearance. High K% limits offensive ceiling.",                                     "No",
+  "Chase%",   "Chase Rate",                   "Swings on pitches outside the strike zone. Lower = better discipline.",                                  "No",
+  "ZCon%",    "Zone Contact Rate",            "Contact rate on pitches in the zone. High = difficult to strike out on hittable pitches.",               "Yes",
+  "SwStr%",   "Swinging Strike Rate",         "Swings and misses per pitch seen. Key bat-to-ball contact indicator.",                                   "No",
+  "CSW%",     "Called Strike + Whiff %",      "Called strikes + swinging strikes per pitch. Measures how often a pitcher wins a pitch.",                "No",
+  "F-Strike%","First-Strike %",               "How often the first pitch is a strike. High = better counts for pitchers.",                             "Context",
+  "EV",       "Exit Velocity",                "Average speed off the bat (mph). Higher = harder contact, more run value.",                             "Yes",
+  "HH%",      "Hard-Hit Rate",                "Batted balls at 95+ mph. Statcast's hard contact threshold.",                                           "Yes",
+  "Brl%",     "Barrel Rate",                  "Batted balls with EV/launch angle combo yielding .500+ AVG and 1.500+ SLG. Best quality-of-contact stat.", "Yes",
+  "GB%",      "Ground Ball Rate",             "Batted balls hit on the ground. High GB% limits HR but can increase BABIP.",                            "Context",
+  "LD%",      "Line Drive Rate",              "Line drives as % of batted balls. Highest BABIP rate of any batted ball type.",                          "Context",
+  "FB%",      "Fly Ball Rate",                "Fly balls as % of batted balls. More fly balls = more HR chances.",                                      "Context",
+  "HR/FB",    "HR per Fly Ball",              "Home runs as % of fly balls. Measures power on contact.",                                               "Yes",
+  "Pull%",    "Pull Rate",                    "Batted balls hit to pull side. High pull% often correlates with power.",                                 "Context",
+  "Sprint",   "Sprint Speed (mph)",           "Statcast feet-per-second converted to mph. Elite threshold: 30 ft/s (~20.5 mph in Statcast units).",    "Yes"
+)
+
+cat(gt::as_raw_html(make_def_table(hitting_defs, "Hitting & Plate Discipline — Definitions")), "\n\n")
+
+# ── Pitching definitions ─────────────────────────────────────
+pitching_defs <- dplyr::tribble(
+  ~Stat,      ~Full,                          ~Measures,                                                                                              ~Better,
+  "ERA",      "Earned Run Average",           "Earned runs per 9 innings. Simple, widely cited, but influenced by defense and luck.",                  "No",
+  "ERA+",     "Adjusted ERA+",                "ERA scaled to league/park, inverted so 100 = average. 120 = 20% better than average.",                  "Yes",
+  "FIP",      "Fielding Independent Pitching","ERA estimator using only K, BB, HBP, HR — removes defense. Better predictor than ERA.",                 "No",
+  "xFIP",     "Expected FIP",                 "FIP with HR/FB regressed to league average. Removes HR luck.",                                           "No",
+  "xERA",     "Expected ERA (Statcast)",      "ERA estimate from Statcast expected stats (xwOBA) allowed. Best contact-quality predictor.",             "No",
+  "SIERA",    "Skill-Interactive ERA",        "ERA estimator that accounts for GB/FB/K interaction. Considered most predictive ERA estimator.",         "No",
+  "WHIP",     "Walks + Hits per Inning",      "Base runners allowed per inning. Quick measure of control + contact allowed.",                           "No",
+  "K%",       "Strikeout Rate",               "Batters struck out per batter faced. Higher = more dominant stuff.",                                     "Yes",
+  "BB%",      "Walk Rate",                    "Unintentional walks per batter faced. Lower = better command.",                                          "No",
+  "K-BB%",    "K minus BB Rate",              "Strikeout rate minus walk rate. Best single command/stuff combined metric.",                             "Yes",
+  "SwStr%",   "Swinging Strike Rate",         "Swinging strikes per pitch. Best in-game stuff indicator.",                                             "Yes",
+  "CSW%",     "Called Strike + Whiff %",      "Called strikes + swinging strikes per pitch. Measures pitch effectiveness.",                             "Yes",
+  "Chase%",   "Batter Chase Rate",            "How often batters swing at pitches outside the zone against this pitcher.",                              "Yes",
+  "Zone%",    "Zone Rate",                    "Pitches thrown in the strike zone. Too low = walks, too high = hittable.",                               "Context",
+  "GB%",      "Ground Ball Rate",             "Ground balls as % of batted balls allowed. High GB% suppresses HR.",                                     "Yes",
+  "BABIP",    "BABIP Against",                "AVG on balls in play against pitcher. Near .295 = expected, far off = luck.",                            "Context",
+  "LOB%",     "Left on Base %",               "Runners left on base. High LOB% (80%+) often means luck is involved — expect regression.",              "Context",
+  "Avg EV",   "Avg Exit Velocity Against",    "Average speed off bat against this pitcher. Lower = generating weak contact.",                           "No",
+  "Brl%",     "Barrel Rate Against",          "Barrels allowed as % of batted balls. Best contact-quality-against metric.",                             "No",
+  "xwOBA",    "xwOBA Against",                "Expected wOBA based on contact quality allowed. Best Statcast pitching metric.",                          "No",
+  "fWAR",     "FanGraphs WAR",                "Wins Above Replacement using FIP-based pitching value. Season totals: 2 = solid starter, 5+ = ace.",    "Yes"
+)
+
+cat(gt::as_raw_html(make_def_table(pitching_defs, "Pitching — Definitions")), "\n\n")
+
+# ── Baserunning & Defense definitions ────────────────────────
+other_defs <- dplyr::tribble(
+  ~Stat,      ~Full,                          ~Measures,                                                                                              ~Better,
+  "Spd",      "Speed Score (Bill James)",     "Composite speed metric from SB%, runs scored, triples, and position. Scale 0-10.",                     "Yes",
+  "UBR",      "Ultimate Base Running",        "Runs above average on non-SB baserunning (taking extra bases, avoiding outs on bases).",                "Yes",
+  "BsR",      "Base Running Runs",            "Total baserunning value: UBR + wSB combined. Overall baserunning contribution in runs.",                "Yes",
+  "wSB",      "Weighted Stolen Base Runs",    "Stolen base value in runs, accounting for both successful steals and caught stealing.",                  "Yes",
+  "OAA",      "Outs Above Average",           "Statcast defensive metric — outs made vs. expected based on catch difficulty. 0 = average.",           "Yes",
+  "DRS",      "Defensive Runs Saved",         "Runs saved above average on defense (Sports Info Solutions). 0 = average, +10 = Gold Glove level.",     "Yes",
+  "UZR",      "Ultimate Zone Rating",         "Runs above average on defense using batted ball location. Multi-year samples most reliable.",            "Yes",
+  "fWAR",     "FanGraphs WAR (Position)",     "Wins Above Replacement: batting + baserunning + defense + positional adjustment. 2 = solid, 5 = MVP.",  "Yes",
+  "bWAR",     "Baseball-Reference WAR",       "Similar to fWAR but uses RA9 (runs allowed) for pitching and slightly different defense methodology.",   "Yes"
+)
+
+cat(gt::as_raw_html(make_def_table(other_defs, "Baserunning, Defense & WAR — Definitions")), "\n\n")
+```
+
+---
+
 ## Hitting Grades
 
 ```{r hitting-grades}

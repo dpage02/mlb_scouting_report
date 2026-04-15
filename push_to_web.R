@@ -17,40 +17,39 @@ if (!dir.exists("reports")) stop("No reports/ directory found. Run run_all.R fir
 
 source("generate_index.R")
 
-# Get auth token from GitHub CLI
-gh_token <- trimws(system("gh auth token 2>/dev/null", intern = TRUE)[1])
-if (is.na(gh_token) || nchar(gh_token) < 10) {
-  stop("Could not get GitHub token. Make sure `gh auth login` has been run.")
+# Verify gh CLI is authenticated
+gh_check <- system("gh auth status 2>/dev/null", intern = FALSE)
+if (gh_check != 0) {
+  stop("Not authenticated. Run `gh auth login` first.")
 }
 
-# Get remote URL and inject token
+# Get remote URL (plain, no token injection — gh credential helper handles auth)
 remote_url <- trimws(system("git remote get-url origin", intern = TRUE)[1])
-# Convert https://github.com/... → https://x-access-token:TOKEN@github.com/...
-auth_url <- sub("https://", paste0("https://x-access-token:", gh_token, "@"), remote_url)
 
-message("Preparing reports (last ", KEEP_DAYS, " days)...")
+# Find gh CLI path for credential helper
+gh_path <- trimws(system("which gh", intern = TRUE)[1])
 
-# Determine which report files to include:
-# - Always: index.html, stat_reference.html
-# - Date-stamped files: only if within KEEP_DAYS
-cutoff_date <- Sys.Date() - KEEP_DAYS
+message("Preparing today's reports for push...")
 
+# Only push today's files + permanent pages (index, stat_reference, etc.)
+# The gh-pages branch accumulates history — older dates stay from prior pushes.
+# KEEP_DAYS controls a periodic cleanup of stale files already on the branch.
 all_files  <- list.files("reports", full.names = TRUE, recursive = FALSE)
 keep_files <- character(0)
 
 for (f in all_files) {
   bn <- basename(f)
-  # Extract date from filename (pattern: something_YYYY-MM-DD_...)
   dm <- regmatches(bn, regexpr("\\d{4}-\\d{2}-\\d{2}", bn))
   if (length(dm) == 0) {
     # No date → always include (index.html, stat_reference.html, etc.)
     keep_files <- c(keep_files, f)
-  } else {
-    if (as.Date(dm) >= cutoff_date) keep_files <- c(keep_files, f)
+  } else if (as.Date(dm) == Sys.Date()) {
+    # Only today's date-stamped reports
+    keep_files <- c(keep_files, f)
   }
 }
 
-message("  Keeping ", length(keep_files), " of ", length(all_files), " files")
+message("  Pushing ", length(keep_files), " files (today + permanent pages)")
 
 tmpdir <- paste0("/tmp/ghpages_", format(Sys.time(), "%Y%m%d%H%M%S"))
 dir.create(tmpdir, recursive = TRUE)
@@ -72,9 +71,24 @@ git init -q
 git checkout -q -b gh-pages
 git remote add origin %s
 
-# Fetch existing gh-pages to preserve older files not in this push
+# Use gh CLI as credential helper (handles OAuth tokens correctly)
+git config credential.helper "!%s auth git-credential"
+git config user.email "deploy@mlb-scouting-report"
+git config user.name "MLB Scouting Report Deploy"
+# Increase HTTP buffer to handle large HTML file pushes (default 1MB causes HTTP 400)
+git config http.postBuffer 524288000
+
+# Fetch existing gh-pages so prior dates are preserved
 git fetch origin gh-pages --depth=1 2>/dev/null && \
-  git reset -q --soft FETCH_HEAD || true
+  git checkout -q FETCH_HEAD -- . 2>/dev/null || true
+
+# Remove files older than KEEP_DAYS from the branch
+find . -maxdepth 1 -name "*[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*" | while read f; do
+  fdate=$(echo "$f" | grep -oE "[0-9]{4}-[0-9]{2}-[0-9]{2}")
+  if [ -n "$fdate" ] && [ "$fdate" \\< "%s" ]; then
+    rm -f "$f"
+  fi
+done
 
 git add -A
 git commit -q -m "Deploy reports %s" --allow-empty
@@ -84,8 +98,10 @@ cd /tmp
 rm -rf %s
 ',
   shQuote(tmpdir),
-  shQuote(auth_url),
-  Sys.Date(),
+  shQuote(remote_url),
+  gh_path,
+  format(Sys.Date() - KEEP_DAYS),  # cutoff for stale file removal
+  Sys.Date(),                        # commit message date
   shQuote(tmpdir)
 )
 

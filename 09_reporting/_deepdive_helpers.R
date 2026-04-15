@@ -1009,9 +1009,13 @@ make_pitcher_full_gt <- function(gpk) {
       columns  = dplyr::any_of(c("Avg EV", "EV95")),
       decimals = 1
     ) %>%
-    gt::fmt_percent(
+    gt::fmt_number(
       columns  = dplyr::any_of(c("Brl%")),
       decimals = 1
+    ) %>%
+    gt::text_transform(
+      locations = gt::cells_body(columns = dplyr::any_of(c("Brl%"))),
+      fn = function(x) dplyr::if_else(x == "\u2014", "\u2014", paste0(x, "%"))
     ) %>%
     gt::fmt_number(
       columns  = dplyr::any_of(c("xBA", "xSLG", "xwOBA", "wOBA")),
@@ -2332,6 +2336,7 @@ make_batter_intelligence_gt <- function(gpk, side_filter) {
         subtitle = paste0("Core production \u00b7 ", season_label)
       ) %>%
       gt::fmt_integer(columns = dplyr::any_of(c("PA"))) %>%
+      gt::fmt_number(columns  = dplyr::any_of(c("wRC+")), decimals = 0) %>%
       gt::fmt_number(columns  = dplyr::any_of(c("ISO", "wOBA")), decimals = 3) %>%
       gt::fmt_percent(columns = dplyr::any_of(c("BB%", "K%")), decimals = 1) %>%
       gt::fmt_missing(columns = dplyr::everything(), missing_text = "\u2014") %>%
@@ -2793,6 +2798,17 @@ make_baserunning_gt <- function(gpk, side_filter) {
     raw <- lineup %>%
       dplyr::left_join(full_stats, by = "mlbam_id", suffix = c("", "_dup")) %>%
       dplyr::select(-dplyr::ends_with("_dup"))
+
+    # Supplement with baserunning master (contains fg_UBR, fg_Spd not in offense_master)
+    if (exists("baserunning_master_season") && nrow(baserunning_master_season) > 0) {
+      br_sup <- baserunning_master_season %>%
+        dplyr::arrange(mlbam_id, dplyr::desc(dplyr::coalesce(mlb_sb, 0L))) %>%
+        dplyr::distinct(mlbam_id, .keep_all = TRUE) %>%
+        dplyr::select(mlbam_id, dplyr::any_of(c("fg_UBR", "fg_Spd", "fg_wSB", "fg_wGDP")))
+      raw <- raw %>%
+        dplyr::left_join(br_sup, by = "mlbam_id", suffix = c("", "_br")) %>%
+        dplyr::select(-dplyr::ends_with("_br"))
+    }
 
     sb_vals  <- if ("mlb_sb"         %in% names(raw)) raw$mlb_sb         else NA_integer_
     cs_vals  <- if ("mlb_cs"         %in% names(raw)) raw$mlb_cs         else NA_integer_

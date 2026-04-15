@@ -66,6 +66,7 @@ pull_pitcher_split <- function(sit_code, season_val) {
     mlb_ip     = "stat.inningsPitched",
     mlb_bf     = "stat.battersFaced",
     mlb_era    = "stat.era",
+    mlb_er     = "stat.earnedRuns",
     mlb_whip   = "stat.whip",
     mlb_h      = "stat.hits",
     mlb_hr     = "stat.homeRuns",
@@ -101,6 +102,13 @@ pull_pitcher_split <- function(sit_code, season_val) {
       mlb_ip     = as.numeric(mlb_ip),
       mlb_bf     = as.integer(mlb_bf),
       mlb_era    = as.numeric(mlb_era),
+      mlb_er     = as.integer(mlb_er),
+      # MLB API sometimes returns "-.--" for ERA (no earned runs yet); compute from components
+      mlb_era    = dplyr::if_else(
+        is.na(mlb_era) & !is.na(mlb_er) & !is.na(mlb_ip) & as.numeric(mlb_ip) > 0,
+        round((mlb_er / as.numeric(mlb_ip)) * 9, 2),
+        mlb_era
+      ),
       mlb_whip   = as.numeric(mlb_whip),
       mlb_h      = as.integer(mlb_h),
       mlb_hr     = as.integer(mlb_hr),
@@ -155,9 +163,13 @@ player_season_mlb_pitching_splits <- dplyr::bind_rows(splits_vr, splits_vl) %>%
   dplyr::filter(!is.na(mlbam_id)) %>%
   dplyr::arrange(mlbam_id, split_code)
 
+era_coverage <- if ("mlb_era" %in% names(player_season_mlb_pitching_splits))
+  sum(!is.na(player_season_mlb_pitching_splits$mlb_era)) else 0
+
 message("04_mlb_pitching_splits complete: ",
         nrow(player_season_mlb_pitching_splits), " rows | ",
         dplyr::n_distinct(player_season_mlb_pitching_splits$mlbam_id),
         " pitchers | season ", season_to_pull,
         " | vs RHH: ", sum(player_season_mlb_pitching_splits$split_code == "vr"),
-        " | vs LHH: ", sum(player_season_mlb_pitching_splits$split_code == "vl"))
+        " | vs LHH: ", sum(player_season_mlb_pitching_splits$split_code == "vl"),
+        " | ERA non-NA: ", era_coverage)

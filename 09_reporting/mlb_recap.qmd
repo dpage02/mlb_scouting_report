@@ -1,0 +1,155 @@
+---
+title: "Yesterday's Results"
+date: today
+params:
+  recap_date: null
+format:
+  html:
+    self-contained: true
+    embed-resources: true
+    theme: cosmo
+    toc: false
+    smooth-scroll: true
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+#| output: false
+if (basename(getwd()) == "09_reporting") setwd("..")
+
+library(dplyr)
+library(httr)
+library(jsonlite)
+
+source("09_reporting/_recap_helpers.R")
+
+recap_date <- if (!is.null(params$recap_date)) as.Date(params$recap_date) else Sys.Date() - 1
+recap_label <- format(recap_date, "%A, %B %d, %Y")
+```
+
+```{r header}
+#| output: asis
+cat(sprintf("# Yesterday's Results — %s\n\n", recap_label))
+```
+
+```{=html}
+<style>
+.recap-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 900px;
+}
+
+.recap-card {
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 14px 18px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+.rc-matchup {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin-bottom: 10px;
+  color: #1a1a2e;
+}
+
+.rc-score {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #555;
+  padding: 0 4px;
+}
+
+.rc-winner {
+  color: #1a73e8;
+}
+
+.rc-status {
+  display: inline-block;
+  font-size: 0.75rem;
+  background: #fff3cd;
+  color: #856404;
+  border-radius: 4px;
+  padding: 2px 7px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+/* Linescore */
+.linescore-tbl {
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  margin-bottom: 10px;
+  width: auto;
+}
+.linescore-tbl th, .linescore-tbl td {
+  border: 1px solid #e0e0e0;
+  padding: 2px 6px;
+  text-align: center;
+  min-width: 22px;
+  color: #333;
+}
+.linescore-tbl th {
+  background: #f4f7fb;
+  font-weight: 600;
+  color: #666;
+}
+.linescore-tbl .ls-team {
+  font-weight: 700;
+  text-align: left;
+  padding-left: 8px;
+  min-width: 40px;
+  background: #f8f9fa;
+}
+.linescore-tbl .ls-r {
+  font-weight: 700;
+  background: #f4f7fb;
+}
+
+/* SP lines */
+.sp-lines {
+  font-size: 0.82rem;
+  color: #444;
+  margin-bottom: 8px;
+  line-height: 1.6;
+}
+.sp-team {
+  display: inline-block;
+  background: #e8f0fe;
+  color: #1a73e8;
+  font-weight: 700;
+  font-size: 0.72rem;
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-right: 4px;
+}
+.sp-name {
+  font-weight: 600;
+}
+
+/* HR list */
+.hr-list {
+  font-size: 0.82rem;
+  color: #444;
+  margin-bottom: 6px;
+}
+
+/* Decisions */
+.decisions {
+  font-size: 0.80rem;
+  color: #666;
+  margin-top: 4px;
+}
+</style>
+```
+
+```{r recap-body}
+#| output: asis
+cat(make_recap_html(recap_date), "\n\n")
+```

@@ -142,17 +142,33 @@ if (!is.null(TARGET_TEAM_ABBR)) {
 # ------------------------------------------------------------
 
 # Compute game_time vector outside transmute (avoids dplyr scoping issues)
-.dt_col  <- intersect(c("game_datetime", "reschedule_game_date",
-                         "resume_game_date"), names(schedule_day))[1]
-.tbd_col <- intersect(c("status_start_time_tbd", "start_time_tbd"),
+message("schedule_day columns with 'date' or 'time': ",
+        paste(grep("date|time|Date|Time", names(schedule_day), value=TRUE), collapse=", "))
+.dt_col  <- intersect(c("game_datetime", "game_date", "gameDate",
+                         "reschedule_game_date", "resume_game_date"),
+                       names(schedule_day))[1]
+.tbd_col <- intersect(c("status_start_time_tbd", "start_time_tbd",
+                         "status.startTimeTBD"),
                        names(schedule_day))[1]
 
 .game_time_vec <- if (!is.na(.dt_col)) {
-  dt_raw   <- schedule_day[[.dt_col]]
-  dt_utc   <- suppressWarnings(
+  dt_raw <- schedule_day[[.dt_col]]
+  # Try ISO 8601 UTC format first, then date-only fallback
+  dt_utc <- suppressWarnings(
     as.POSIXct(dt_raw, format = "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
   )
-  tbd_flag <- if (!is.na(.tbd_col)) schedule_day[[.tbd_col]] else FALSE
+  # Some API responses use milliseconds
+  dt_utc <- dplyr::if_else(
+    is.na(dt_utc),
+    suppressWarnings(as.POSIXct(dt_raw, format = "%Y-%m-%dT%H:%M:%OS", tz = "UTC")),
+    dt_utc
+  )
+  tbd_flag <- if (!is.na(.tbd_col)) {
+    v <- schedule_day[[.tbd_col]]
+    if (is.logical(v)) v else as.logical(v)
+  } else {
+    rep(FALSE, nrow(schedule_day))
+  }
   dplyr::if_else(
     !is.na(dt_utc) & !tbd_flag,
     format(dt_utc, "%I:%M %p ET", tz = "America/New_York"),

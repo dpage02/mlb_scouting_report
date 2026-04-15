@@ -184,7 +184,8 @@ pipeline_cache_objects <- c(
   "player_season_mlb_offense_splits", "player_season_mlb_pitching_splits",
   "batter_pitch_type_stats",
   "steamer_projections",
-  "team_standings"
+  "team_standings",
+  "baserunning_master_season"
 )
 
 pipeline_cache <- mget(

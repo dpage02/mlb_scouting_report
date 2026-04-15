@@ -172,8 +172,7 @@ for (nm in names(sp_full)) {
   cat(gt::as_raw_html(sp_full[[nm]]))
   cat("\n\n")
 }
-sp_career <- make_career_pitching_gt(gpk)
-if (!is.null(sp_career)) cat(gt::as_raw_html(sp_career))
+sp_career <- NULL  # Career history moved to team page
 ```
 
 ---
@@ -220,26 +219,6 @@ for (nm in names(tables_home)) {
   cat(gt::as_raw_html(tables_home[[nm]]))
   cat("\n\n")
 }
-```
-
----
-
-## Lineup — Career History
-
-*Last 5 seasons + current season, totals aggregated across teams.*
-
-### `r away_team`
-
-```{r career-away}
-#| output: asis
-cat(gt::as_raw_html(make_career_offense_gt(gpk, "away")))
-```
-
-### `r home_team`
-
-```{r career-home}
-#| output: asis
-cat(gt::as_raw_html(make_career_offense_gt(gpk, "home")))
 ```
 
 ---

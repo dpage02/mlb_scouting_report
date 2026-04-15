@@ -36,6 +36,13 @@ parse_report_file <- function(f) {
                       file=f, stringsAsFactors=FALSE))
   }
 
+  if (grepl("^recap_\\d{4}-\\d{2}-\\d{2}\\.html$", f)) {
+    dm <- regmatches(f, regexpr("\\d{4}-\\d{2}-\\d{2}", f))
+    return(data.frame(type="recap", date=dm,
+                      away=NA_character_, home=NA_character_,
+                      file=f, stringsAsFactors=FALSE))
+  }
+
   m <- regmatches(f, regexec(
     "^(scouting|deepdive|print|team|matchup|prediction|hitting)_(\\d{4}-\\d{2}-\\d{2})(?:_([A-Z0-9]+)(?:_([A-Z0-9]+))?)?\\.html$",
     f
@@ -183,6 +190,14 @@ if (nchar(past_rows) == 0) {
 # Stat reference link
 ref_link <- if ("stat_reference.html" %in% all_files) {
   '<a href="stat_reference.html" class="ref-link">Stat Reference &amp; Grade Ranges</a>'
+} else ""
+
+# Yesterday's recap link
+yesterday_str   <- as.character(Sys.Date() - 1)
+recap_file      <- paste0("recap_", yesterday_str, ".html")
+recap_link <- if (recap_file %in% all_files) {
+  sprintf('<a href="%s" class="ref-link" style="background:#0d1117; border-color:#58a6ff;">&#x23F0; Yesterday\'s Results</a>',
+          recap_file)
 } else ""
 
 # ------------------------------------------------------------
@@ -335,7 +350,7 @@ html <- sprintf('<!DOCTYPE html>
 <body>
   <header>
     <h1>⚾ MLB <span>Scouting Report</span></h1>
-    <div class="header-links">%s</div>
+    <div class="header-links">%s%s</div>
   </header>
   <main>
     <div class="today-date">%s</div>
@@ -343,8 +358,12 @@ html <- sprintf('<!DOCTYPE html>
     <div class="section-title">Today\'s Games</div>
     <div class="games-grid">%s</div>
 
-    <div class="section-title past-section">Past Games</div>
-    <div>%s</div>
+    <details class="past-section">
+      <summary class="section-title" style="cursor:pointer; list-style:none; display:flex; align-items:center; gap:8px;">
+        Past Games <span style="font-size:0.7rem; color:#58a6ff; font-weight:400;">click to expand</span>
+      </summary>
+      <div style="margin-top:10px;">%s</div>
+    </details>
   </main>
   <div class="footer">
     Updated %s ET &nbsp;·&nbsp; Reports auto-refresh at 10 AM, 4 PM, 6:30 PM ET
@@ -352,6 +371,7 @@ html <- sprintf('<!DOCTYPE html>
 </body>
 </html>',
   today_str,            # title date
+  recap_link,           # header recap link
   ref_link,             # header ref link
   today_str,            # h2 date
   scouting_link,        # overview link

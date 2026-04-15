@@ -326,14 +326,36 @@ WRC_STAB_PA <- 550L
       if ("batting_slot" %in% names(lineup_rows)) lineup_rows$batting_slot[i] else NA_integer_
     )
 
-    # 1. True-talent wRC+ (Steamer > Marcel)
-    base_wrc <- NA_real_
+    # 1. True-talent wRC+
+    # Blend actual season wRC+ with Steamer/Marcel based on PA:
+    #   <30 PA  → preseason projection only
+    #   30 PA   → 20% actual, 80% projection
+    #   100 PA  → 55% actual, 45% projection
+    #   200 PA  → 75% actual, 25% projection
+    #   400+ PA → 90% actual, 10% projection
+    actual_wrc <- if ("fg_wRC_plus" %in% names(lineup_rows) &&
+                      !is.na(lineup_rows$fg_wRC_plus[i]))
+      as.numeric(lineup_rows$fg_wRC_plus[i]) else NA_real_
+    actual_pa  <- if ("mlb_pa" %in% names(lineup_rows) &&
+                      !is.na(lineup_rows$mlb_pa[i]))
+      as.numeric(lineup_rows$mlb_pa[i]) else 0
+
+    proj_wrc <- NA_real_
     if (steamer_ok) {
       st_row <- steamer_projections[steamer_projections$mlbam_id == pid, ]
       if (nrow(st_row) > 0 && !is.na(st_row$steamer_wrc_plus[1]))
-        base_wrc <- as.numeric(st_row$steamer_wrc_plus[1])
+        proj_wrc <- as.numeric(st_row$steamer_wrc_plus[1])
     }
-    if (is.na(base_wrc)) base_wrc <- .stabilized_wrc(pid)
+    if (is.na(proj_wrc)) proj_wrc <- .stabilized_wrc(pid)
+
+    base_wrc <- if (!is.na(actual_wrc) && actual_pa >= 30 && !is.na(proj_wrc)) {
+      actual_w <- min(0.90, max(0.20, (actual_pa - 30) / 400))
+      actual_wrc * actual_w + proj_wrc * (1 - actual_w)
+    } else if (!is.na(actual_wrc) && actual_pa >= 30) {
+      actual_wrc
+    } else {
+      proj_wrc
+    }
     if (is.na(base_wrc)) return(NULL)
 
     # 2. Handedness adjustment: apply split OPS ratio to true-talent estimate

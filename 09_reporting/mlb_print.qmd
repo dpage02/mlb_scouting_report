@@ -148,12 +148,11 @@ body {
 
 /* ── Prediction row ────────────────────────────── */
 .pred-row {
-  display: flex;
-  gap: 10pt;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8pt;
 }
 .pred-cell {
-  flex: 1 1 100pt;
   padding: 6pt 10pt;
   background: #f4f7fb;
   border-left: 3pt solid #1a73e8;
