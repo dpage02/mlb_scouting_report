@@ -12,52 +12,49 @@
 
 if (!dir.exists("reports")) stop("No reports/ directory found. Run run_all.R first.")
 
-# Generate index page
-message("Generating index.html...")
 source("generate_index.R")
 
-# Get remote URL from current repo
-remote_url <- trimws(system("git remote get-url origin", intern = TRUE))
-if (length(remote_url) == 0 || nchar(remote_url) == 0) {
-  stop("Could not determine git remote URL.")
-}
+remote_url <- trimws(system("git remote get-url origin", intern = TRUE)[1])
+if (is.na(remote_url) || nchar(remote_url) == 0)
+  stop("Could not read git remote URL.")
 
-message("Pushing reports/ to gh-pages branch at: ", remote_url)
+message("Deploying to: ", remote_url)
 
-# Use a throw-away git repo in /tmp — avoids touching the working tree
-# and sidesteps gitignore on reports/
-tmpdir <- file.path(tempdir(), paste0("gh-pages-", format(Sys.time(), "%Y%m%d%H%M%S")))
-dir.create(tmpdir, recursive = TRUE)
+tmpdir <- paste0("/tmp/ghpages_", format(Sys.time(), "%Y%m%d%H%M%S"))
 
-on.exit({
-  unlink(tmpdir, recursive = TRUE)
-}, add = TRUE)
-
-# Copy all reports into tmp dir
-file.copy(
-  list.files("reports", full.names = TRUE),
-  tmpdir,
-  recursive = TRUE
-)
-
-script <- paste0('
+script <- sprintf('
 set -e
-cd ', shQuote(tmpdir), '
+
+# 1. Create temp dir and copy all reports into it
+mkdir -p %s
+cp -r %s/. %s/
+
+# 2. Init a fresh git repo there
+cd %s
 git init -q
 git checkout -q -b gh-pages
-git add -A
-git commit -q -m "Deploy reports ', Sys.Date(), '"
-git remote add origin ', shQuote(remote_url), '
 
-# Pull existing gh-pages history if it exists (keeps archive intact)
-git fetch origin gh-pages 2>/dev/null && \
+# 3. Pull existing gh-pages history so archive is preserved
+git remote add origin %s
+git fetch origin gh-pages --depth=1 2>/dev/null && \
   git reset -q --soft FETCH_HEAD || true
 
+# 4. Commit and push
 git add -A
-git commit -q -m "Deploy reports ', Sys.Date(), '" --allow-empty
-git push origin gh-pages --force-with-lease 2>/dev/null || \
-  git push origin gh-pages --force
-')
+git commit -q -m "Deploy reports %s" --allow-empty
+git push origin gh-pages --force
+
+# 5. Clean up
+rm -rf %s
+',
+  tmpdir,
+  shQuote(normalizePath("reports")),
+  tmpdir,
+  tmpdir,
+  shQuote(remote_url),
+  Sys.Date(),
+  tmpdir
+)
 
 result <- system(paste("bash -c", shQuote(script)), intern = FALSE)
 
