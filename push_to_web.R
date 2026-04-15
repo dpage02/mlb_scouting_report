@@ -51,17 +51,15 @@ for (f in all_files) {
 
 message("  Pushing ", length(keep_files), " files (today + permanent pages)")
 
+# Stage new files separately so they survive the gh-pages checkout below
+stagedir <- paste0("/tmp/ghpages_stage_", format(Sys.time(), "%Y%m%d%H%M%S"))
+dir.create(stagedir, recursive = TRUE)
+invisible(file.copy(keep_files, stagedir))
+subdirs <- list.dirs("reports", recursive = FALSE, full.names = TRUE)
+for (d in subdirs) file.copy(d, stagedir, recursive = TRUE)
+
 tmpdir <- paste0("/tmp/ghpages_", format(Sys.time(), "%Y%m%d%H%M%S"))
 dir.create(tmpdir, recursive = TRUE)
-
-# Copy selected files to temp dir
-invisible(file.copy(keep_files, tmpdir))
-
-# Also copy any subdirectories needed (e.g. libs/)
-subdirs <- list.dirs("reports", recursive = FALSE, full.names = TRUE)
-for (d in subdirs) {
-  file.copy(d, tmpdir, recursive = TRUE)
-}
 
 script <- sprintf('
 set -e
@@ -90,19 +88,24 @@ find . -maxdepth 1 -name "*[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*" | while 
   fi
 done
 
+# Copy new files AFTER checkout so they overwrite old versions
+cp -r %s/. .
+
 git add -A
 git commit -q -m "Deploy reports %s" --allow-empty
 git push origin gh-pages --force
 
 cd /tmp
-rm -rf %s
+rm -rf %s %s
 ',
   shQuote(tmpdir),
   shQuote(remote_url),
   gh_path,
   format(Sys.Date() - KEEP_DAYS),  # cutoff for stale file removal
+  shQuote(stagedir),                 # copy new files over old checkout
   Sys.Date(),                        # commit message date
-  shQuote(tmpdir)
+  shQuote(tmpdir),
+  shQuote(stagedir)
 )
 
 message("Pushing to GitHub Pages...")
