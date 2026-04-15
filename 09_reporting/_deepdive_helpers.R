@@ -58,7 +58,7 @@ make_lineup_full_gt <- function(gpk, side_filter) {
         "fg_K_pct", "fg_BB_pct", "fg_K.", "fg_BB.",
         "fg_O.Swing.", "fg_SwStr.", "fg_CSW.",
         "sc_avg_hit_speed", "sc_brl_percent", "sc_ev95percent",
-        "sc_est_ba", "sc_est_woba",
+        "sc_est_ba", "sc_est_slg", "sc_est_woba",
         "fg_GB.", "fg_LD.", "fg_FB.", "fg_HR.FB",
         "fg_Pull.", "fg_Cent.", "fg_Oppo.",
         "sc_sprint_speed"
@@ -96,64 +96,38 @@ make_lineup_full_gt <- function(gpk, side_filter) {
       gt::opt_stylize(style = 1, color = "blue")
   }
 
-  # ── Table A: PRODUCTION & APPROACH ──────────────────────────
-  # Batting line + key plate approach metrics. Pos shown here only.
+  # ── Table A: OVERVIEW ────────────────────────────────────────
+  # Core batting line + advanced value. Pos shown here only.
   dA <- dplyr::tibble(`#` = raw$batting_slot, Name = raw$player_name, Pos = raw$fg_position)
-  dA <- add_col(dA, "PA",     c("mlb_pa"))
-  dA <- add_col(dA, "AVG",    c("mlb_avg"))
-  dA <- add_col(dA, "OBP",    c("mlb_obp"))
-  dA <- add_col(dA, "SLG",    c("mlb_slg"))
-  dA <- add_col(dA, "OPS",    c("mlb_ops"))
-  dA <- add_col(dA, "wRC+",   c("fg_wRC_plus"))
-  dA <- add_col(dA, "HR",     c("mlb_hr"))
-  dA <- add_col(dA, "RBI",    c("mlb_rbi"))
-  dA <- add_col(dA, "K%",     c("fg_K_pct",  "fg_K."))
-  dA <- add_col(dA, "BB%",    c("fg_BB_pct", "fg_BB."))
-  dA <- add_col(dA, "Chase%", c("fg_O.Swing."))
-  dA <- add_col(dA, "SwStr%", c("fg_SwStr."))
-  dA <- add_col(dA, "CSW%",   c("fg_CSW."))
+  dA <- add_col(dA, "PA",   c("mlb_pa"))
+  dA <- add_col(dA, "AVG",  c("mlb_avg"))
+  dA <- add_col(dA, "OBP",  c("mlb_obp"))
+  dA <- add_col(dA, "SLG",  c("mlb_slg"))
+  dA <- add_col(dA, "OPS",  c("mlb_ops"))
+  dA <- add_col(dA, "wRC+", c("fg_wRC_plus"))
+  dA <- add_col(dA, "HR",   c("mlb_hr"))
+  dA <- add_col(dA, "RBI",  c("mlb_rbi"))
 
   tA <- dA %>%
     gt::gt() %>%
     gt::tab_header(
-      title    = gt::md(paste0("**", team, "** \u2014 Production & Approach")),
-      subtitle = paste0("Batting line · advanced value · plate approach", season_label)
+      title    = gt::md(paste0("**", team, "** \u2014 Overview")),
+      subtitle = paste0("Core production", season_label)
     ) %>%
-    gt::fmt_number(
-      columns  = dplyr::any_of(c("AVG", "OBP", "SLG", "OPS")),
-      decimals = 3
-    ) %>%
-    gt::fmt_number(
-      columns  = dplyr::any_of(c("wRC+", "PA", "HR", "RBI")),
-      decimals = 0
-    ) %>%
-    gt::fmt_percent(
-      columns  = dplyr::any_of(c("K%", "BB%", "Chase%", "SwStr%", "CSW%")),
-      decimals = 1
-    ) %>%
-    gt::tab_spanner(
-      label   = "Batting Line",
-      columns = dplyr::any_of(c("AVG", "OBP", "SLG", "OPS"))
-    ) %>%
-    gt::tab_spanner(
-      label   = "Value",
-      columns = dplyr::any_of(c("wRC+", "HR", "RBI", "PA"))
-    ) %>%
-    gt::tab_spanner(
-      label   = "Approach",
-      columns = dplyr::any_of(c("K%", "BB%", "Chase%", "SwStr%", "CSW%"))
-    ) %>%
+    gt::fmt_number(columns = dplyr::any_of(c("AVG", "OBP", "SLG", "OPS")), decimals = 3) %>%
+    gt::fmt_number(columns = dplyr::any_of(c("wRC+", "PA", "HR", "RBI")), decimals = 0) %>%
+    gt::tab_spanner(label = "Batting Line", columns = dplyr::any_of(c("AVG", "OBP", "SLG", "OPS"))) %>%
+    gt::tab_spanner(label = "Value",        columns = dplyr::any_of(c("wRC+", "HR", "RBI", "PA"))) %>%
     base_gt_opts(has_pos = TRUE)
 
-  # ── Table B: QUALITY & PROFILE ───────────────────────────────
-  # Contact quality + batted ball shape/direction + sprint speed.
-  # Pos omitted — reader already knows the lineup from Table A.
+  # ── Table B: ADVANCED ────────────────────────────────────────
+  # Plate discipline + batted ball profile.
   dB <- dplyr::tibble(`#` = raw$batting_slot, Name = raw$player_name)
-  dB <- add_col(dB, "EV",     c("sc_avg_hit_speed"))
-  dB <- add_col(dB, "HH%",    c("sc_ev95percent"))
-  dB <- add_col(dB, "Brl%",   c("sc_brl_percent"))
-  dB <- add_col(dB, "xBA",    c("sc_est_ba"))
-  dB <- add_col(dB, "xwOBA",  c("sc_est_woba"))
+  dB <- add_col(dB, "K%",     c("fg_K_pct",  "fg_K."))
+  dB <- add_col(dB, "BB%",    c("fg_BB_pct", "fg_BB."))
+  dB <- add_col(dB, "Chase%", c("fg_O.Swing."))
+  dB <- add_col(dB, "SwStr%", c("fg_SwStr."))
+  dB <- add_col(dB, "CSW%",   c("fg_CSW."))
   dB <- add_col(dB, "GB%",    c("fg_GB."))
   dB <- add_col(dB, "LD%",    c("fg_LD."))
   dB <- add_col(dB, "FB%",    c("fg_FB."))
@@ -161,13 +135,40 @@ make_lineup_full_gt <- function(gpk, side_filter) {
   dB <- add_col(dB, "Pull%",  c("fg_Pull."))
   dB <- add_col(dB, "Cent%",  c("fg_Cent."))
   dB <- add_col(dB, "Oppo%",  c("fg_Oppo."))
-  dB <- add_col(dB, "Sprint", c("sc_sprint_speed"))
 
   tB <- dB %>%
     gt::gt() %>%
     gt::tab_header(
-      title    = gt::md(paste0("**", team, "** \u2014 Quality & Profile")),
-      subtitle = paste0("Contact quality · expected stats · batted ball shape & direction · speed", season_label)
+      title    = gt::md(paste0("**", team, "** \u2014 Advanced")),
+      subtitle = paste0("Plate discipline \u00b7 batted ball profile", season_label)
+    ) %>%
+    gt::fmt_percent(
+      columns  = dplyr::any_of(c("K%", "BB%", "Chase%", "SwStr%", "CSW%",
+                                  "GB%", "LD%", "FB%", "HR/FB",
+                                  "Pull%", "Cent%", "Oppo%")),
+      decimals = 1
+    ) %>%
+    gt::tab_spanner(label = "Discipline",  columns = dplyr::any_of(c("K%", "BB%", "Chase%", "SwStr%", "CSW%"))) %>%
+    gt::tab_spanner(label = "Batted Ball", columns = dplyr::any_of(c("GB%", "LD%", "FB%", "HR/FB"))) %>%
+    gt::tab_spanner(label = "Direction",   columns = dplyr::any_of(c("Pull%", "Cent%", "Oppo%"))) %>%
+    base_gt_opts(has_pos = FALSE)
+
+  # ── Table C: STAT NERD ───────────────────────────────────────
+  # Statcast contact quality + expected stats + sprint speed.
+  dC <- dplyr::tibble(`#` = raw$batting_slot, Name = raw$player_name)
+  dC <- add_col(dC, "EV",     c("sc_avg_hit_speed"))
+  dC <- add_col(dC, "HH%",    c("sc_ev95percent"))
+  dC <- add_col(dC, "Brl%",   c("sc_brl_percent"))
+  dC <- add_col(dC, "xBA",    c("sc_est_ba"))
+  dC <- add_col(dC, "xSLG",   c("sc_est_slg"))
+  dC <- add_col(dC, "xwOBA",  c("sc_est_woba"))
+  dC <- add_col(dC, "Sprint", c("sc_sprint_speed"))
+
+  tC <- dC %>%
+    gt::gt() %>%
+    gt::tab_header(
+      title    = gt::md(paste0("**", team, "** \u2014 Statcast")),
+      subtitle = paste0("Contact quality \u00b7 expected stats \u00b7 sprint speed", season_label)
     ) %>%
     gt::fmt_number(columns = dplyr::any_of(c("EV")), decimals = 1) %>%
     gt::fmt_number(columns = dplyr::any_of(c("HH%", "Brl%")), decimals = 1) %>%
@@ -175,40 +176,63 @@ make_lineup_full_gt <- function(gpk, side_filter) {
       locations = gt::cells_body(columns = dplyr::any_of(c("HH%", "Brl%"))),
       fn = function(x) dplyr::if_else(x == "\u2014", "\u2014", paste0(x, "%"))
     ) %>%
-    gt::fmt_number(columns = dplyr::any_of(c("xBA", "xwOBA")), decimals = 3) %>%
-    gt::fmt_percent(
-      columns  = dplyr::any_of(c("GB%", "LD%", "FB%", "HR/FB",
-                                  "Pull%", "Cent%", "Oppo%")),
-      decimals = 1
-    ) %>%
+    gt::fmt_number(columns = dplyr::any_of(c("xBA", "xSLG", "xwOBA")), decimals = 3) %>%
     gt::fmt_number(columns = dplyr::any_of(c("Sprint")), decimals = 1) %>%
-    gt::tab_spanner(
-      label   = "Contact Quality",
-      columns = dplyr::any_of(c("EV", "HH%", "Brl%"))
-    ) %>%
-    gt::tab_spanner(
-      label   = "Expected",
-      columns = dplyr::any_of(c("xBA", "xwOBA"))
-    ) %>%
-    gt::tab_spanner(
-      label   = "Batted Ball",
-      columns = dplyr::any_of(c("GB%", "LD%", "FB%", "HR/FB"))
-    ) %>%
-    gt::tab_spanner(
-      label   = "Direction",
-      columns = dplyr::any_of(c("Pull%", "Cent%", "Oppo%"))
-    ) %>%
-    gt::tab_spanner(
-      label   = "Speed",
-      columns = dplyr::any_of(c("Sprint"))
-    ) %>%
+    gt::tab_spanner(label = "Contact Quality", columns = dplyr::any_of(c("EV", "HH%", "Brl%"))) %>%
+    gt::tab_spanner(label = "Expected",        columns = dplyr::any_of(c("xBA", "xSLG", "xwOBA"))) %>%
+    gt::tab_spanner(label = "Speed",           columns = dplyr::any_of(c("Sprint"))) %>%
     base_gt_opts(has_pos = FALSE)
 
   # ── Return — drop tables where no stat columns landed ────────
   out <- list()
-  if (ncol(dA) > 3) out[["Production & Approach"]] <- tA
-  if (ncol(dB) > 2) out[["Quality & Profile"]]     <- tB
+  if (ncol(dA) > 3) out[["Overview"]]   <- tA
+  if (ncol(dB) > 2) out[["Advanced"]]   <- tB
+  if (ncol(dC) > 2) out[["Stat Nerd"]]  <- tC
   out
+}
+
+# ------------------------------------------------------------
+# Bootstrap 5 tab wrapper for the three-tier lineup view
+# uid must be unique per team per page (e.g. paste0(gpk, side))
+# ------------------------------------------------------------
+
+make_lineup_tabset_html <- function(tables, uid) {
+  tab_names <- names(tables)
+  if (length(tab_names) == 0) return("")
+
+  slugify <- function(nm) gsub("[^a-z0-9]", "", tolower(nm))
+
+  # Nav buttons
+  btns <- vapply(seq_along(tab_names), function(i) {
+    nm   <- tab_names[[i]]
+    slug <- slugify(nm)
+    active   <- if (i == 1) " active"  else ""
+    selected <- if (i == 1) "true" else "false"
+    sprintf(
+      '<li class="nav-item" role="presentation"><button class="nav-link%s" id="%s-%s-tab" data-bs-toggle="tab" data-bs-target="#%s-%s" type="button" role="tab" aria-controls="%s-%s" aria-selected="%s" style="font-size:0.82rem;padding:5px 14px;">%s</button></li>',
+      active, slug, uid, slug, uid, slug, uid, selected, nm
+    )
+  }, character(1))
+
+  # Pane content
+  panes <- vapply(seq_along(tab_names), function(i) {
+    nm   <- tab_names[[i]]
+    slug <- slugify(nm)
+    show <- if (i == 1) " show active" else ""
+    sprintf(
+      '<div class="tab-pane fade%s" id="%s-%s" role="tabpanel" aria-labelledby="%s-%s-tab" style="padding-top:10px;">%s</div>',
+      show, slug, uid, slug, uid, gt::as_raw_html(tables[[nm]])
+    )
+  }, character(1))
+
+  paste0(
+    '<ul class="nav nav-tabs" id="lineup-', uid, '" role="tablist" style="margin-bottom:0;">',
+    paste(btns,  collapse = ""),
+    '</ul>',
+    '<div class="tab-content" id="lineup-', uid, '-content">',
+    paste(panes, collapse = ""),
+    '</div>'
+  )
 }
 
 # ------------------------------------------------------------

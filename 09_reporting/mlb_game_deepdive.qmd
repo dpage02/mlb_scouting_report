@@ -202,11 +202,7 @@ if (!is.null(arsenal_tbl)) {
 ```{r lineup-away-full}
 #| output: asis
 tables_away <- make_lineup_full_gt(gpk, "away")
-for (nm in names(tables_away)) {
-  cat(sprintf('\n\n<h4 style="margin-top:1.4rem; margin-bottom:0.3rem; color:#2c3e50;">%s</h4>\n\n', nm))
-  cat(gt::as_raw_html(tables_away[[nm]]))
-  cat("\n\n")
-}
+cat(make_lineup_tabset_html(tables_away, paste0(gpk, "away")), "\n\n")
 ```
 
 ### `r home_team`
@@ -214,11 +210,7 @@ for (nm in names(tables_away)) {
 ```{r lineup-home-full}
 #| output: asis
 tables_home <- make_lineup_full_gt(gpk, "home")
-for (nm in names(tables_home)) {
-  cat(sprintf('\n\n<h4 style="margin-top:1.4rem; margin-bottom:0.3rem; color:#2c3e50;">%s</h4>\n\n', nm))
-  cat(gt::as_raw_html(tables_home[[nm]]))
-  cat("\n\n")
-}
+cat(make_lineup_tabset_html(tables_home, paste0(gpk, "home")), "\n\n")
 ```
 
 ---
