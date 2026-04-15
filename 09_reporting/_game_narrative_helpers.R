@@ -288,11 +288,43 @@ WRC_STAB_PA <- 550L
   max(50, min(185, regressed + .age_adj_wrc(age_val)))
 }
 
+# Display version: PA-weighted mean of actual season fg_wRC_plus.
+# Matches what the overview cards and lineup tables show.
+# Falls back to .team_wrc() (blended) if no actual data is available.
+.team_wrc_display <- function(lineup_rows) {
+  if (nrow(lineup_rows) == 0) return(100)
+
+  full_stats <- if (exists("offense_master_season") && nrow(offense_master_season) > 0) {
+    offense_master_season %>%
+      dplyr::arrange(mlbam_id, dplyr::desc(dplyr::coalesce(mlb_pa, 0L))) %>%
+      dplyr::distinct(mlbam_id, .keep_all = TRUE) %>%
+      dplyr::select(mlbam_id,
+                    dplyr::any_of(c("mlb_pa", "fg_wRC_plus")))
+  } else NULL
+
+  if (is.null(full_stats)) return(.team_wrc(lineup_rows))
+
+  raw <- lineup_rows %>%
+    dplyr::left_join(full_stats, by = "mlbam_id", suffix = c("", "_dup")) %>%
+    dplyr::select(-dplyr::ends_with("_dup"))
+
+  wrc_vals <- if ("fg_wRC_plus" %in% names(raw)) raw$fg_wRC_plus else rep(NA_real_, nrow(raw))
+  pa_vals  <- dplyr::coalesce(
+    if ("mlb_pa" %in% names(raw)) as.numeric(raw$mlb_pa) else NULL,
+    rep(1, nrow(raw))
+  )
+  pa_vals <- pmax(pa_vals, 1)
+
+  ok <- !is.na(wrc_vals) & is.finite(wrc_vals)
+  if (sum(ok) == 0) return(.team_wrc(lineup_rows))
+  round(weighted.mean(wrc_vals[ok], pa_vals[ok]))
+}
+
 # Team lineup wRC+ — best-available estimate per batter, adjusted for:
 #   1. True talent: Steamer projected wRC+ > Marcel blend (PA-weighted 3-yr)
 #   2. Handedness: OPS ratio vs opposing SP's arm side (min 50 PA; cap ±25%)
 #   3. Batting order: PA-weighted by slot (slot 1 bats ~22% more than slot 9)
-# Returns slot-PA-weighted mean across the lineup; falls back to 100 when sparse.
+# Used internally for the run model only — use .team_wrc_display() for text/tables.
 .team_wrc <- function(lineup_rows) {
   if (nrow(lineup_rows) == 0) return(100)
 
@@ -537,8 +569,8 @@ make_game_bullets_html <- function(gpk) {
       paste0("<strong>Strikeout stuff</strong>: ", paste(k_parts, collapse = " · ")))
 
   # ---- 3. Offense comparison ----
-  away_wrc <- .team_wrc(lineup %>% dplyr::filter(side == "away"))
-  home_wrc <- .team_wrc(lineup %>% dplyr::filter(side == "home"))
+  away_wrc <- .team_wrc_display(lineup %>% dplyr::filter(side == "away"))
+  home_wrc <- .team_wrc_display(lineup %>% dplyr::filter(side == "home"))
 
   both_default <- (away_wrc == 100 && home_wrc == 100)
   if (!both_default) {
@@ -874,8 +906,8 @@ make_game_preview_html <- function(gpk) {
   )
 
   # Offense summary
-  away_wrc <- .team_wrc(lineup %>% dplyr::filter(side == "away"))
-  home_wrc <- .team_wrc(lineup %>% dplyr::filter(side == "home"))
+  away_wrc <- .team_wrc_display(lineup %>% dplyr::filter(side == "away"))
+  home_wrc <- .team_wrc_display(lineup %>% dplyr::filter(side == "home"))
   off_note <- if (away_wrc == 100 && home_wrc == 100) {
     ""  # no data, skip
   } else {
@@ -1391,8 +1423,8 @@ make_game_narrative_html <- function(gpk) {
 
   # ---- Paragraph 2: Lineup & matchup edge ----
   para2 <- tryCatch({
-    away_wrc <- .team_wrc(away_lu)
-    home_wrc <- .team_wrc(home_lu)
+    away_wrc <- .team_wrc_display(away_lu)
+    home_wrc <- .team_wrc_display(home_lu)
 
     # Offense comparison opener
     off_intro <- if (away_wrc == 100 && home_wrc == 100) {
@@ -2148,19 +2180,20 @@ make_prediction_html <- function(gpk) {
   # --- Lineup offense ---
   away_lineup_rows <- lineup %>% dplyr::filter(side == "away")
   home_lineup_rows <- lineup %>% dplyr::filter(side == "home")
-  away_wrc <- .team_wrc(away_lineup_rows)
+  away_wrc <- .team_wrc(away_lineup_rows)          # blended — used for run model
   home_wrc <- .team_wrc(home_lineup_rows)
+  away_wrc_disp <- .team_wrc_display(away_lineup_rows)  # actual — shown in table/text
+  home_wrc_disp <- .team_wrc_display(home_lineup_rows)
 
-  # Determine which method was used (Steamer available → no flag needed)
+  # (flag logic kept for compatibility but no longer shown)
   steamer_ok <- exists("steamer_projections") &&
     is.data.frame(steamer_projections) && nrow(steamer_projections) > 0
 
   .wrc_flag_label <- function(lr) {
     if (steamer_ok) {
-      # Check if most players have Steamer coverage
       ids_in_steamer <- sum(lr$mlbam_id %in% steamer_projections$mlbam_id, na.rm = TRUE)
-      if (ids_in_steamer >= 5) return(NULL)  # good Steamer coverage — no asterisk
-      return("marcel")  # few in Steamer, Marcel dominated
+      if (ids_in_steamer >= 5) return(NULL)
+      return("marcel")
     }
     "marcel"  # no Steamer at all
   }
@@ -2325,13 +2358,7 @@ make_prediction_html <- function(gpk) {
     tr(blend_label,
        paste0("<strong>", round(away_blended_fip, 2), "</strong>"),
        paste0("<strong>", round(home_blended_fip, 2), "</strong>")),
-    tr(paste0("Lineup avg wRC+",
-              if (steamer_ok && !away_wrc_flag && !home_wrc_flag)
-                ' <span style="font-size:10px;color:#888;">(Steamer)</span>'
-              else
-                ' <span style="font-size:10px;color:#888;">(*=regressed)</span>'),
-       paste0(round(away_wrc), if (away_wrc_flag) "*" else ""),
-       paste0(round(home_wrc), if (home_wrc_flag) "*" else "")),
+    tr("Lineup avg wRC+", round(away_wrc_disp), round(home_wrc_disp)),
     if (!is.null(pf_display)) paste0(
       '<tr><td style="padding:6px 14px; border-bottom:1px solid #eee; color:#555;">',
       pf_display, '</td>',
