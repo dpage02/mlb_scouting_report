@@ -23,6 +23,7 @@ if (basename(getwd()) == "09_reporting") setwd("..")
 library(dplyr)
 library(httr)
 library(jsonlite)
+library(readr)
 
 source("09_reporting/_recap_helpers.R")
 
