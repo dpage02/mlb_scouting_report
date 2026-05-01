@@ -186,6 +186,190 @@ pull_yesterday_results <- function(recap_date = Sys.Date() - 1) {
 }
 
 # ------------------------------------------------------------
+# Game narrative — 2-4 sentence recap of how the game unfolded
+# ------------------------------------------------------------
+
+.ordinal <- function(n) {
+  switch(as.character(n),
+    "1"="1st","2"="2nd","3"="3rd","4"="4th","5"="5th",
+    "6"="6th","7"="7th","8"="8th","9"="9th",
+    paste0(n, "th")
+  )
+}
+
+make_game_narrative_html <- function(game, bs, sc) {
+  tryCatch({
+    away_name  <- game$teams$away$team$name
+    home_name  <- game$teams$home$team$name
+    away_score <- as.integer(game$teams$away$score)
+    home_score <- as.integer(game$teams$home$score)
+    if (is.null(away_score) || is.null(home_score)) return("")
+
+    away_win <- away_score > home_score
+    winner   <- if (away_win) away_name else home_name
+    loser    <- if (away_win) home_name else away_name
+    margin   <- abs(away_score - home_score)
+
+    .abbr <- function(nm) tail(strsplit(nm, " ")[[1]], 1)
+
+    away_sp <- .sp_line(bs, "away")
+    home_sp <- .sp_line(bs, "home")
+    win_sp  <- if (away_win) away_sp else home_sp
+    los_sp  <- if (away_win) home_sp else away_sp
+
+    parts <- c()
+
+    # ── 1. Result + winner's starter ───────────────────────────
+    result_verb <- dplyr::case_when(
+      margin == 1 ~ "edged",
+      margin >= 7 ~ "rolled past",
+      margin >= 4 ~ "handled",
+      TRUE        ~ "defeated"
+    )
+
+    if (!is.null(win_sp)) {
+      ip_val <- suppressWarnings(as.numeric(win_sp$ip))
+      er_val <- suppressWarnings(as.integer(win_sp$er))
+      k_val  <- suppressWarnings(as.integer(win_sp$k))
+
+      quality <- if (!is.na(ip_val) && !is.na(er_val)) {
+        if      (ip_val >= 7 && er_val <= 1) "dominant"
+        else if (ip_val >= 6 && er_val <= 2) "sharp"
+        else if (ip_val >= 6 && er_val <= 3) "solid"
+        else if (ip_val >= 5)                "serviceable"
+        else                                 "short"
+      } else "solid"
+
+      k_note <- if (!is.na(k_val) && k_val >= 8) paste0(", striking out ", k_val) else ""
+
+      parts <- c(parts, sprintf(
+        "The %s %s the %s %d\u2013%d, with %s throwing a %s game (%s IP, %sER%s).",
+        winner, result_verb, loser,
+        max(away_score, home_score), min(away_score, home_score),
+        win_sp$name, quality, win_sp$ip, win_sp$er, k_note
+      ))
+    } else {
+      parts <- c(parts, sprintf(
+        "The %s %s the %s %d\u2013%d.",
+        winner, result_verb, loser,
+        max(away_score, home_score), min(away_score, home_score)
+      ))
+    }
+
+    # ── 2. Key inning (biggest scoring burst, min 2 runs) ──────
+    big_inn <- tryCatch({
+      innings <- game$linescore$innings
+      best <- NULL
+      for (inn in innings) {
+        for (side in c("away", "home")) {
+          runs <- as.integer(inn[[side]]$runs)
+          if (!is.null(runs) && !is.na(runs) && runs >= 2) {
+            team_nm <- if (side == "away") away_name else home_name
+            num     <- as.integer(inn$num)
+            if (is.null(best) || runs > best$runs)
+              best <- list(team = team_nm, inning = num, runs = runs)
+          }
+        }
+      }
+      best
+    }, error = function(e) NULL)
+
+    if (!is.null(big_inn)) {
+      burst_verb <- if (big_inn$runs >= 4) "exploded for" else if (big_inn$runs == 3) "plated" else "scored"
+      parts <- c(parts, sprintf(
+        "%s %s %d in the %s to take control.",
+        .abbr(big_inn$team), burst_verb, big_inn$runs, .ordinal(big_inn$inning)
+      ))
+    }
+
+    # ── 3. Loser's starter if they got knocked around ──────────
+    if (!is.null(los_sp)) {
+      er_val <- suppressWarnings(as.integer(los_sp$er))
+      ip_val <- suppressWarnings(as.numeric(los_sp$ip))
+      if (!is.na(er_val) && !is.na(ip_val) && er_val >= 4) {
+        parts <- c(parts, sprintf(
+          "%s couldn't hold down the %s offense, allowing %s runs in %s innings.",
+          los_sp$name, .abbr(winner), los_sp$er, los_sp$ip
+        ))
+      }
+    }
+
+    # ── 4. Key reliever moment ──────────────────────────────────
+    dec <- game$decisions
+    if (!is.null(dec) && !is.null(bs)) {
+
+      # Save in a close game — give credit
+      if (!is.null(dec$save) && margin <= 3) {
+        sv_line <- tryCatch({
+          sv_id <- dec$save$id
+          for (side in c("away", "home")) {
+            p <- bs$teams[[side]]$players[[paste0("ID", sv_id)]]
+            if (!is.null(p)) {
+              s <- p$stats$pitching
+              return(list(ip = s$inningsPitched, k = s$strikeOuts))
+            }
+          }
+          NULL
+        }, error = function(e) NULL)
+
+        if (!is.null(sv_line) && !is.null(sv_line$ip)) {
+          k_part <- if (!is.null(sv_line$k) && as.integer(sv_line$k) > 0)
+            paste0(", ", sv_line$k, "K") else ""
+          parts <- c(parts, sprintf(
+            "%s slammed the door for the save (%s IP%s).",
+            dec$save$fullName, sv_line$ip, k_part
+          ))
+        }
+      }
+
+      # Blown lead: L pitcher was a reliever, not the starter
+      if (!is.null(dec$loser)) {
+        los_side     <- if (away_win) "home" else "away"
+        los_pitchers <- bs$teams[[los_side]]$pitchers
+        loser_id     <- dec$loser$id
+        is_rp        <- length(los_pitchers) > 1 && loser_id != los_pitchers[[1]]
+        if (is_rp) {
+          parts <- c(parts, sprintf(
+            "%s came on in relief and was charged with the loss.",
+            dec$loser$fullName
+          ))
+        }
+      }
+    }
+
+    # ── 5. Spectacular play (xBA >= 0.60 turned into an out) ───
+    if (!is.null(sc)) {
+      spec <- tryCatch({
+        sc %>%
+          dplyr::filter(
+            !is.na(estimated_ba_using_speedangle),
+            estimated_ba_using_speedangle >= 0.60,
+            bb_type %in% c("fly_ball", "line_drive"),
+            events %in% c("field_out", "force_out", "sac_fly",
+                           "double_play", "grounded_into_double_play")
+          ) %>%
+          dplyr::arrange(dplyr::desc(estimated_ba_using_speedangle)) %>%
+          dplyr::slice_head(n = 1)
+      }, error = function(e) data.frame())
+
+      if (nrow(spec) > 0) {
+        xba_pct <- round(spec$estimated_ba_using_speedangle[1] * 100)
+        ev_str  <- if (!is.na(spec$launch_speed[1]))
+          sprintf(" on a %.0f mph shot", spec$launch_speed[1]) else ""
+        parts <- c(parts, sprintf(
+          "Defensive gem of the night: a %d%% xBA ball%s somehow became an out — SportsCenter territory.",
+          xba_pct, ev_str
+        ))
+      }
+    }
+
+    if (length(parts) == 0) return("")
+    paste0('<p class="game-narrative">', paste(parts, collapse = " "), '</p>')
+
+  }, error = function(e) "")
+}
+
+# ------------------------------------------------------------
 # Build HTML card for one game
 # ------------------------------------------------------------
 
@@ -310,6 +494,9 @@ make_game_recap_card <- function(game) {
       }
     }, error = function(e) "")
 
+    # Game narrative blurb
+    narrative_html <- if (is_final) make_game_narrative_html(game, bs, sc) else ""
+
     # Spectacular plays (from Statcast)
     spectacular_html <- if (!is.null(sc)) .spectacular_plays_html(sc) else ""
 
@@ -419,6 +606,7 @@ make_game_recap_card <- function(game) {
       pitch_mix_html,
       hr_html,
       performers_html,
+      narrative_html,
       spectacular_html,
       decisions_html,
       '</div>'
