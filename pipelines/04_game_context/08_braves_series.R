@@ -100,21 +100,28 @@ if (is.null(braves_sched_raw) || nrow(braves_sched_raw) == 0) {
     dplyr::arrange(game_date)
 
   # ----------------------------------------------------------------
-  # 2. Detect: is today a Braves series finale?
+  # 2. Detect: is today (or yesterday) a Braves series finale?
+  #    Check yesterday too so nightly runs (3 AM ET = next calendar
+  #    day) still catch finales from games that finished that evening.
   # ----------------------------------------------------------------
 
-  today_braves <- braves_sched %>%
-    dplyr::filter(game_date == target_date)
+  check_dates <- unique(c(target_date, target_date - 1))
 
-  finale_today <- today_braves %>%
-    dplyr::filter(!is.na(series_game_num), !is.na(games_in_series),
-                  series_game_num == games_in_series)
+  finale_today <- braves_sched %>%
+    dplyr::filter(
+      game_date %in% check_dates,
+      !is.na(series_game_num), !is.na(games_in_series),
+      series_game_num == games_in_series
+    ) %>%
+    dplyr::arrange(dplyr::desc(game_date)) %>%  # prefer most recent
+    dplyr::slice(1)
 
   braves_series_context$is_finale_today <- nrow(finale_today) > 0
 
   if (braves_series_context$is_finale_today) {
 
-    cur <- finale_today[1, ]
+    cur          <- finale_today[1, ]
+    finale_date  <- cur$game_date   # may be yesterday if nightly run
 
     # ----------------------------------------------------------------
     # 3. Current series game_pks (for recap)
@@ -126,7 +133,7 @@ if (is.null(braves_sched_raw) || nrow(braves_sched_raw) == 0) {
         home_team_id    == cur$home_team_id,
         away_team_id    == cur$away_team_id,
         series_game_num == 1L,
-        game_date       <= target_date
+        game_date       <= finale_date
       ) %>%
       dplyr::arrange(dplyr::desc(game_date)) %>%
       dplyr::slice(1)
@@ -138,7 +145,7 @@ if (is.null(braves_sched_raw) || nrow(braves_sched_raw) == 0) {
         home_team_id == cur$home_team_id,
         away_team_id == cur$away_team_id,
         game_date >= opener_date,
-        game_date <= target_date
+        game_date <= finale_date
       ) %>%
       dplyr::pull(game_pk)
 
@@ -158,7 +165,7 @@ if (is.null(braves_sched_raw) || nrow(braves_sched_raw) == 0) {
       away_team_name = cur$away_team_name,
       braves_are_home = cur$braves_are_home,
       venue_name     = dplyr::coalesce(cur$venue_name, "Unknown"),
-      end_date       = target_date,
+      end_date       = finale_date,
       start_date     = opener_date
     )
 
@@ -172,7 +179,7 @@ if (is.null(braves_sched_raw) || nrow(braves_sched_raw) == 0) {
     # ----------------------------------------------------------------
 
     upcoming <- braves_sched %>%
-      dplyr::filter(game_date > target_date) %>%
+      dplyr::filter(game_date > finale_date) %>%
       dplyr::arrange(game_date)
 
     if (nrow(upcoming) > 0) {

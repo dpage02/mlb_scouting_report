@@ -245,16 +245,50 @@ make_game_recap_card <- function(game) {
       }
     }, error = function(e) "")
 
-    # Decisions
+    # Decisions + key reliever stat lines (W, L, SV from boxscore)
     decisions_html <- tryCatch({
       dec <- game$decisions
+      if (is.null(dec)) return("")
+
+      .rp_line <- function(person_id, bs) {
+        tryCatch({
+          for (side in c("away", "home")) {
+            key <- paste0("ID", person_id)
+            p   <- bs$teams[[side]]$players[[key]]
+            if (!is.null(p)) {
+              s <- p$stats$pitching
+              ip  <- s$inningsPitched
+              h   <- s$hits
+              er  <- s$earnedRuns
+              bb  <- s$baseOnBalls
+              k   <- s$strikeOuts
+              if (!is.null(ip)) {
+                parts <- c(paste0(ip, " IP"))
+                if (!is.null(h))  parts <- c(parts, paste0(h, "H"))
+                if (!is.null(er)) parts <- c(parts, paste0(er, "ER"))
+                if (!is.null(bb) && bb > 0) parts <- c(parts, paste0(bb, "BB"))
+                if (!is.null(k)  && k  > 0) parts <- c(parts, paste0(k, "K"))
+                return(paste(parts, collapse = " "))
+              }
+            }
+          }
+          ""
+        }, error = function(e) "")
+      }
+
       lines <- c()
-      if (!is.null(dec$winner))
-        lines <- c(lines, paste0("W: ", dec$winner$fullName))
-      if (!is.null(dec$loser))
-        lines <- c(lines, paste0("L: ", dec$loser$fullName))
-      if (!is.null(dec$save))
-        lines <- c(lines, paste0("SV: ", dec$save$fullName))
+      for (role in list(
+        list(lbl = "W",  person = dec$winner),
+        list(lbl = "L",  person = dec$loser),
+        list(lbl = "SV", person = dec$save)
+      )) {
+        if (!is.null(role$person)) {
+          stat <- if (!is.null(bs)) .rp_line(role$person$id, bs) else ""
+          txt  <- paste0(role$lbl, ": ", role$person$fullName)
+          if (nchar(stat) > 0) txt <- paste0(txt, " (", stat, ")")
+          lines <- c(lines, txt)
+        }
+      }
       if (length(lines) == 0) "" else
         paste0('<div class="decisions">', paste(lines, collapse = " &nbsp;&middot;&nbsp; "), '</div>')
     }, error = function(e) "")

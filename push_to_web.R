@@ -54,6 +54,10 @@ for (f in all_files) {
   } else if (as.Date(dm) == Sys.Date() - 1 && grepl("^recap_", bn)) {
     # Recap files are always dated yesterday — include them explicitly
     keep_files <- c(keep_files, f)
+  } else if (as.Date(dm) >= Sys.Date() - KEEP_DAYS &&
+             grepl("^series_recap_|^series_preview_", bn)) {
+    # Series recap/preview files — keep within the rolling window
+    keep_files <- c(keep_files, f)
   } else if (as.Date(dm) >= Sys.Date() - KEEP_DAYS && grepl("^result_", bn)) {
     # Per-game result pages can be any recent date — include all within keep window
     keep_files <- c(keep_files, f)
