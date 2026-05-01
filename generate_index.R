@@ -44,7 +44,7 @@ parse_report_file <- function(f) {
   }
 
   m <- regmatches(f, regexec(
-    "^(scouting|deepdive|print|team|matchup|prediction|hitting)_(\\d{4}-\\d{2}-\\d{2})(?:_([A-Z0-9]+)(?:_([A-Z0-9]+))?)?\\.html$",
+    "^(scouting|deepdive|print|team|matchup|prediction|hitting|result)_(\\d{4}-\\d{2}-\\d{2})(?:_([A-Z0-9]+)(?:_([A-Z0-9]+))?)?\\.html$",
     f
   ))[[1]]
 
@@ -158,15 +158,24 @@ for (d in past_dates) {
 
   game_links <- ""
   for (j in seq_len(nrow(games_on_date))) {
+    aw <- games_on_date$away[j]
+    hm <- games_on_date$home[j]
+
     dd_file <- file_df$file[
       file_df$type == "deepdive" &
       !is.na(file_df$date) & file_df$date == d &
-      !is.na(file_df$away) & file_df$away == games_on_date$away[j] &
-      !is.na(file_df$home) & file_df$home == games_on_date$home[j]]
+      !is.na(file_df$away) & file_df$away == aw &
+      !is.na(file_df$home) & file_df$home == hm]
+    res_file <- file_df$file[
+      file_df$type == "result" &
+      !is.na(file_df$date) & file_df$date == d &
+      !is.na(file_df$away) & file_df$away == aw &
+      !is.na(file_df$home) & file_df$home == hm]
+
     if (length(dd_file) > 0) {
       game_links <- paste0(game_links, sprintf(
         '<a href="%s" class="past-game-link">%s @ %s</a>',
-        dd_file[1], games_on_date$away[j], games_on_date$home[j]
+        dd_file[1], aw, hm
       ))
     }
   }
@@ -175,12 +184,18 @@ for (d in past_dates) {
     sprintf('<a href="%s" class="past-overview-btn">Overview</a>', scouting_f[1])
   } else ""
 
+  recap_f  <- paste0("recap_", d, ".html")
+  results_btn <- if (recap_f %in% all_files) {
+    sprintf('<a href="%s" class="past-overview-btn" style="background:#1a3c6e;border-color:#58a6ff;">Results</a>', recap_f)
+  } else ""
+
   past_rows <- paste0(past_rows, sprintf('
     <div class="past-row">
       <span class="past-date">%s</span>
       %s
+      %s
       <div class="past-game-links">%s</div>
-    </div>', d, scouting_btn, game_links))
+    </div>', d, results_btn, scouting_btn, game_links))
 }
 
 if (nchar(past_rows) == 0) {
@@ -190,6 +205,11 @@ if (nchar(past_rows) == 0) {
 # Stat reference link
 ref_link <- if ("stat_reference.html" %in% all_files) {
   '<a href="stat_reference.html" class="ref-link">Stat Reference &amp; Grade Ranges</a>'
+} else ""
+
+# Accuracy tracker link
+accuracy_link <- if ("accuracy.html" %in% all_files) {
+  '<a href="accuracy.html" class="ref-link" style="background:#0d1117;border-color:#58a6ff;">&#127919; Prediction Accuracy</a>'
 } else ""
 
 # Yesterday's recap link
@@ -350,7 +370,7 @@ html <- sprintf('<!DOCTYPE html>
 <body>
   <header>
     <h1>⚾ MLB <span>Scouting Report</span></h1>
-    <div class="header-links">%s%s</div>
+    <div class="header-links">%s%s%s</div>
   </header>
   <main>
     <div class="today-date">%s</div>
@@ -366,13 +386,14 @@ html <- sprintf('<!DOCTYPE html>
     </details>
   </main>
   <div class="footer">
-    Updated %s ET &nbsp;·&nbsp; Reports auto-refresh at 10 AM, 4 PM, 6:30 PM ET
+    Updated %s ET &nbsp;·&nbsp; Reports auto-refresh at 7:30 AM, 4:30 PM, 3 AM ET
   </div>
 </body>
 </html>',
   today_str,            # title date
   recap_link,           # header recap link
   ref_link,             # header ref link
+  accuracy_link,        # header accuracy link
   today_str,            # h2 date
   scouting_link,        # overview link
   today_cards,          # game cards

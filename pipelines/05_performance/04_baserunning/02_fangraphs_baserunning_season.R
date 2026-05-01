@@ -68,6 +68,50 @@ if (is.null(fg_raw) || nrow(fg_raw) == 0) {
   )
 } else {
 
+  # Log what cols came back (useful for diagnosing missing UBR / Spd)
+  br_candidates <- c("BsR", "BaseRunning", "wBsR", "wSB", "UBR", "wGDP", "Spd", "SB", "CS")
+  message("FanGraphs type=1 cols found: ",
+          paste(intersect(br_candidates, names(fg_raw)), collapse = ", "),
+          " | missing: ",
+          paste(setdiff(br_candidates, names(fg_raw)), collapse = ", "))
+
+  # If UBR or Spd are missing from type=1, try type=2 (Advanced batting page)
+  if (!all(c("UBR", "Spd") %in% names(fg_raw))) {
+    fg_raw2 <- pull_fg_baserunning_api(season_complete)  # placeholder — type=2 below
+    fg_raw2 <- tryCatch({
+      resp2 <- httr::GET(
+        "https://www.fangraphs.com/api/leaders/major-league/data",
+        query = list(
+          age = "", pos = "all", stats = "bat", lg = "all",
+          season = season_complete, season1 = season_complete, ind = "0", qual = "0",
+          type = "2", pageitems = "2000000", pagenum = "1", rost = "0"
+        ),
+        httr::timeout(60)
+      )
+      if (httr::http_error(resp2)) NULL
+      else {
+        parsed2 <- jsonlite::fromJSON(httr::content(resp2, as = "text", encoding = "UTF-8"), flatten = TRUE)
+        if ("data" %in% names(parsed2)) dplyr::as_tibble(parsed2$data) else NULL
+      }
+    }, error = function(e) NULL)
+
+    if (!is.null(fg_raw2) && nrow(fg_raw2) > 0) {
+      message("FanGraphs type=2 cols found: ",
+              paste(intersect(br_candidates, names(fg_raw2)), collapse = ", "))
+      # Pull any missing baserunning cols from type=2
+      id_col2 <- intersect(c("xMLBAMID", "mlbam_id", "playerid"), names(fg_raw2))[1]
+      id_col1 <- intersect(c("xMLBAMID", "mlbam_id", "playerid"), names(fg_raw))[1]
+      extra_cols <- intersect(setdiff(br_candidates, names(fg_raw)), names(fg_raw2))
+      if (length(extra_cols) > 0 && !is.na(id_col2) && !is.na(id_col1)) {
+        fg_raw2_slim <- fg_raw2 %>%
+          dplyr::select(dplyr::all_of(c(id_col2, extra_cols))) %>%
+          dplyr::rename(!!id_col1 := !!id_col2)
+        fg_raw <- dplyr::left_join(fg_raw, fg_raw2_slim, by = id_col1)
+        message("Patched from type=2: ", paste(extra_cols, collapse = ", "))
+      }
+    }
+  }
+
   mlbam_col <- intersect(c("xMLBAMID", "mlbam_id"), names(fg_raw))[1]
   team_col  <- intersect(c("team_name_abb", "Team"), names(fg_raw))[1]
 

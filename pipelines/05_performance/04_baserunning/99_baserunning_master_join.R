@@ -41,11 +41,13 @@ if (length(missing_objects) > 0) {
 
 baserunning_master_season <- player_season_mlb_baserunning %>%
 
-  # FanGraphs — team-level, same grain as MLB spine
+  # FanGraphs — join by player + season only (team_abbr naming differs across sources)
+  # For traded players with multiple rows, keep the first (typically season total)
   dplyr::left_join(
     player_season_fg_baserunning %>%
-      dplyr::distinct(mlbam_id, season, team_abbr, .keep_all = TRUE),
-    by = c("mlbam_id", "season", "team_abbr")
+      dplyr::distinct(mlbam_id, season, .keep_all = TRUE) %>%
+      dplyr::select(-team_abbr),
+    by = c("mlbam_id", "season")
   ) %>%
 
   # Statcast — season total, join on player + season only

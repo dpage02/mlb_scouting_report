@@ -1,0 +1,152 @@
+---
+title: "Prediction Accuracy Tracker"
+format:
+  html:
+    theme: cosmo
+    self-contained: true
+    page-layout: full
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(gt)
+})
+
+LOG_PATH <- "../data/predictions_log.csv"
+
+log_df <- if (file.exists(LOG_PATH)) {
+  tryCatch(
+    readr::read_csv(LOG_PATH, show_col_types = FALSE) %>%
+      dplyr::mutate(game_date = as.Date(game_date)),
+    error = function(e) NULL
+  )
+} else NULL
+```
+
+```{r no-data-check}
+#| output: asis
+if (is.null(log_df) || nrow(log_df) == 0) {
+  cat('<p style="color:#888;font-style:italic;">No predictions logged yet — run the pipeline to begin tracking.</p>')
+  knitr::knit_exit()
+}
+```
+
+```{r summary-cards}
+#| output: asis
+resolved <- log_df %>% dplyr::filter(!is.na(correct_winner))
+n_total   <- nrow(resolved)
+n_correct <- sum(resolved$correct_winner, na.rm = TRUE)
+win_pct   <- if (n_total > 0) round(n_correct / n_total * 100, 1) else NA
+
+run_err <- resolved %>%
+  dplyr::mutate(
+    err_away = abs(pred_away_runs - actual_away_runs),
+    err_home = abs(pred_home_runs - actual_home_runs)
+  ) %>%
+  dplyr::summarise(mae = round(mean(c(err_away, err_home), na.rm = TRUE), 2)) %>%
+  dplyr::pull(mae)
+
+last7_df  <- resolved %>% dplyr::filter(game_date >= Sys.Date() - 7)
+last7_pct <- if (nrow(last7_df) > 0)
+  round(sum(last7_df$correct_winner, na.rm = TRUE) / nrow(last7_df) * 100, 1) else NA
+
+card <- function(label, value, sub = "") sprintf(
+  '<div style="display:inline-block;background:#f8f9fa;border:1px solid #dee2e6;
+   border-radius:8px;padding:16px 24px;margin:6px;text-align:center;min-width:140px;">
+   <div style="font-size:1.8rem;font-weight:700;color:#1a3c6e;">%s</div>
+   <div style="font-size:0.85rem;color:#555;margin-top:4px;">%s</div>
+   %s</div>',
+  value, label,
+  if (nchar(sub) > 0) sprintf('<div style="font-size:0.75rem;color:#888;margin-top:2px;">%s</div>', sub) else ""
+)
+
+cat('<div style="margin-bottom:24px;">')
+cat(card("Season record",   paste0(n_correct, "–", n_total - n_correct),
+         if (!is.na(win_pct)) paste0(win_pct, "%") else ""))
+cat(card("Last 7 days",     if (!is.na(last7_pct)) paste0(last7_pct, "%") else "—",
+         paste0(nrow(last7_df), " games")))
+cat(card("Avg run error",   if (!is.na(run_err)) paste0(run_err, " R") else "—",
+         "per team per game"))
+cat(card("Games logged",    nrow(log_df), paste0(nrow(resolved), " resolved")))
+cat('</div>')
+```
+
+```{r calibration}
+#| output: asis
+if (nrow(resolved) >= 10) {
+  cal <- resolved %>%
+    dplyr::mutate(
+      conf_bucket = dplyr::case_when(
+        pmax(away_win_pct, home_win_pct) >= 0.70 ~ "70%+",
+        pmax(away_win_pct, home_win_pct) >= 0.65 ~ "65–70%",
+        pmax(away_win_pct, home_win_pct) >= 0.60 ~ "60–65%",
+        TRUE                                       ~ "50–60%"
+      )
+    ) %>%
+    dplyr::group_by(conf_bucket) %>%
+    dplyr::summarise(
+      Games   = dplyr::n(),
+      Correct = sum(correct_winner, na.rm = TRUE),
+      `Hit%`  = round(Correct / Games * 100, 1),
+      .groups = "drop"
+    ) %>%
+    dplyr::arrange(dplyr::desc(conf_bucket))
+
+  cat("### Accuracy by Confidence Tier\n\n")
+  print(htmltools::tagList(
+    gt::gt(cal) %>%
+      gt::fmt_number(columns = "Hit%", decimals = 1) %>%
+      gt::tab_style(
+        style = gt::cell_fill(color = "#d4edda"),
+        locations = gt::cells_body(columns = "Hit%",
+                                   rows = `Hit%` >= 55)
+      ) %>%
+      gt::tab_style(
+        style = gt::cell_fill(color = "#f8d7da"),
+        locations = gt::cells_body(columns = "Hit%",
+                                   rows = `Hit%` < 50)
+      ) %>%
+      gt::tab_options(table.font.size = 13) %>%
+      gt::as_raw_html()
+  ))
+}
+```
+
+```{r recent-games}
+#| output: asis
+cat("### Recent Results\n\n")
+
+recent <- resolved %>%
+  dplyr::arrange(dplyr::desc(game_date), dplyr::desc(game_pk)) %>%
+  dplyr::slice_head(n = 30) %>%
+  dplyr::transmute(
+    Date     = format(game_date, "%b %d"),
+    Matchup  = paste0(away_team, " @ ", home_team),
+    `Pred Score` = paste0(round(pred_away_runs, 1), "–", round(pred_home_runs, 1)),
+    `Actual`     = paste0(actual_away_runs, "–", actual_home_runs),
+    `Pred Winner` = predicted_winner,
+    Result   = dplyr::if_else(correct_winner, "✓", "✗"),
+    `Away Win%`  = paste0(round(away_win_pct * 100), "%"),
+    `Home Win%`  = paste0(round(home_win_pct * 100), "%")
+  )
+
+tbl <- recent %>%
+  gt::gt() %>%
+  gt::tab_style(
+    style = gt::cell_text(color = "#198754", weight = "bold"),
+    locations = gt::cells_body(columns = "Result", rows = Result == "✓")
+  ) %>%
+  gt::tab_style(
+    style = gt::cell_text(color = "#dc3545"),
+    locations = gt::cells_body(columns = "Result", rows = Result == "✗")
+  ) %>%
+  gt::tab_options(table.font.size = 12, data_row.padding = gt::px(4)) %>%
+  gt::fmt_missing(columns = dplyr::everything(), missing_text = "—")
+
+cat(gt::as_raw_html(tbl))
+```

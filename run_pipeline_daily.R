@@ -97,6 +97,8 @@ suppressMessages({
   # Re-join with cached Statcast + Lahman + BBRef from base cache
   source("pipelines/05_performance/02_pitching/99_pitching_master_join.R")
   source("pipelines/05_performance/02_pitching/06_player_career_pitching.R")
+  # Pitch arsenal — refreshed daily (new endpoint is fast, ~5 requests)
+  source("pipelines/05_performance/02_pitching/08_statcast_pitch_arsenal.R")
 })
 
 log_message("05 — stats refresh complete")
@@ -126,6 +128,7 @@ suppressMessages({
   source("pipelines/04_game_context/06_series_context.R")
   source("pipelines/04_game_context/99_game_context.R")
   source("pipelines/04_game_context/07_team_standings.R")
+  source("pipelines/04_game_context/08_braves_series.R")
 })
 log_message("04 — game context complete")
 
@@ -185,7 +188,8 @@ pipeline_cache_objects <- c(
   "batter_pitch_type_stats",
   "steamer_projections",
   "team_standings",
-  "baserunning_master_season"
+  "baserunning_master_season",
+  "braves_series_context"
 )
 
 pipeline_cache <- mget(

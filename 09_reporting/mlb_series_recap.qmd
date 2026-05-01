@@ -1,0 +1,191 @@
+---
+title: "Series Recap"
+date: today
+format:
+  html:
+    self-contained:  true
+    embed-resources: true
+    theme:           cosmo
+    toc:             true
+    toc-depth:       2
+    toc-title:       "Sections"
+    toc-location:    left
+    smooth-scroll:   true
+execute:
+  echo:    false
+  warning: false
+  message: false
+---
+
+```{r setup}
+if (basename(getwd()) == "09_reporting") setwd("..")
+
+library(dplyr)
+library(gt)
+library(baseballr)
+library(httr)
+library(jsonlite)
+library(purrr)
+
+# ── Load pipeline cache ──────────────────────────────────────
+cache_path <- "data/pipeline_cache.rds"
+cache_ok   <- file.exists(cache_path) &&
+              difftime(Sys.time(), file.mtime(cache_path), units = "hours") < 12
+if (cache_ok) {
+  cache <- readRDS(cache_path)
+  list2env(cache, envir = .GlobalEnv)
+  rm(cache)
+} else {
+  invisible(capture.output(source("run_pipeline_phase01.R")))
+}
+
+# ── Load helpers ─────────────────────────────────────────────
+source("09_reporting/_series_helpers.R")
+
+# ── Series context ───────────────────────────────────────────
+if (!exists("braves_series_context") || is.null(braves_series_context$current_series)) {
+  stop("No current series context found. Run the daily pipeline first.")
+}
+
+cs <- braves_series_context$current_series
+```
+
+```{r nav-bar}
+#| output: asis
+scouting_file <- paste0("scouting_", format(Sys.Date(), "%Y-%m-%d"), ".html")
+
+nav_html <- paste0(
+  '<div style="margin-bottom:1.5rem;padding:10px 14px;background:#f8f9fa;',
+  'border-radius:6px;border:1px solid #dee2e6;font-size:13px;">',
+  '<a href="https://dpage02.github.io/mlb_scouting_report/" ',
+  'style="color:#1a73e8;text-decoration:none;">\U0001f3e0 Home</a>',
+  '&nbsp;&nbsp;|&nbsp;&nbsp;',
+  '<a href="', scouting_file, '" style="color:#1a73e8;text-decoration:none;">',
+  '\u2190 Today\'s Games</a>',
+  '</div>'
+)
+cat(nav_html, "\n\n")
+```
+
+```{r series-result-header}
+#| output: asis
+# Fetch boxscore data for all games
+recap_data <- make_series_recap_boxscores(cs)
+
+result_label <- if (!is.null(recap_data)) recap_data$result_header else
+  paste0("Atlanta Braves vs ", cs$opponent_name)
+
+series_dates <- if (length(cs$game_dates) > 1) {
+  paste0(format(min(cs$game_dates), "%b %d"), " \u2013 ",
+         format(max(cs$game_dates), "%b %d, %Y"))
+} else {
+  format(cs$game_dates[1], "%B %d, %Y")
+}
+
+braves_won <- !is.null(recap_data) && recap_data$braves_wins > recap_data$opp_wins
+result_color <- if (!is.null(recap_data)) {
+  if (recap_data$braves_wins > recap_data$opp_wins) "#27ae60"
+  else if (recap_data$opp_wins > recap_data$braves_wins) "#e74c3c"
+  else "#f39c12"
+} else "#7f8c8d"
+
+cat(paste0(
+  '<div style="background:', result_color, ';color:white;padding:20px 24px;',
+  'border-radius:8px;margin-bottom:1.5rem;">',
+  '<div style="font-size:0.8rem;text-transform:uppercase;letter-spacing:1px;',
+  'opacity:0.85;margin-bottom:6px;">Series Recap</div>',
+  '<div style="font-size:1.5rem;font-weight:700;margin-bottom:4px;">',
+  result_label, '</div>',
+  '<div style="font-size:0.9rem;opacity:0.9;">', series_dates,
+  ' &nbsp;&middot;&nbsp; ', cs$venue_name, '</div>',
+  '</div>'
+), "\n\n")
+```
+
+---
+
+## Game-by-Game Results
+
+```{r boxscores}
+#| output: asis
+if (is.null(recap_data) || is.null(recap_data$table_data)) {
+  cat("*Game results not yet available.*\n\n")
+} else {
+  tbl <- recap_data$table_data %>%
+    dplyr::select(Game, Date, Score, Winner) %>%
+    gt::gt() %>%
+    gt::cols_align(align = "center", columns = -c(Game, Date)) %>%
+    gt::cols_align(align = "left",   columns = c(Game, Date)) %>%
+    gt::tab_style(
+      style = gt::cell_text(weight = "bold"),
+      locations = gt::cells_body(
+        columns = Winner,
+        rows    = Winner == "Atlanta Braves"
+      )
+    ) %>%
+    gt::tab_style(
+      style = gt::cell_fill(color = "#eafaf1"),
+      locations = gt::cells_body(rows = Winner == "Atlanta Braves")
+    ) %>%
+    gt::tab_style(
+      style = gt::cell_fill(color = "#fdedec"),
+      locations = gt::cells_body(rows = Winner != "Atlanta Braves" & Winner != "—")
+    ) %>%
+    gt::sub_missing(missing_text = "\u2014") %>%
+    gt::tab_options(
+      table.font.size      = 13,
+      data_row.padding     = gt::px(8),
+      column_labels.font.weight = "bold"
+    ) %>%
+    gt::opt_stylize(style = 1, color = "blue")
+
+  cat(gt::as_raw_html(tbl), "\n\n")
+}
+```
+
+---
+
+## Series Narrative
+
+```{r narrative}
+#| output: asis
+narr <- make_series_recap_narrative(cs, recap_data)
+if (nchar(narr) > 0) cat(narr, "\n\n") else
+  cat("*Narrative unavailable.*\n\n")
+```
+
+---
+
+## Individual Game Deep Dives
+
+*Full play-by-play analysis for each game in this series:*
+
+```{r game-links}
+#| output: asis
+away_abbr_str <- tryCatch({
+  team_ids %>% dplyr::filter(mlbam_team_id == cs$away_team_id) %>%
+    dplyr::pull(team_abbr) %>% dplyr::first()
+}, error = function(e) "AWAY")
+home_abbr_str <- tryCatch({
+  team_ids %>% dplyr::filter(mlbam_team_id == cs$home_team_id) %>%
+    dplyr::pull(team_abbr) %>% dplyr::first()
+}, error = function(e) "HOME")
+away_abbr_str <- if (is.na(away_abbr_str) || length(away_abbr_str) == 0) "AWAY" else away_abbr_str
+home_abbr_str <- if (is.na(home_abbr_str) || length(home_abbr_str) == 0) "HOME" else home_abbr_str
+
+links <- purrr::map_chr(seq_along(cs$game_pks), function(i) {
+  gdate <- format(cs$game_dates[i], "%Y-%m-%d")
+  fname <- paste0("deepdive_", gdate, "_", away_abbr_str, "_", home_abbr_str, ".html")
+  paste0(
+    '<a href="', fname, '" style="display:inline-block;background:#1a73e8;color:white;',
+    'padding:6px 14px;border-radius:4px;text-decoration:none;font-weight:600;margin:4px;">',
+    'Game ', i, ' \u2014 ', format(cs$game_dates[i], "%b %d"), '</a>'
+  )
+})
+
+cat(paste0(
+  '<div style="margin:1rem 0;">',
+  paste(links, collapse = "\n"),
+  '</div>'
+), "\n\n")
+```

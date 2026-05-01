@@ -91,6 +91,7 @@ suppressMessages({
   source("pipelines/05_performance/01_offense/05_lahman_offense_season.R")
   source("pipelines/05_performance/01_offense/99_offense_master_join.R")
   source("pipelines/05_performance/01_offense/06_player_career_offense.R")
+  source("pipelines/05_performance/01_offense/07_statcast_batter_vs_pitch.R")
 })
 log_message("05 — offense complete")
 
@@ -177,6 +178,48 @@ suppressMessages({
   source("pipelines/08_game_model/99_game_model_join.R")
 })
 log_message("08 — game model complete")
+
+# ------------------------------------------------------------
+# 09_predictions — log today's predictions + fill past results
+# ------------------------------------------------------------
+
+log_message("09 — Logging predictions...")
+tryCatch(source("log_predictions.R"), error = function(e)
+  message("log_predictions failed (non-fatal): ", e$message))
+log_message("09 — predictions complete")
+
+# ------------------------------------------------------------
+# Save pipeline cache (for report rendering)
+# ------------------------------------------------------------
+
+pipeline_cache_objects <- c(
+  "target_date", "target_season", "team_ids",
+  "game_context", "lineup_context", "starter_matchup", "bullpen_grid",
+  "offense_master_season", "player_career_offense", "player_career_pitching",
+  "pitching_master_season", "pitcher_arsenal",
+  "defense_master_season", "lineup_context_splits", "starter_splits",
+  "player_season_fg_pitching", "player_season_mlb_pitching",
+  "player_master_ids", "depth_charts",
+  "park_factors", "recent_batter_streaks", "current_defense_stats", "value_master_season",
+  "player_season_mlb_offense_splits", "player_season_mlb_pitching_splits",
+  "batter_pitch_type_stats",
+  "steamer_projections",
+  "team_standings",
+  "baserunning_master_season"
+)
+
+pipeline_cache <- mget(
+  pipeline_cache_objects[pipeline_cache_objects %in% ls()],
+  envir = .GlobalEnv
+)
+
+if (!dir.exists("data")) dir.create("data")
+saveRDS(pipeline_cache, "data/pipeline_cache.rds")
+log_message(sprintf(
+  "Pipeline cache saved — %d objects | %.1f MB",
+  length(pipeline_cache),
+  file.size("data/pipeline_cache.rds") / 1e6
+))
 
 # ------------------------------------------------------------
 # Completion

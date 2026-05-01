@@ -26,6 +26,36 @@ library(gt)
 library(dplyr)
 
 # ------------------------------------------------------------
+# Layout helper: place two HTML strings side by side in a flex row
+# label1/label2: optional team-name headers shown above each panel
+# ------------------------------------------------------------
+
+side_by_side_html <- function(html1, html2, gap = "2rem",
+                               label1 = NULL, label2 = NULL) {
+  header <- function(lbl) {
+    if (is.null(lbl)) return("")
+    sprintf(
+      '<div style="font-size:0.92rem;font-weight:700;color:#2c3e50;
+        margin-bottom:6px;padding-bottom:4px;border-bottom:2px solid #3498db;">%s</div>',
+      lbl
+    )
+  }
+  panel <- function(html, lbl) {
+    paste0(
+      '<div style="flex:1;min-width:0;overflow-x:auto;">',
+      header(lbl), html,
+      '</div>'
+    )
+  }
+  paste0(
+    '<div style="display:flex;gap:', gap, ';align-items:flex-start;width:100%;">',
+    panel(html1, label1),
+    panel(html2, label2),
+    '</div>'
+  )
+}
+
+# ------------------------------------------------------------
 # Full Lineup — "Nerd Heaven" analytical breakdown
 # Returns a NAMED LIST of gt tables (3 bands):
 #   1. Overall                  — traditional rates + counting + advanced
@@ -704,15 +734,17 @@ make_arsenal_gt <- function(gpk) {
     display$`H.Break` <- data$h_break
   if ("v_break"         %in% names(data) && any(!is.na(data$v_break)))
     display$`V.Break` <- data$v_break
-  if ("whiff_pct"       %in% names(data) && any(!is.na(data$whiff_pct)))
+  if ("whiff_pct"        %in% names(data) && any(!is.na(data$whiff_pct)))
     display$`Whiff%` <- data$whiff_pct
-  if ("put_away"        %in% names(data) && any(!is.na(data$put_away)))
-    display$`PutAway%` <- data$put_away
-  if ("hard_hit_pct"    %in% names(data) && any(!is.na(data$hard_hit_pct)))
+  if ("put_away"         %in% names(data) && any(!is.na(data$put_away)))
+    display$`PutAwy%` <- data$put_away
+  if ("k_pct"            %in% names(data) && any(!is.na(data$k_pct)))
+    display$`K%` <- data$k_pct
+  if ("hard_hit_pct"     %in% names(data) && any(!is.na(data$hard_hit_pct)))
     display$`HH%` <- data$hard_hit_pct
-  if ("xba"             %in% names(data) && any(!is.na(data$xba)))
+  if ("xba"              %in% names(data) && any(!is.na(data$xba)))
     display$xBA <- data$xba
-  if ("xwoba"           %in% names(data) && any(!is.na(data$xwoba)))
+  if ("xwoba"            %in% names(data) && any(!is.na(data$xwoba)))
     display$xwOBA <- data$xwoba
   if ("run_value_per100" %in% names(data) && any(!is.na(data$run_value_per100)))
     display$`RV/100` <- data$run_value_per100
@@ -727,7 +759,7 @@ make_arsenal_gt <- function(gpk) {
       subtitle = paste0("Pitch mix, velocity, movement, and outcomes · ", season_yr, " season")
     ) %>%
     gt::fmt_percent(
-      columns  = dplyr::any_of(c("Usage%", "Whiff%", "PutAway%", "HH%")),
+      columns  = dplyr::any_of(c("Usage%", "Whiff%", "PutAwy%", "K%", "HH%")),
       decimals = 1
     ) %>%
     gt::fmt_number(
@@ -757,7 +789,7 @@ make_arsenal_gt <- function(gpk) {
     ) %>%
     gt::tab_spanner(
       label   = "Outcomes",
-      columns = dplyr::any_of(c("Whiff%", "PutAway%", "HH%", "xBA", "xwOBA", "RV/100"))
+      columns = dplyr::any_of(c("Whiff%", "PutAwy%", "K%", "HH%", "xBA", "xwOBA", "RV/100"))
     ) %>%
     gt::tab_options(
       table.font.size            = 12,
@@ -1406,7 +1438,9 @@ make_bullpen_arsenal_gt <- function(gpk, side_filter) {
   if ("whiff_pct"        %in% names(data) && any(!is.na(data$whiff_pct)))
     display$`Whiff%` <- data$whiff_pct
   if ("put_away"         %in% names(data) && any(!is.na(data$put_away)))
-    display$`PutAway%` <- data$put_away
+    display$`PutAwy%` <- data$put_away
+  if ("k_pct"            %in% names(data) && any(!is.na(data$k_pct)))
+    display$`K%` <- data$k_pct
   if ("hard_hit_pct"     %in% names(data) && any(!is.na(data$hard_hit_pct)))
     display$`HH%` <- data$hard_hit_pct
   if ("xba"              %in% names(data) && any(!is.na(data$xba)))
@@ -1423,7 +1457,7 @@ make_bullpen_arsenal_gt <- function(gpk, side_filter) {
       subtitle = paste0("Pitch mix, velocity, movement, and outcomes \u00b7 ", season_yr, " season")
     ) %>%
     gt::fmt_percent(
-      columns  = dplyr::any_of(c("Usage%", "Whiff%", "PutAway%", "HH%")),
+      columns  = dplyr::any_of(c("Usage%", "Whiff%", "PutAwy%", "K%", "HH%")),
       decimals = 1
     ) %>%
     gt::fmt_number(columns = dplyr::any_of(c("Velo")), decimals = 1) %>%
@@ -1435,7 +1469,7 @@ make_bullpen_arsenal_gt <- function(gpk, side_filter) {
     gt::tab_spanner(label = "Pitch Characteristics",
                     columns = dplyr::any_of(c("Velo", "Spin", "H.Break", "V.Break"))) %>%
     gt::tab_spanner(label = "Outcomes",
-                    columns = dplyr::any_of(c("Whiff%", "PutAway%", "HH%", "xBA", "xwOBA", "RV/100"))) %>%
+                    columns = dplyr::any_of(c("Whiff%", "PutAwy%", "K%", "HH%", "xBA", "xwOBA", "RV/100"))) %>%
     gt::tab_options(
       table.font.size            = 12,
       heading.align              = "left",
@@ -2864,7 +2898,6 @@ make_baserunning_gt <- function(gpk, side_filter) {
       `SB%`   = sbpct_vals,
       Sprint  = col1_br(c("sc_sprint_speed")),
       Spd     = col1_br(c("fg_Spd", "fg_spd")),
-      UBR     = col1_br(c("fg_UBR", "fg_ubr", "fg_UBR_x", "fg_UBR_y")),
       BsR     = col1_br(c("fg_wBsR", "fg_BsR", "fg_bsr", "fg_wBSR"))
     )
 
@@ -2876,7 +2909,7 @@ make_baserunning_gt <- function(gpk, side_filter) {
       ) %>%
       gt::fmt_integer(columns = dplyr::any_of(c("SB", "CS"))) %>%
       gt::fmt_percent(columns = dplyr::any_of(c("SB%")), decimals = 1) %>%
-      gt::fmt_number(columns  = dplyr::any_of(c("Sprint", "Spd", "UBR", "BsR")), decimals = 1) %>%
+      gt::fmt_number(columns  = dplyr::any_of(c("Sprint", "Spd", "BsR")), decimals = 1) %>%
       gt::fmt_missing(columns = dplyr::everything(), missing_text = "\u2014") %>%
       gt::tab_spanner(
         label   = "Stolen Bases",
@@ -2888,10 +2921,10 @@ make_baserunning_gt <- function(gpk, side_filter) {
       ) %>%
       gt::tab_spanner(
         label   = "Baserunning Value",
-        columns = dplyr::any_of(c("UBR", "BsR"))
+        columns = dplyr::any_of(c("BsR"))
       ) %>%
       gt::tab_source_note(
-        source_note = "Sprint Speed: Statcast mph (elite \u2265 30). Spd: Bill James composite speed score. UBR: extra bases taken on BIP (excludes SB). BsR: total baserunning runs above average."
+        source_note = "Sprint Speed: Statcast mph (elite \u2265 30). Spd: Bill James composite speed score. BsR: total baserunning runs above average (FanGraphs)."
       ) %>%
       gt::cols_width(`#` ~ gt::px(28)) %>%
       gt::tab_options(
@@ -2931,5 +2964,139 @@ make_baserunning_gt <- function(gpk, side_filter) {
       gt::tab_options(table.font.size = 12, heading.align = "left",
                       data_row.padding = gt::px(4)) %>%
       gt::opt_stylize(style = 1, color = "blue")
+  })
+}
+
+# ------------------------------------------------------------
+# Ballpark & Conditions
+# Card row: park factor (with handedness splits when notable),
+# temperature, wind, precipitation, and a conditions note.
+# ------------------------------------------------------------
+
+make_ballpark_conditions_html <- function(gpk) {
+  tryCatch({
+    game <- game_context %>% dplyr::filter(game_pk == gpk)
+    if (nrow(game) == 0) return("")
+
+    # --- Local card builder ---
+    .bc_card <- function(label, value, sub_text = "", value_color = "#1a1a1a") {
+      paste0(
+        '<div style="flex:0 0 auto;min-width:120px;padding:10px 14px;background:#f8f9fa;',
+        'border:1px solid #dee2e6;border-radius:6px;text-align:center;">',
+        '<div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;',
+        'color:#888;font-weight:600;margin-bottom:4px;">', label, '</div>',
+        '<div style="font-size:1.25rem;font-weight:700;color:', value_color, ';">', value, '</div>',
+        if (nchar(sub_text) > 0)
+          paste0('<div style="font-size:10px;color:#666;margin-top:2px;">', sub_text, '</div>')
+        else "",
+        '</div>'
+      )
+    }
+
+    # --- Park factor lookup (by home team) ---
+    home_id <- game$home_team_id[1]
+    pf_row  <- if (exists("park_factors") && nrow(park_factors) > 0)
+      park_factors %>% dplyr::filter(mlbam_team_id == home_id)
+    else
+      dplyr::tibble()
+
+    pf_runs <- if (nrow(pf_row) > 0) pf_row$pf_runs[1] else NA_real_
+    pf_lhh  <- if (nrow(pf_row) > 0) pf_row$pf_lhh[1]  else NA_real_
+    pf_rhh  <- if (nrow(pf_row) > 0) pf_row$pf_rhh[1]  else NA_real_
+    venue   <- if (nrow(pf_row) > 0 && !is.na(pf_row$venue_name[1]))
+      pf_row$venue_name[1]
+    else
+      dplyr::coalesce(game$venue_name[1], "Unknown Park")
+
+    # Park factor label + color
+    pf_label <- if (is.na(pf_runs))      "N/A" else
+      if (pf_runs >= 1.06) "Strong Hitter's Park" else
+      if (pf_runs >= 1.02) "Hitter-Friendly"      else
+      if (pf_runs >= 0.98) "Neutral"               else
+      if (pf_runs >= 0.94) "Pitcher-Friendly"      else
+                           "Strong Pitcher's Park"
+
+    pf_color <- if (is.na(pf_runs))      "#aaa"     else
+      if (pf_runs >= 1.06) "#c0392b" else   # deep red
+      if (pf_runs >= 1.02) "#e67e22" else   # orange
+      if (pf_runs >= 0.98) "#7f8c8d" else   # gray
+      if (pf_runs >= 0.94) "#2980b9" else   # blue
+                           "#1a5276"         # deep blue
+
+    pf_display <- if (is.na(pf_runs)) "\u2014" else sprintf("%.3f", pf_runs)
+
+    # --- Weather columns ---
+    temp_f  <- if ("game_temp_f"      %in% names(game)) game$game_temp_f[1]      else NA_real_
+    wind    <- if ("wind_speed_mph"   %in% names(game)) game$wind_speed_mph[1]   else NA_real_
+    precip  <- if ("precipitation_in" %in% names(game)) game$precipitation_in[1] else NA_real_
+
+    temp_str   <- if (is.na(temp_f))                     "\u2014" else sprintf("%.0f\u00b0F", temp_f)
+    wind_str   <- if (is.na(wind))                        "\u2014" else sprintf("%.0f mph", wind)
+    precip_str <- if (is.na(precip) || precip == 0)       "None"   else sprintf("%.2f in", precip)
+
+    # --- Park factor card (wider, colored label) ---
+    pf_card <- paste0(
+      '<div style="flex:0 0 auto;min-width:160px;padding:10px 14px;background:#f8f9fa;',
+      'border:1px solid #dee2e6;border-radius:6px;text-align:center;">',
+      '<div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;',
+      'color:#888;font-weight:600;margin-bottom:4px;">Park Factor (Runs)</div>',
+      '<div style="font-size:1.25rem;font-weight:700;color:', pf_color, ';">', pf_display, '</div>',
+      '<div style="font-size:11px;color:', pf_color, ';font-weight:600;margin-top:3px;">', pf_label, '</div>',
+      '</div>'
+    )
+
+    # Handedness splits — only when LHH/RHH differ by more than 1 point
+    splits_html <- ""
+    if (!is.na(pf_lhh) && !is.na(pf_rhh) && !is.na(pf_runs) &&
+        abs(pf_lhh - pf_rhh) > 0.01) {
+      splits_html <- paste0(
+        .bc_card("LHH Factor", sprintf("%.3f", pf_lhh),
+                 sub_text = if (pf_lhh > pf_rhh) "favors lefties" else ""),
+        .bc_card("RHH Factor", sprintf("%.3f", pf_rhh),
+                 sub_text = if (pf_rhh > pf_lhh) "favors righties" else "")
+      )
+    }
+
+    # --- Conditions note (only when there is something worth flagging) ---
+    impact_parts <- character()
+    if (!is.na(temp_f) && temp_f >= 85)
+      impact_parts <- c(impact_parts, paste0("Hot air (", temp_str, ") carries the ball"))
+    if (!is.na(temp_f) && temp_f <= 45)
+      impact_parts <- c(impact_parts, paste0("Cold air (", temp_str, ") suppresses HR"))
+    if (!is.na(wind) && wind >= 12)
+      impact_parts <- c(impact_parts, paste0("Wind at ", wind_str, " \u2014 fly balls in play"))
+    if (!is.na(pf_runs) && pf_runs >= 1.04)
+      impact_parts <- c(impact_parts, "Elevated run environment")
+    if (!is.na(pf_runs) && pf_runs <= 0.97)
+      impact_parts <- c(impact_parts, "Run-suppressing ballpark")
+    if (!is.na(precip) && precip > 0.10)
+      impact_parts <- c(impact_parts, "Rain possible \u2014 check for delays")
+
+    impact_html <- if (length(impact_parts) > 0) paste0(
+      '\n<div style="margin-top:10px;padding:8px 12px;background:#fffbf0;',
+      'border-left:3px solid #f39c12;border-radius:0 4px 4px 0;font-size:12px;color:#5d4037;">',
+      '<strong>Conditions note:</strong> ', paste(impact_parts, collapse = " \u00b7 "),
+      '</div>'
+    ) else ""
+
+    # --- Assemble ---
+    venue_hdr <- paste0(
+      '<div style="font-size:0.92rem;font-weight:700;color:#2c3e50;margin-bottom:10px;">',
+      venue, '</div>'
+    )
+    cards_row <- paste0(
+      '<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start;">',
+      pf_card, splits_html,
+      .bc_card("Temperature",   temp_str),
+      .bc_card("Wind Speed",    wind_str),
+      .bc_card("Precipitation", precip_str),
+      '</div>'
+    )
+
+    paste0(venue_hdr, cards_row, impact_html)
+
+  }, error = function(e) {
+    paste0('<p style="color:#888;font-style:italic;font-size:12px;">',
+           'Ballpark data unavailable: ', conditionMessage(e), '</p>')
   })
 }

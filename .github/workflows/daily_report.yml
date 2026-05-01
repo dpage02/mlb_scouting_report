@@ -1,0 +1,163 @@
+# ============================================================
+# MLB Scouting Report — Daily Pipeline + Deploy
+# ============================================================
+# Runs twice daily: morning preview (projected lineups) and
+# afternoon update (official lineups + fresh game context).
+#
+# Schedules (UTC — baseball season runs EDT = UTC-4):
+#   7:30 AM ET  →  11:30 UTC
+#   4:30 PM ET  →  20:30 UTC
+#
+# Note: GitHub Actions scheduled runs can be delayed up to
+#   30-60 min during high-traffic periods.
+#
+# Manual trigger: Actions tab → Daily MLB Report → Run workflow
+# ============================================================
+
+name: Daily MLB Report
+
+on:
+  schedule:
+    - cron: "30 11 * * *"   #  7:30 AM ET (EDT = UTC-4)
+    - cron: "30 20 * * *"   #  4:30 PM ET (EDT = UTC-4)
+  workflow_dispatch:          # manual trigger from Actions tab
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      RENV_PATHS_LIBRARY: ~/.local/share/renv
+
+    steps:
+      # --------------------------------------------------------
+      # 1. Checkout source
+      # --------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # --------------------------------------------------------
+      # 2. Install Quarto
+      # --------------------------------------------------------
+      - name: Install Quarto
+        uses: quarto-dev/quarto-actions/setup@v2
+
+      # --------------------------------------------------------
+      # 3. Install R
+      # --------------------------------------------------------
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: "4.4"
+          use-public-rspm: true
+
+      # --------------------------------------------------------
+      # 4. Install R packages (from DESCRIPTION, with binary cache)
+      # --------------------------------------------------------
+      - name: Install R dependencies
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          needs: website
+
+      # --------------------------------------------------------
+      # 5. Prepare directories
+      # --------------------------------------------------------
+      - name: Ensure data, logs, and reports directories exist
+        run: mkdir -p data logs reports
+
+      # --------------------------------------------------------
+      # 6. Base pipeline cache (season stats, refreshed weekly)
+      # --------------------------------------------------------
+      - name: Get ISO week number
+        id: week
+        run: echo "week=$(date +%V)" >> $GITHUB_OUTPUT
+
+      - name: Restore base pipeline cache
+        id: base-cache
+        uses: actions/cache@v4
+        with:
+          path: data/base_cache.rds
+          key: base-cache-${{ runner.os }}-week-${{ steps.week.outputs.week }}
+          restore-keys: |
+            base-cache-${{ runner.os }}-week-
+
+      - name: Bootstrap base cache from release (first run of the week)
+        if: steps.base-cache.outputs.cache-hit != 'true'
+        run: |
+          gh release download cache-bootstrap \
+            --pattern "base_cache.rds" \
+            --dir data \
+            --clobber 2>/dev/null \
+            || echo "No bootstrap release found — run_all.R will do a full rebuild"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # --------------------------------------------------------
+      # 7. Run full pipeline and render all reports
+      #    push_to_web.R is a no-op in CI (GITHUB_ACTIONS is set)
+      # --------------------------------------------------------
+      - name: Run pipeline and render reports
+        run: |
+          Rscript -e "
+            setwd('${{ github.workspace }}')
+            tryCatch(
+              source('run_all.R'),
+              error = function(e) {
+                cat('Pipeline error:', conditionMessage(e), '\n')
+                quit(status = 1)
+              }
+            )
+          "
+
+      # --------------------------------------------------------
+      # 8. Pull existing gh-pages HTML into reports/ so the
+      #    index page can link to past dates
+      # --------------------------------------------------------
+      - name: Restore past reports from gh-pages
+        run: |
+          git fetch origin gh-pages --depth=1 2>/dev/null || echo "No gh-pages branch yet — skipping"
+          if git cat-file -e FETCH_HEAD 2>/dev/null; then
+            git worktree add /tmp/ghpages-old FETCH_HEAD 2>/dev/null
+            find /tmp/ghpages-old -maxdepth 1 -name "*.html" ! -name "index.html" | while read f; do
+              bn=$(basename "$f")
+              [ -f "reports/$bn" ] && continue   # keep freshly rendered file
+              cp "$f" "reports/$bn"
+            done
+            git worktree remove /tmp/ghpages-old --force 2>/dev/null || true
+          fi
+
+      # --------------------------------------------------------
+      # 9. Generate index.html (needs full reports/ to list past games)
+      # --------------------------------------------------------
+      - name: Generate index page
+        run: |
+          Rscript -e "
+            setwd('${{ github.workspace }}')
+            source('generate_index.R')
+          "
+
+      # --------------------------------------------------------
+      # 10. Deploy reports/ to GitHub Pages
+      #     keep_files: true preserves older date files already
+      #     on the branch (peaceiris only adds/overwrites, not deletes)
+      # --------------------------------------------------------
+      - name: Get report date
+        id: date
+        run: echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./reports
+          publish_branch: gh-pages
+          keep_files: true
+          force_orphan: false
+          user_name: "github-actions[bot]"
+          user_email: "github-actions[bot]@users.noreply.github.com"
+          commit_message: "Deploy MLB reports ${{ steps.date.outputs.date }}"

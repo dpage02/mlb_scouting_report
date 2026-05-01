@@ -13,6 +13,11 @@
 
 KEEP_DAYS <- 14   # how many days of reports to keep live
 
+# GitHub Actions handles deployment via peaceiris/actions-gh-pages — skip locally
+if (nchar(Sys.getenv("GITHUB_ACTIONS")) > 0) {
+  message("push_to_web: GitHub Actions detected — deployment handled by workflow, skipping.")
+} else {
+
 if (!dir.exists("reports")) stop("No reports/ directory found. Run run_all.R first.")
 
 source("generate_index.R")
@@ -45,6 +50,12 @@ for (f in all_files) {
     keep_files <- c(keep_files, f)
   } else if (as.Date(dm) == Sys.Date()) {
     # Only today's date-stamped reports
+    keep_files <- c(keep_files, f)
+  } else if (as.Date(dm) == Sys.Date() - 1 && grepl("^recap_", bn)) {
+    # Recap files are always dated yesterday — include them explicitly
+    keep_files <- c(keep_files, f)
+  } else if (as.Date(dm) >= Sys.Date() - KEEP_DAYS && grepl("^result_", bn)) {
+    # Per-game result pages can be any recent date — include all within keep window
     keep_files <- c(keep_files, f)
   }
 }
@@ -116,3 +127,5 @@ if (result == 0) {
 } else {
   message("\nPush failed — check output above.")
 }
+
+} # end: !GITHUB_ACTIONS

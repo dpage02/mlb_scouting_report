@@ -1,0 +1,209 @@
+---
+title: "Series Preview"
+date: today
+params:
+  away_team_id:  null
+  home_team_id:  null
+  series_label:  null
+format:
+  html:
+    self-contained:   true
+    embed-resources:  true
+    theme:            cosmo
+    toc:              true
+    toc-depth:        2
+    toc-title:        "Sections"
+    toc-location:     left
+    smooth-scroll:    true
+execute:
+  echo:    false
+  warning: false
+  message: false
+---
+
+```{r setup}
+if (basename(getwd()) == "09_reporting") setwd("..")
+
+library(dplyr)
+library(gt)
+library(baseballr)
+library(httr)
+library(jsonlite)
+
+# ── Load pipeline cache ──────────────────────────────────────
+cache_path <- "data/pipeline_cache.rds"
+cache_ok   <- file.exists(cache_path) &&
+              difftime(Sys.time(), file.mtime(cache_path), units = "hours") < 12
+if (cache_ok) {
+  cache <- readRDS(cache_path)
+  list2env(cache, envir = .GlobalEnv)
+  rm(cache)
+} else {
+  invisible(capture.output(source("run_pipeline_phase01.R")))
+}
+
+# ── Load helpers ─────────────────────────────────────────────
+source("09_reporting/_deepdive_helpers.R")
+source("09_reporting/_series_helpers.R")
+
+# ── Series context ───────────────────────────────────────────
+if (!exists("braves_series_context") || is.null(braves_series_context$next_series)) {
+  stop("No upcoming series context found. Run the daily pipeline first.")
+}
+
+ns  <- braves_series_context$next_series
+prb <- braves_series_context$next_series_probables
+
+away_id   <- ns$away_team_id
+home_id   <- ns$home_team_id
+away_name <- ns$away_team_name
+home_name <- ns$home_team_name
+```
+
+```{r nav-bar}
+#| output: asis
+scouting_file <- paste0("scouting_", format(Sys.Date(), "%Y-%m-%d"), ".html")
+
+nav_html <- paste0(
+  '<div style="margin-bottom:1.5rem;padding:10px 14px;background:#f8f9fa;',
+  'border-radius:6px;border:1px solid #dee2e6;font-size:13px;">',
+  '<a href="https://dpage02.github.io/mlb_scouting_report/" ',
+  'style="color:#1a73e8;text-decoration:none;">\U0001f3e0 Home</a>',
+  '&nbsp;&nbsp;|&nbsp;&nbsp;',
+  '<a href="', scouting_file, '" style="color:#1a73e8;text-decoration:none;">',
+  '\u2190 Today\'s Games</a>',
+  '</div>'
+)
+cat(nav_html, "\n\n")
+```
+
+```{r series-header}
+#| output: asis
+cat(make_series_header_html(ns), "\n\n")
+```
+
+---
+
+## Season at a Glance
+
+*Current standings, run environment, and team-level offensive and pitching ratings.*
+
+```{r team-overview}
+#| output: asis
+tbl <- make_series_team_overview_gt(away_id, home_id)
+cat(gt::as_raw_html(tbl), "\n\n")
+```
+
+---
+
+## Ballpark & Conditions
+
+```{r ballpark}
+#| output: asis
+# Use the first game of the series for venue + weather lookup
+first_gpk <- ns$game_pks[1]
+
+# Temporarily build a minimal game_context row for the helper
+# if the series game isn't in today's game_context
+if (exists("game_context") && first_gpk %in% game_context$game_pk) {
+  bc_html <- tryCatch(make_ballpark_conditions_html(first_gpk), error = function(e) "")
+} else {
+  # Fallback: build directly from park_factors by home team
+  pf_row <- if (exists("park_factors"))
+    park_factors %>% dplyr::filter(mlbam_team_id == home_id) else dplyr::tibble()
+  pf_runs <- if (nrow(pf_row) > 0) pf_row$pf_runs[1] else NA_real_
+  pf_label <- if (is.na(pf_runs)) "N/A" else
+    if (pf_runs >= 1.06) "Strong Hitter's Park" else
+    if (pf_runs >= 1.02) "Hitter-Friendly" else
+    if (pf_runs >= 0.98) "Neutral" else "Pitcher-Friendly"
+  pf_color <- if (is.na(pf_runs)) "#aaa" else
+    if (pf_runs >= 1.06) "#c0392b" else
+    if (pf_runs >= 1.02) "#e67e22" else
+    if (pf_runs >= 0.98) "#7f8c8d" else "#2980b9"
+
+  venue <- if (nrow(pf_row) > 0) pf_row$venue_name[1] else ns$venue_name
+  bc_html <- paste0(
+    '<div style="font-size:0.92rem;font-weight:700;color:#2c3e50;margin-bottom:10px;">',
+    venue, '</div>',
+    '<div style="display:flex;flex-wrap:wrap;gap:10px;">',
+    '<div style="flex:0 0 auto;min-width:160px;padding:10px 14px;background:#f8f9fa;',
+    'border:1px solid #dee2e6;border-radius:6px;text-align:center;">',
+    '<div style="font-size:10px;text-transform:uppercase;color:#888;font-weight:600;margin-bottom:4px;">',
+    'Park Factor (Runs)</div>',
+    '<div style="font-size:1.25rem;font-weight:700;color:', pf_color, ';">',
+    if (!is.na(pf_runs)) sprintf("%.3f", pf_runs) else "\u2014", '</div>',
+    '<div style="font-size:11px;color:', pf_color, ';font-weight:600;margin-top:3px;">',
+    pf_label, '</div></div>',
+    '<div style="flex:0 0 auto;padding:10px 14px;background:#fff8e7;border:1px solid #f0d08a;',
+    'border-radius:6px;font-size:12px;color:#7d5a00;max-width:320px;align-self:center;">',
+    '<strong>Note:</strong> Weather forecast not yet available for this series date.</div>',
+    '</div>'
+  )
+}
+
+if (nchar(bc_html) > 0) cat(bc_html, "\n\n")
+```
+
+---
+
+## Probable Starters
+
+*Tier-1: official MLB API probables. Shows TBD when not yet posted.*
+
+```{r rotation}
+#| output: asis
+tbl <- make_series_rotation_gt(ns, prb)
+cat(gt::as_raw_html(tbl), "\n\n")
+```
+
+---
+
+## Offense — `r away_name`
+
+*Full roster: starters (top 9 PA) and bench (≥ 25 PA). 2026 season.*
+
+```{r batting-away}
+#| output: asis
+opp_sp_away <- if (!is.null(prb) && nrow(prb) > 0 && !is.na(prb$home_pitcher_name[1]))
+  prb$home_pitcher_name[1] else NULL
+tbl <- make_series_batting_gt(away_id, opp_sp_name = opp_sp_away)
+cat(gt::as_raw_html(tbl), "\n\n")
+```
+
+---
+
+## Offense — `r home_name`
+
+*Full roster: starters (top 9 PA) and bench (≥ 25 PA). 2026 season.*
+
+```{r batting-home}
+#| output: asis
+opp_sp_home <- if (!is.null(prb) && nrow(prb) > 0 && !is.na(prb$away_pitcher_name[1]))
+  prb$away_pitcher_name[1] else NULL
+tbl <- make_series_batting_gt(home_id, opp_sp_name = opp_sp_home)
+cat(gt::as_raw_html(tbl), "\n\n")
+```
+
+---
+
+## Bullpen — `r away_name`
+
+*Relief corps season stats (min. 5 IP), sorted by ERA.*
+
+```{r bullpen-away}
+#| output: asis
+tbl <- make_series_bullpen_gt(away_id)
+cat(gt::as_raw_html(tbl), "\n\n")
+```
+
+---
+
+## Bullpen — `r home_name`
+
+*Relief corps season stats (min. 5 IP), sorted by ERA.*
+
+```{r bullpen-home}
+#| output: asis
+tbl <- make_series_bullpen_gt(home_id)
+cat(gt::as_raw_html(tbl), "\n\n")
+```

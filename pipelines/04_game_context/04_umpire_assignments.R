@@ -38,7 +38,7 @@ game_umpires <- map_dfr(
       error = function(e) return(NULL)
     )
     
-    if (is.null(ump_data) || nrow(ump_data) == 0) {
+    if (is.null(ump_data) || !is.data.frame(ump_data) || nrow(ump_data) == 0) {
       return(tibble(
         game_pk = gpk,
         home_plate_umpire = NA_character_,

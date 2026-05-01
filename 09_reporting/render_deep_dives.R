@@ -29,6 +29,40 @@ message("Rendering deep dives for ", report_date,
         " — ", nrow(game_context), " games...")
 
 # ------------------------------------------------------------
+# Helper: render a QMD using absolute paths so Quarto's
+# self-contained bundler finds _files/ next to the QMD.
+# Passing relative cross-directory paths causes either
+# "No valid input files" or a bundler readfile error.
+# Returns the absolute path of the rendered file.
+# ------------------------------------------------------------
+.qmd_dir      <- normalizePath(file.path(getwd(), "09_reporting"), winslash = "/")
+.project_root <- normalizePath(getwd(), winslash = "/")
+
+.qmd_render <- function(qmd_basename, params = NULL, output_file = NULL, ...) {
+  qmd_abs <- file.path(.qmd_dir, qmd_basename)
+
+  # cd into the QMD's directory so the bare output filename and the
+  # _files/ bundler directory both resolve next to the QMD.
+  old_wd <- setwd(.qmd_dir)
+  on.exit(setwd(old_wd))
+
+  quarto::quarto_render(
+    input          = qmd_abs,
+    execute_params = params,
+    output_file    = output_file,   # bare filename or NULL
+    ...
+  )
+
+  # Clean up intermediate _files/ dir (resources already bundled into HTML)
+  stem      <- tools::file_path_sans_ext(qmd_basename)
+  files_dir <- file.path(.qmd_dir, paste0(stem, "_files"))
+  if (dir.exists(files_dir)) unlink(files_dir, recursive = TRUE)
+
+  # Return absolute path where Quarto wrote the file
+  if (!is.null(output_file)) file.path(.qmd_dir, output_file) else NULL
+}
+
+# ------------------------------------------------------------
 # Build filename for each game
 # ------------------------------------------------------------
 
@@ -64,23 +98,16 @@ for (i in seq_len(nrow(game_files))) {
   message(sprintf("  [%d/%d] %s...", i, nrow(game_files), matchup))
 
   tryCatch({
-    quarto::quarto_render(
-      input          = "09_reporting/mlb_game_deepdive.qmd",
-      execute_params = list(
-        game_pk   = gpk,
-        game_date = report_date
-      ),
+    rendered_path <- .qmd_render(
+      "mlb_game_deepdive.qmd",
+      params      = list(game_pk = gpk, game_date = report_date),
       output_file = out_file
     )
-
-    # Move from project root to reports/
-    # Quarto writes output_file relative to QMD dir, so "../name.html" lands at project root
-    if (file.exists(out_file)) {
-      file.rename(out_file, row$final_path)
+    if (!is.null(rendered_path) && file.exists(rendered_path)) {
+      file.rename(rendered_path, row$final_path)
       rendered <- c(rendered, row$final_path)
       message("    Saved: ", row$final_path)
     }
-
   }, error = function(e) {
     message("    ERROR rendering ", matchup, ": ", e$message)
   })
@@ -111,22 +138,16 @@ for (i in seq_len(nrow(game_files))) {
     message(sprintf("  %s — %s...", abbr, team_name))
 
     tryCatch({
-      quarto::quarto_render(
-        input          = "09_reporting/mlb_team_deepdive.qmd",
-        execute_params = list(
-          game_pk   = gpk,
-          side      = side,
-          game_date = report_date
-        ),
+      rendered_path <- .qmd_render(
+        "mlb_team_deepdive.qmd",
+        params      = list(game_pk = gpk, side = side, game_date = report_date),
         output_file = out_file
       )
-
-      if (file.exists(out_file)) {
-        file.rename(out_file, final_path)
+      if (!is.null(rendered_path) && file.exists(rendered_path)) {
+        file.rename(rendered_path, final_path)
         team_rendered <- c(team_rendered, final_path)
         message("    Saved: ", final_path)
       }
-
     }, error = function(e) {
       message("    ERROR rendering ", abbr, " team page: ", e$message)
     })
@@ -153,13 +174,13 @@ for (i in seq_len(nrow(game_files))) {
   message(sprintf("  [%d/%d] %s...", i, nrow(game_files), matchup))
 
   tryCatch({
-    quarto::quarto_render(
-      input          = "09_reporting/mlb_pitcher_matchup.qmd",
-      execute_params = list(game_pk = gpk, game_date = report_date),
-      output_file    = out_file
+    rendered_path <- .qmd_render(
+      "mlb_pitcher_matchup.qmd",
+      params      = list(game_pk = gpk, game_date = report_date),
+      output_file = out_file
     )
-    if (file.exists(out_file)) {
-      file.rename(out_file, final_path)
+    if (!is.null(rendered_path) && file.exists(rendered_path)) {
+      file.rename(rendered_path, final_path)
       matchup_rendered <- c(matchup_rendered, final_path)
       message("    Saved: ", final_path)
     }
@@ -188,13 +209,13 @@ for (i in seq_len(nrow(game_files))) {
   message(sprintf("  [%d/%d] %s...", i, nrow(game_files), matchup))
 
   tryCatch({
-    quarto::quarto_render(
-      input          = "09_reporting/mlb_prediction.qmd",
-      execute_params = list(game_pk = gpk, game_date = report_date),
-      output_file    = out_file
+    rendered_path <- .qmd_render(
+      "mlb_prediction.qmd",
+      params      = list(game_pk = gpk, game_date = report_date),
+      output_file = out_file
     )
-    if (file.exists(out_file)) {
-      file.rename(out_file, final_path)
+    if (!is.null(rendered_path) && file.exists(rendered_path)) {
+      file.rename(rendered_path, final_path)
       pred_rendered <- c(pred_rendered, final_path)
       message("    Saved: ", final_path)
     }
@@ -223,13 +244,13 @@ for (i in seq_len(nrow(game_files))) {
   message(sprintf("  [%d/%d] %s...", i, nrow(game_files), matchup))
 
   tryCatch({
-    quarto::quarto_render(
-      input          = "09_reporting/mlb_hitting.qmd",
-      execute_params = list(game_pk = gpk, game_date = report_date),
-      output_file    = out_file
+    rendered_path <- .qmd_render(
+      "mlb_hitting.qmd",
+      params      = list(game_pk = gpk, game_date = report_date),
+      output_file = out_file
     )
-    if (file.exists(out_file)) {
-      file.rename(out_file, final_path)
+    if (!is.null(rendered_path) && file.exists(rendered_path)) {
+      file.rename(rendered_path, final_path)
       hitting_rendered <- c(hitting_rendered, final_path)
       message("    Saved: ", final_path)
     }
@@ -258,13 +279,13 @@ for (i in seq_len(nrow(game_files))) {
   message(sprintf("  [%d/%d] %s...", i, nrow(game_files), matchup))
 
   tryCatch({
-    quarto::quarto_render(
-      input          = "09_reporting/mlb_print.qmd",
-      execute_params = list(game_pk = gpk, game_date = report_date),
-      output_file    = out_file
+    rendered_path <- .qmd_render(
+      "mlb_print.qmd",
+      params      = list(game_pk = gpk, game_date = report_date),
+      output_file = out_file
     )
-    if (file.exists(out_file)) {
-      file.rename(out_file, final_path)
+    if (!is.null(rendered_path) && file.exists(rendered_path)) {
+      file.rename(rendered_path, final_path)
       print_rendered <- c(print_rendered, final_path)
       message("    Saved: ", final_path)
     }
@@ -281,12 +302,9 @@ message("\nPrint pages complete: ", length(print_rendered), "/",
 # ------------------------------------------------------------
 message("\nRendering stat reference page...")
 tryCatch({
-  quarto::quarto_render(
-    input       = "09_reporting/mlb_stat_reference.qmd",
-    output_file = "stat_reference.html"
-  )
-  if (file.exists("stat_reference.html")) {
-    file.rename("stat_reference.html", "reports/stat_reference.html")
+  rendered_path <- .qmd_render("mlb_stat_reference.qmd", output_file = "stat_reference.html")
+  if (!is.null(rendered_path) && file.exists(rendered_path)) {
+    file.rename(rendered_path, "reports/stat_reference.html")
     message("Saved: reports/stat_reference.html")
   }
 }, error = function(e) message("ERROR rendering stat reference: ", e$message))

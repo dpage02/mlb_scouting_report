@@ -4,24 +4,26 @@
 # SCRIPT: 07_statcast_batter_vs_pitch.R
 # ============================================================
 # PURPOSE:
-#   Pull per-batter, per-pitch-type performance stats from
-#   Baseball Savant and aggregate across the last 3 seasons
-#   for stable career-level sample sizes.
+#   Build per-batter, per-pitch-type run value stats from
+#   FanGraphs pitch RV columns already in offense_master_season.
+#   Pivots the wide fg_wXX_C columns to long format.
 #
 # OUTPUT:
 #   batter_pitch_type_stats
 #
 # GRAIN:
-#   One row per mlbam_id per pitch_code (career aggregate)
+#   One row per mlbam_id per pitch_code
 #
-# NOTE ON DATA SOURCE:
-#   Uses Savant statcast_search with group_by=name-pitch_type
-#   (NOT pitch-arsenals, which only serves pitcher data).
-#   One request per season; Savant returns aggregated stats
-#   per batter per pitch type directly.
+# DATA SOURCE:
+#   offense_master_season (fg_wFB_C, fg_wSL_C, fg_wCT_C, etc.)
+#   from 02_fangraphs_offense_season.R type-3 pull.
+#   Run value per 100 pitches, batter perspective.
+#
+# NOTE:
+#   FanGraphs pitch RV lumps 4-seam + 2-seam + generic fastball
+#   into wFB/C (mapped to code FF). Sweeper (ST) uses pfxwST/C
+#   if present. Sinker (SI) uses pfxwSI/C if present.
 # ============================================================
-
-career_seasons <- (target_season - 2L):target_season
 
 if (!exists("pitch_name_map")) {
   pitch_name_map <- c(
@@ -34,157 +36,77 @@ if (!exists("pitch_name_map")) {
   )
 }
 
-# Safe weighted mean: drops NA pairs before computing
-.wmean <- function(x, w) {
-  keep <- !is.na(x) & !is.na(w) & w > 0
-  if (!any(keep)) return(NA_real_)
-  stats::weighted.mean(x[keep], w[keep])
-}
+# FanGraphs fg_wXX_C column → Statcast pitch code mapping.
+# One canonical code per FG column (display purposes).
+fg_rv_pitch_map <- c(
+  fg_wFB_C      = "FF",   # FG "fastball" bucket: 4-seam + 2-seam + FA
+  fg_wCT_C      = "FC",   # Cutter
+  fg_wSL_C      = "SL",   # Slider
+  fg_wCB_C      = "CU",   # Curveball (FG uses CB abbreviation)
+  fg_wCH_C      = "CH",   # Changeup
+  fg_wSF_C      = "FS",   # Splitter (FG uses SF)
+  fg_wKN_C      = "KN",   # Knuckleball
+  fg_pfxwSI_C   = "SI",   # Sinker (pfx series — supplement when available)
+  fg_pfxwST_C   = "ST",   # Sweeper (pfx series — supplement when available)
+  fg_pfxwKC_C   = "KC"    # Knuckle-curve (pfx series)
+)
 
-# ------------------------------------------------------------
-# Fetch one season from Savant statcast search
-# Returns long-format: mlbam_id, pitch_code, n_pitches,
-#   xba, xwoba, whiff_pct, hard_hit_pct, run_value_per100
-# ------------------------------------------------------------
+# ----------------------------------------------------------------
+# Build from FG data in offense_master_season
+# ----------------------------------------------------------------
 
-fetch_batter_vs_pitch_season <- function(yr) {
-  url <- paste0(
-    "https://baseballsavant.mlb.com/statcast_search",
-    "?hfGT=R%7C",
-    "&hfSea=", yr, "%7C",
-    "&player_type=batter",
-    "&group_by=name-pitch_type",
-    "&min_pitches=0&min_results=0&min_pas=0",
-    "&type=details&csv=true"
-  )
-
-  df <- tryCatch(
-    readr::read_csv(url, show_col_types = FALSE, progress = FALSE),
-    error = function(e) {
-      message("Batter vs pitch fetch failed (yr=", yr, "): ", e$message)
-      NULL
-    }
-  )
-  if (is.null(df) || nrow(df) == 0) {
-    message("  No batter vs pitch data for ", yr)
-    return(NULL)
-  }
-
-  # Savant uses player_id in this view
-  id_col <- intersect(c("player_id", "batter"), names(df))[1]
-  pt_col <- intersect(c("pitch_type"), names(df))[1]
-  if (is.na(id_col) || is.na(pt_col)) {
-    message("  Unexpected column names in batter vs pitch response for ", yr,
-            ": ", paste(names(df), collapse = ", "))
-    return(NULL)
-  }
-
-  result <- df %>%
-    dplyr::select(
-      mlbam_id   = dplyr::all_of(id_col),
-      pitch_code = dplyr::all_of(pt_col),
-      dplyr::any_of(c(
-        "pitches",
-        "xba", "xwoba",
-        "whiff_percent", "hard_hit_percent",
-        "run_value_per100"
-      ))
-    ) %>%
-    dplyr::mutate(
-      mlbam_id   = as.integer(mlbam_id),
-      pitch_code = toupper(as.character(pitch_code)),
-      season     = as.integer(yr)
-    ) %>%
-    dplyr::filter(!is.na(mlbam_id), nchar(pitch_code) > 0, pitch_code != "NA")
-
-  # Standardise column names
-  if ("pitches" %in% names(result))
-    result <- dplyr::rename(result, n_pitches = pitches)
-  if ("whiff_percent" %in% names(result))
-    result <- dplyr::rename(result, whiff_pct = whiff_percent)
-  if ("hard_hit_percent" %in% names(result))
-    result <- dplyr::rename(result, hard_hit_pct = hard_hit_percent)
-
-  # Ensure n_pitches is integer
-  if ("n_pitches" %in% names(result))
-    result <- dplyr::mutate(result, n_pitches = as.integer(n_pitches))
-
-  # Normalise pct fields from 0-100 → decimal
-  if ("whiff_pct" %in% names(result))
-    result <- dplyr::mutate(result,
-      whiff_pct = dplyr::if_else(!is.na(whiff_pct) & whiff_pct > 1, whiff_pct / 100, whiff_pct))
-  if ("hard_hit_pct" %in% names(result))
-    result <- dplyr::mutate(result,
-      hard_hit_pct = dplyr::if_else(!is.na(hard_hit_pct) & hard_hit_pct > 1, hard_hit_pct / 100, hard_hit_pct))
-
-  message("  ", yr, ": ", nrow(result), " batter-pitch rows, ",
-          dplyr::n_distinct(result$mlbam_id), " batters")
-  result
-}
-
-# ------------------------------------------------------------
-# Pull all career seasons and aggregate
-# ------------------------------------------------------------
-
-message("Batter vs pitch type: pulling seasons ",
-        paste(career_seasons, collapse = ", "), "...")
-
-seasons_list <- lapply(career_seasons, fetch_batter_vs_pitch_season)
-seasons_list <- Filter(Negate(is.null), seasons_list)
-
-if (length(seasons_list) == 0) {
-  message("No batter vs pitch data available. Creating empty table.")
+if (!exists("offense_master_season") || nrow(offense_master_season) == 0) {
+  message("07_statcast_batter_vs_pitch: offense_master_season unavailable. Creating empty table.")
   batter_pitch_type_stats <- dplyr::tibble(
     mlbam_id         = integer(),
     pitch_code       = character(),
     pitch_name       = character(),
-    n_pitches        = integer(),
-    xba              = numeric(),
-    xwoba            = numeric(),
-    whiff_pct        = numeric(),
-    hard_hit_pct     = numeric(),
     run_value_per100 = numeric()
   )
 } else {
-  rate_cols <- c("xba", "xwoba", "whiff_pct", "hard_hit_pct", "run_value_per100")
 
-  all_seasons <- dplyr::bind_rows(seasons_list)
+  # Keep only columns that are present in offense_master_season
+  available_map <- fg_rv_pitch_map[
+    names(fg_rv_pitch_map) %in% names(offense_master_season)
+  ]
 
-  # Add any rate cols that may be missing
-  for (col in rate_cols) {
-    if (!col %in% names(all_seasons))
-      all_seasons[[col]] <- NA_real_
+  if (length(available_map) == 0) {
+    message("07_statcast_batter_vs_pitch: no FG pitch RV columns found. Creating empty table.")
+    batter_pitch_type_stats <- dplyr::tibble(
+      mlbam_id         = integer(),
+      pitch_code       = character(),
+      pitch_name       = character(),
+      run_value_per100 = numeric()
+    )
+  } else {
+
+    # One row per player (highest-PA stint for traded players)
+    oms_base <- offense_master_season %>%
+      dplyr::arrange(mlbam_id, dplyr::desc(dplyr::coalesce(mlb_pa, 0L))) %>%
+      dplyr::distinct(mlbam_id, .keep_all = TRUE) %>%
+      dplyr::select(mlbam_id, dplyr::any_of(names(available_map)))
+
+    # Pivot to long: one row per mlbam_id per pitch_code
+    batter_pitch_type_stats <- tidyr::pivot_longer(
+      oms_base,
+      cols      = dplyr::any_of(names(available_map)),
+      names_to  = "fg_col",
+      values_to = "run_value_per100"
+    ) %>%
+      dplyr::filter(!is.na(run_value_per100)) %>%
+      dplyr::mutate(
+        pitch_code = unname(available_map[fg_col]),
+        pitch_name = purrr::map_chr(pitch_code, function(code) {
+          nm <- unname(pitch_name_map[code])
+          if (is.na(nm)) code else nm
+        })
+      ) %>%
+      dplyr::select(mlbam_id, pitch_code, pitch_name, run_value_per100) %>%
+      dplyr::arrange(mlbam_id, pitch_code)
+
+    message("07_statcast_batter_vs_pitch complete: ",
+            nrow(batter_pitch_type_stats), " batter-pitch rows | ",
+            dplyr::n_distinct(batter_pitch_type_stats$mlbam_id), " batters | ",
+            "FG pitch RV source (", length(available_map), " pitch types)")
   }
-  if (!"n_pitches" %in% names(all_seasons))
-    all_seasons$n_pitches <- NA_integer_
-
-  batter_pitch_type_stats <- all_seasons %>%
-    dplyr::group_by(mlbam_id, pitch_code) %>%
-    dplyr::summarise(
-      n_pitches        = sum(n_pitches, na.rm = TRUE),
-      xba              = .wmean(xba,              n_pitches),
-      xwoba            = .wmean(xwoba,            n_pitches),
-      whiff_pct        = .wmean(whiff_pct,        n_pitches),
-      hard_hit_pct     = .wmean(hard_hit_pct,     n_pitches),
-      run_value_per100 = .wmean(run_value_per100, n_pitches),
-      .groups = "drop"
-    ) %>%
-    dplyr::mutate(
-      n_pitches  = as.integer(n_pitches),
-      pitch_name = purrr::map_chr(pitch_code, function(code) {
-        nm <- unname(pitch_name_map[code])
-        if (is.na(nm)) code else nm
-      })
-    ) %>%
-    dplyr::filter(!is.na(n_pitches), n_pitches >= 50L) %>%
-    dplyr::select(
-      mlbam_id, pitch_code, pitch_name, n_pitches,
-      dplyr::any_of(rate_cols)
-    ) %>%
-    dplyr::arrange(mlbam_id, dplyr::desc(n_pitches))
-
-  message("07_statcast_batter_vs_pitch complete: ",
-          nrow(batter_pitch_type_stats), " batter-pitch rows | ",
-          dplyr::n_distinct(batter_pitch_type_stats$mlbam_id), " batters | ",
-          "career aggregate (", paste(career_seasons, collapse = "\u2013"), ")")
 }

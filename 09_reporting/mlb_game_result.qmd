@@ -1,0 +1,370 @@
+---
+title: "Game Result"
+date: today
+params:
+  game_pk: null
+  game_date: null
+  away_abbr: null
+  home_abbr: null
+format:
+  html:
+    self-contained: true
+    embed-resources: true
+    theme: cosmo
+    toc: false
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+#| output: false
+if (basename(getwd()) == "09_reporting") setwd("..")
+
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(gt)
+  library(jsonlite)
+})
+
+gpk       <- as.integer(params$game_pk)
+game_date <- as.character(params$game_date)
+away_abbr <- params$away_abbr
+home_abbr <- params$home_abbr
+
+# ── MLB Stats API helpers ──────────────────────────────────────
+
+mlb_get <- function(path) {
+  url <- paste0("https://statsapi.mlb.com", path)
+  tryCatch(
+    jsonlite::fromJSON(url, simplifyVector = TRUE, flatten = TRUE),
+    error = function(e) NULL
+  )
+}
+
+# ── Pull linescore ─────────────────────────────────────────────
+ls_data <- mlb_get(paste0("/api/v1/game/", gpk, "/linescore"))
+
+# ── Pull boxscore ─────────────────────────────────────────────
+bs_data <- mlb_get(paste0("/api/v1/game/", gpk, "/boxscore"))
+
+# ── Check predictions log ──────────────────────────────────────
+log_path <- "data/predictions_log.csv"
+pred_row <- if (file.exists(log_path)) {
+  tryCatch(
+    readr::read_csv(log_path, show_col_types = FALSE) %>%
+      dplyr::filter(game_pk == !!gpk) %>%
+      dplyr::slice_head(n = 1),
+    error = function(e) NULL
+  )
+} else NULL
+
+# ── Extract key fields ─────────────────────────────────────────
+away_name  <- tryCatch(bs_data$teams$away$team$name,  error = function(e) away_abbr)
+home_name  <- tryCatch(bs_data$teams$home$team$name,  error = function(e) home_abbr)
+away_score <- tryCatch(ls_data$teams$away$runs,       error = function(e) NA_integer_)
+home_score <- tryCatch(ls_data$teams$home$runs,       error = function(e) NA_integer_)
+away_hits  <- tryCatch(ls_data$teams$away$hits,       error = function(e) NA_integer_)
+home_hits  <- tryCatch(ls_data$teams$home$hits,       error = function(e) NA_integer_)
+away_err   <- tryCatch(ls_data$teams$away$errors,     error = function(e) NA_integer_)
+home_err   <- tryCatch(ls_data$teams$home$errors,     error = function(e) NA_integer_)
+
+winner <- if (!is.na(away_score) && !is.na(home_score)) {
+  if (away_score > home_score) away_name else home_name
+} else NA_character_
+```
+
+```{r scoreline}
+#| output: asis
+cat(sprintf("# %s @ %s\n\n", away_name, home_name))
+cat(sprintf(
+  "> **%s** · %s\n\n",
+  format(as.Date(game_date), "%A, %B %d, %Y"),
+  if (!is.na(winner)) paste0("**", winner, " win**") else "Result unavailable"
+))
+
+# Big score display
+if (!is.na(away_score) && !is.na(home_score)) {
+  cat(sprintf(
+    '<div style="display:flex;gap:3rem;align-items:center;
+      background:#f8f9fa;border:1px solid #dee2e6;border-radius:10px;
+      padding:20px 32px;margin:1rem 0 1.5rem;max-width:480px;">
+      <div style="text-align:center;">
+        <div style="font-size:0.85rem;color:#666;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">%s</div>
+        <div style="font-size:3rem;font-weight:800;color:%s;line-height:1.1;">%d</div>
+        <div style="font-size:0.75rem;color:#888;">%d H · %d E</div>
+      </div>
+      <div style="font-size:1.5rem;color:#aaa;font-weight:300;">@</div>
+      <div style="text-align:center;">
+        <div style="font-size:0.85rem;color:#666;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">%s</div>
+        <div style="font-size:3rem;font-weight:800;color:%s;line-height:1.1;">%d</div>
+        <div style="font-size:0.75rem;color:#888;">%d H · %d E</div>
+      </div>
+    </div>\n\n',
+    away_name,
+    if (away_score > home_score) "#1a5276" else "#5d6d7e",
+    away_score,
+    coalesce(away_hits, 0L), coalesce(away_err, 0L),
+    home_name,
+    if (home_score > away_score) "#1a5276" else "#5d6d7e",
+    home_score,
+    coalesce(home_hits, 0L), coalesce(home_err, 0L)
+  ))
+} else {
+  cat('<p style="color:#888;font-style:italic;">Final score not yet available.</p>\n\n')
+}
+```
+
+```{r prediction-compare}
+#| output: asis
+if (!is.null(pred_row) && nrow(pred_row) > 0) {
+  p <- pred_row
+  correct <- isTRUE(p$correct_winner)
+  result_badge <- if (correct) {
+    '<span style="background:#198754;color:white;padding:3px 10px;border-radius:4px;font-weight:700;font-size:0.85rem;">✓ Correct pick</span>'
+  } else {
+    '<span style="background:#dc3545;color:white;padding:3px 10px;border-radius:4px;font-weight:700;font-size:0.85rem;">✗ Wrong pick</span>'
+  }
+
+  cat("## Our Prediction\n\n")
+  cat(sprintf(
+    '<div style="background:#f0f4ff;border:1px solid #c5d4f5;border-radius:8px;padding:16px 20px;margin-bottom:1.5rem;">
+      <div style="margin-bottom:8px;">%s &nbsp; Predicted: <strong>%s</strong></div>
+      <div style="display:flex;gap:2rem;font-size:0.9rem;">
+        <div><span style="color:#666;">Predicted score:</span> <strong>%s %s – %s %s</strong></div>
+        <div><span style="color:#666;">Actual score:</span> <strong>%s %s – %s %s</strong></div>
+      </div>
+      <div style="margin-top:8px;font-size:0.85rem;color:#555;">
+        Away win probability: <strong>%s%%</strong> &nbsp;·&nbsp; Home win probability: <strong>%s%%</strong>
+      </div>
+    </div>\n\n',
+    result_badge,
+    coalesce(p$predicted_winner, "—"),
+    p$away_team, round(p$pred_away_runs, 1),
+    p$home_team, round(p$pred_home_runs, 1),
+    p$away_team, coalesce(p$actual_away_runs, NA_real_),
+    p$home_team, coalesce(p$actual_home_runs, NA_real_),
+    round(coalesce(p$away_win_pct, 0) * 100),
+    round(coalesce(p$home_win_pct, 0) * 100)
+  ))
+}
+```
+
+```{r linescore-table}
+#| output: asis
+cat("## Linescore\n\n")
+
+innings_raw <- tryCatch(ls_data$innings, error = function(e) NULL)
+
+if (!is.null(innings_raw) && length(innings_raw) > 0) {
+  innings_df <- tryCatch(
+    as.data.frame(innings_raw, stringsAsFactors = FALSE),
+    error = function(e) NULL
+  )
+
+  if (!is.null(innings_df) && nrow(innings_df) > 0) {
+    # Build wide linescore: rows = team, cols = each inning + R/H/E
+    n_inn   <- nrow(innings_df)
+    inn_nums <- innings_df$num
+
+    away_inn_runs <- innings_df$away.runs
+    home_inn_runs <- innings_df$home.runs
+
+    # Replace NA (walk-off 9th etc.) with "X"
+    fmt_inn <- function(x) ifelse(is.na(x), "X", as.character(x))
+
+    ls_tbl <- data.frame(
+      Team = c(away_name, home_name),
+      stringsAsFactors = FALSE
+    )
+    for (j in seq_len(n_inn)) {
+      col_nm <- as.character(inn_nums[j])
+      ls_tbl[[col_nm]] <- c(
+        fmt_inn(away_inn_runs[j]),
+        fmt_inn(home_inn_runs[j])
+      )
+    }
+    ls_tbl[["R"]] <- c(coalesce(away_score, 0L), coalesce(home_score, 0L))
+    ls_tbl[["H"]] <- c(coalesce(away_hits,  0L), coalesce(home_hits,  0L))
+    ls_tbl[["E"]] <- c(coalesce(away_err,   0L), coalesce(home_err,   0L))
+
+    tbl <- ls_tbl %>%
+      gt::gt() %>%
+      gt::tab_style(
+        style    = gt::cell_text(weight = "bold"),
+        locations = gt::cells_body(columns = c("R", "H", "E"))
+      ) %>%
+      gt::tab_style(
+        style    = gt::cell_fill(color = "#e8f4ea"),
+        locations = gt::cells_body(
+          columns = "R",
+          rows    = R == max(R)
+        )
+      ) %>%
+      gt::tab_options(table.font.size = 13, data_row.padding = gt::px(5)) %>%
+      gt::fmt_missing(columns = dplyr::everything(), missing_text = "—")
+
+    cat(gt::as_raw_html(tbl), "\n\n")
+  }
+} else {
+  cat('<p style="color:#888;font-style:italic;">Linescore not available.</p>\n\n')
+}
+```
+
+```{r pitching-lines}
+#| output: asis
+cat("## Pitching\n\n")
+
+get_pitching_lines <- function(side_data) {
+  pitchers <- tryCatch(side_data$pitchers, error = function(e) NULL)
+  all_stats <- tryCatch(side_data$players, error = function(e) NULL)
+  if (is.null(pitchers) || is.null(all_stats)) return(NULL)
+
+  rows <- lapply(pitchers, function(pid) {
+    key    <- paste0("ID", pid)
+    p_info <- all_stats[[key]]
+    if (is.null(p_info)) return(NULL)
+
+    stats <- tryCatch(p_info$stats$pitching$summary, error = function(e) "")
+    name  <- tryCatch(p_info$person$fullName,        error = function(e) as.character(pid))
+    note  <- tryCatch(p_info$gameStatus$note,         error = function(e) "")
+    if (is.null(note) || length(note) == 0) note <- ""
+
+    data.frame(
+      Pitcher   = name,
+      Note      = note,
+      Line      = if (is.null(stats) || length(stats) == 0) "—" else stats,
+      stringsAsFactors = FALSE
+    )
+  })
+  rows <- Filter(Negate(is.null), rows)
+  if (length(rows) == 0) return(NULL)
+  do.call(rbind, rows)
+}
+
+away_pitching <- get_pitching_lines(tryCatch(bs_data$teams$away, error = function(e) list()))
+home_pitching <- get_pitching_lines(tryCatch(bs_data$teams$home, error = function(e) list()))
+
+render_pitching_gt <- function(df, team_name) {
+  if (is.null(df) || nrow(df) == 0) {
+    return(dplyr::tibble(Note = "Pitching data not available.") %>%
+             gt::gt() %>% gt::tab_header(title = team_name))
+  }
+  df %>%
+    gt::gt() %>%
+    gt::tab_header(title = team_name) %>%
+    gt::tab_style(
+      style     = gt::cell_text(color = "#198754", weight = "bold"),
+      locations = gt::cells_body(columns = "Note",
+                                  rows = grepl("W|Win", Note, ignore.case = TRUE))
+    ) %>%
+    gt::tab_style(
+      style     = gt::cell_text(color = "#dc3545"),
+      locations = gt::cells_body(columns = "Note",
+                                  rows = grepl("L|Loss", Note, ignore.case = TRUE))
+    ) %>%
+    gt::tab_options(table.font.size = 13, data_row.padding = gt::px(4)) %>%
+    gt::fmt_missing(columns = dplyr::everything(), missing_text = "—")
+}
+
+away_p_html <- gt::as_raw_html(render_pitching_gt(away_pitching, away_name))
+home_p_html <- gt::as_raw_html(render_pitching_gt(home_pitching, home_name))
+
+cat(paste0(
+  '<div style="display:flex;gap:2rem;align-items:flex-start;width:100%;">',
+  '<div style="flex:1;min-width:0;overflow-x:auto;">', away_p_html, '</div>',
+  '<div style="flex:1;min-width:0;overflow-x:auto;">', home_p_html, '</div>',
+  '</div>'
+), "\n\n")
+```
+
+```{r batting-highlights}
+#| output: asis
+cat("## Batting Highlights\n\n")
+
+get_batting_leaders <- function(side_data, team_name) {
+  batters  <- tryCatch(side_data$batters, error = function(e) NULL)
+  all_stats <- tryCatch(side_data$players, error = function(e) NULL)
+  if (is.null(batters) || is.null(all_stats)) return(NULL)
+
+  rows <- lapply(batters, function(bid) {
+    key    <- paste0("ID", bid)
+    b_info <- all_stats[[key]]
+    if (is.null(b_info)) return(NULL)
+
+    s     <- tryCatch(b_info$stats$batting, error = function(e) list())
+    name  <- tryCatch(b_info$person$fullName, error = function(e) as.character(bid))
+
+    ab   <- as.integer(tryCatch(s$atBats,        error = function(e) 0))
+    h    <- as.integer(tryCatch(s$hits,           error = function(e) 0))
+    hr   <- as.integer(tryCatch(s$homeRuns,       error = function(e) 0))
+    rbi  <- as.integer(tryCatch(s$rbi,            error = function(e) 0))
+    bb   <- as.integer(tryCatch(s$baseOnBalls,    error = function(e) 0))
+    k    <- as.integer(tryCatch(s$strikeOuts,     error = function(e) 0))
+    sb   <- as.integer(tryCatch(s$stolenBases,    error = function(e) 0))
+
+    if (is.na(ab) || ab == 0) return(NULL)
+    data.frame(
+      Player = name, AB = ab, H = h, HR = hr, RBI = rbi,
+      BB = bb, K = k, SB = sb,
+      stringsAsFactors = FALSE
+    )
+  })
+  rows <- Filter(Negate(is.null), rows)
+  if (length(rows) == 0) return(NULL)
+  df <- do.call(rbind, rows)
+  df %>%
+    dplyr::arrange(dplyr::desc(H), dplyr::desc(HR), dplyr::desc(RBI)) %>%
+    dplyr::slice_head(n = 9)
+}
+
+away_bat <- get_batting_leaders(tryCatch(bs_data$teams$away, error = function(e) list()), away_name)
+home_bat <- get_batting_leaders(tryCatch(bs_data$teams$home, error = function(e) list()), home_name)
+
+render_batting_gt <- function(df, team_name) {
+  if (is.null(df) || nrow(df) == 0) {
+    return(dplyr::tibble(Note = "Batting data not available.") %>%
+             gt::gt() %>% gt::tab_header(title = team_name))
+  }
+  df %>%
+    gt::gt() %>%
+    gt::tab_header(title = team_name) %>%
+    gt::tab_style(
+      style     = gt::cell_text(weight = "bold", color = "#7950f2"),
+      locations = gt::cells_body(columns = "HR", rows = HR > 0)
+    ) %>%
+    gt::tab_options(table.font.size = 13, data_row.padding = gt::px(4)) %>%
+    gt::fmt_missing(columns = dplyr::everything(), missing_text = "—")
+}
+
+away_b_html <- gt::as_raw_html(render_batting_gt(away_bat, away_name))
+home_b_html <- gt::as_raw_html(render_batting_gt(home_bat, home_name))
+
+cat(paste0(
+  '<div style="display:flex;gap:2rem;align-items:flex-start;width:100%;">',
+  '<div style="flex:1;min-width:0;overflow-x:auto;">', away_b_html, '</div>',
+  '<div style="flex:1;min-width:0;overflow-x:auto;">', home_b_html, '</div>',
+  '</div>'
+), "\n\n")
+```
+
+```{r nav-links}
+#| output: asis
+dd_file     <- paste0("deepdive_",   game_date, "_", away_abbr, "_", home_abbr, ".html")
+matchup_file <- paste0("matchup_",   game_date, "_", away_abbr, "_", home_abbr, ".html")
+pred_file   <- paste0("prediction_", game_date, "_", away_abbr, "_", home_abbr, ".html")
+
+cat(paste0(
+  '<div style="margin-top:2rem;padding:14px 18px;background:#f0f4ff;',
+  'border-radius:6px;border:1px solid #c5d4f5;font-size:13px;">',
+  '<strong>Pre-game analysis for this matchup:</strong>&nbsp;&nbsp;',
+  '<a href="', dd_file,      '" style="background:#1a73e8;color:white;padding:4px 12px;',
+  'border-radius:4px;text-decoration:none;font-weight:600;margin-right:8px;">Deep Dive</a>',
+  '<a href="', matchup_file, '" style="background:#0f9d58;color:white;padding:4px 12px;',
+  'border-radius:4px;text-decoration:none;font-weight:600;margin-right:8px;">Pitcher Matchup</a>',
+  '<a href="', pred_file,    '" style="background:#f4511e;color:white;padding:4px 12px;',
+  'border-radius:4px;text-decoration:none;font-weight:600;">Prediction</a>',
+  '</div>'
+), "\n\n")
+```

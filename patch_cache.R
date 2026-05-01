@@ -159,8 +159,11 @@ pipeline_cache_objects <- c(
   "pitching_master_season", "pitcher_arsenal",
   "defense_master_season", "lineup_context_splits", "starter_splits",
   "player_season_fg_pitching", "player_season_mlb_pitching",
-  "player_master_ids",
-  "depth_charts"
+  "player_master_ids", "depth_charts",
+  "park_factors", "recent_batter_streaks", "current_defense_stats", "value_master_season",
+  "player_season_mlb_offense_splits", "player_season_mlb_pitching_splits",
+  "batter_pitch_type_stats",
+  "steamer_projections", "team_standings", "baserunning_master_season"
 )
 pipeline_cache <- mget(
   pipeline_cache_objects[pipeline_cache_objects %in% ls()],

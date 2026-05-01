@@ -108,6 +108,9 @@ print_file     <- paste0("print_",      params$game_date, "_", away_abbr_str,  "
 nav_html <- paste0(
   '<div style="margin-bottom:1.5rem; padding:10px 14px; background:#f8f9fa; ',
   'border-radius:6px; border:1px solid #dee2e6; font-size:13px;">',
+  '<a href="https://dpage02.github.io/mlb_scouting_report/" style="color:#1a73e8; text-decoration:none;">',
+  '\U0001f3e0 Home</a>',
+  '&nbsp;&nbsp;|&nbsp;&nbsp;',
   '<a href="', scouting_file, '" style="color:#1a73e8; text-decoration:none;">',
   '\u2190 Today\'s Games</a>',
   '&nbsp;&nbsp;|&nbsp;&nbsp;',
@@ -157,6 +160,17 @@ cat(gt::as_raw_html(make_game_header_gt(gpk)))
 
 ---
 
+## Ballpark & Conditions
+
+```{r ballpark-conditions}
+#| output: asis
+bc_html <- tryCatch(make_ballpark_conditions_html(gpk), error = function(e) "")
+if (nchar(bc_html) > 0) cat(bc_html, "\n\n") else
+  cat('<p style="color:#888;font-style:italic;font-size:12px;">Ballpark data unavailable.</p>\n\n')
+```
+
+---
+
 ## Starting Pitchers
 
 ```{r starters}
@@ -193,24 +207,39 @@ if (!is.null(arsenal_tbl)) {
 
 ---
 
+## Batter vs. Pitch Type
+
+*How each lineup performs against the opposing starter's specific pitch mix. Run value per 100 pitches (FanGraphs) — positive = batter advantage over that pitch type.*
+
+```{r batter-vs-pitch}
+#| output: asis
+bvp_html <- tryCatch(make_batter_vs_pitch_html(gpk), error = function(e) {
+  paste0('<p style="color:#888; font-style:italic;">Batter vs. pitch type unavailable: ',
+         conditionMessage(e), '</p>')
+})
+if (nchar(bvp_html) > 0) cat(bvp_html, "\n\n")
+```
+
+---
+
 ## Lineup — Analytical Breakdown
 
 *Current season stats from MLB API, FanGraphs (all leaderboard types), and Statcast. Each section focuses on a different dimension of hitting.*
 
-### `r away_team`
-
-```{r lineup-away-full}
+```{r lineup-full}
 #| output: asis
 tables_away <- make_lineup_full_gt(gpk, "away")
-cat(make_lineup_tabset_html(tables_away, paste0(gpk, "away")), "\n\n")
-```
-
-### `r home_team`
-
-```{r lineup-home-full}
-#| output: asis
 tables_home <- make_lineup_full_gt(gpk, "home")
-cat(make_lineup_tabset_html(tables_home, paste0(gpk, "home")), "\n\n")
+away_html   <- make_lineup_tabset_html(tables_away, paste0(gpk, "away"))
+home_html   <- make_lineup_tabset_html(tables_home, paste0(gpk, "home"))
+
+.team_hdr <- function(lbl) sprintf(
+  '<div style="font-size:0.95rem;font-weight:700;color:#2c3e50;margin-bottom:6px;padding-bottom:4px;border-bottom:2px solid #3498db;">%s</div>',
+  lbl
+)
+cat(.team_hdr(away_team), away_html,
+    '<div style="margin-top:2rem;"></div>',
+    .team_hdr(home_team), home_html, "\n\n")
 ```
 
 ---
@@ -219,48 +248,27 @@ cat(make_lineup_tabset_html(tables_home, paste0(gpk, "home")), "\n\n")
 
 *Stats split by opposing starter's handedness. Shows how each batter performs against this type of pitcher.*
 
-```{r splits-label}
+```{r splits-combined}
 #| output: asis
-# Show which split applies to each team
-# pitch_hand lives in starter_splits (from 04_matchup_splits.R)
-away_sp <- starter_splits %>%
-  dplyr::filter(game_pk == gpk, side == "away")
-home_sp <- starter_splits %>%
-  dplyr::filter(game_pk == gpk, side == "home")
-
+away_sp <- tryCatch(starter_splits %>% dplyr::filter(game_pk == gpk, side == "away"),
+                    error = function(e) data.frame())
+home_sp <- tryCatch(starter_splits %>% dplyr::filter(game_pk == gpk, side == "home"),
+                    error = function(e) data.frame())
 away_hand <- if (nrow(away_sp) > 0 && "pitch_hand" %in% names(away_sp) &&
-                 !is.na(away_sp$pitch_hand[1]))
-  away_sp$pitch_hand[1] else "?"
+                  !is.na(away_sp$pitch_hand[1])) away_sp$pitch_hand[1] else "?"
 home_hand <- if (nrow(home_sp) > 0 && "pitch_hand" %in% names(home_sp) &&
-                 !is.na(home_sp$pitch_hand[1]))
-  home_sp$pitch_hand[1] else "?"
+                  !is.na(home_sp$pitch_hand[1])) home_sp$pitch_hand[1] else "?"
 
-cat(sprintf(
-  "> **%s** batters face a **%sHP** starter · showing **vs %sHP** splits  \n",
-  home_team,
-  away_hand,
-  away_hand
-))
-cat(sprintf(
-  "> **%s** batters face a **%sHP** starter · showing **vs %sHP** splits\n\n",
-  away_team,
-  home_hand,
-  home_hand
-))
-```
+splits_away_html <- gt::as_raw_html(make_lineup_splits_gt(gpk, "away"))
+splits_home_html <- gt::as_raw_html(make_lineup_splits_gt(gpk, "home"))
 
-### `r away_team` — Matchup Splits
-
-```{r splits-away}
-#| output: asis
-cat(gt::as_raw_html(make_lineup_splits_gt(gpk, "away")))
-```
-
-### `r home_team` — Matchup Splits
-
-```{r splits-home}
-#| output: asis
-cat(gt::as_raw_html(make_lineup_splits_gt(gpk, "home")))
+.split_hdr <- function(team, opp_hand) sprintf(
+  '<div style="font-size:0.95rem;font-weight:700;color:#2c3e50;margin-bottom:6px;padding-bottom:4px;border-bottom:2px solid #3498db;">%s \u2014 Matchup Splits <span style="font-size:0.82rem;font-weight:400;color:#666;">vs %sHP</span></div>',
+  team, opp_hand
+)
+cat(.split_hdr(away_team, home_hand), splits_away_html,
+    '<div style="margin-top:2rem;"></div>',
+    .split_hdr(home_team, away_hand), splits_home_html, "\n\n")
 ```
 
 ---
@@ -269,47 +277,38 @@ cat(gt::as_raw_html(make_lineup_splits_gt(gpk, "home")))
 
 *Prior season defensive metrics. Traditional (innings, errors, fielding%), Advanced (FanGraphs UZR/DRS), Statcast (OAA).*
 
-### `r away_team`
-
-```{r defense-away}
+```{r defense-combined}
 #| output: asis
-cat(gt::as_raw_html(make_lineup_defense_gt(gpk, "away")))
-```
+def_away_html <- gt::as_raw_html(make_lineup_defense_gt(gpk, "away"))
+def_home_html <- gt::as_raw_html(make_lineup_defense_gt(gpk, "home"))
 
-### `r home_team`
-
-```{r defense-home}
-#| output: asis
-cat(gt::as_raw_html(make_lineup_defense_gt(gpk, "home")))
+.team_hdr <- function(lbl) sprintf(
+  '<div style="font-size:0.95rem;font-weight:700;color:#2c3e50;margin-bottom:6px;padding-bottom:4px;border-bottom:2px solid #3498db;">%s</div>',
+  lbl
+)
+cat(.team_hdr(away_team), def_away_html,
+    '<div style="margin-top:2rem;"></div>',
+    .team_hdr(home_team), def_home_html, "\n\n")
 ```
 
 ---
 
 ## Bullpen
 
-```{r bullpen-legend}
+```{r bullpen-combined}
 #| output: asis
-cat('<p style="font-size:12px; margin-bottom:6px;">',
+cat('<p style="font-size:12px; margin-bottom:10px;">',
     '<span style="background:#27ae60;color:white;padding:2px 6px;border-radius:3px;">Fresh</span> &nbsp;',
     '<span style="background:#a9dfbf;color:#1a5276;padding:2px 6px;border-radius:3px;">Available</span> &nbsp;',
     '<span style="background:#f39c12;color:white;padding:2px 6px;border-radius:3px;">Limited</span> &nbsp;',
     '<span style="background:#e74c3c;color:white;padding:2px 6px;border-radius:3px;">Unavailable</span> &nbsp;',
     '<span style="background:#d5d8dc;color:#7f8c8d;padding:2px 6px;border-radius:3px;">Injured</span>',
     '</p>\n\n')
-```
-
-### `r away_team` Bullpen
-
-```{r bullpen-away}
-#| output: asis
-cat(gt::as_raw_html(make_bullpen_gt(gpk, "away")))
-```
-
-### `r home_team` Bullpen
-
-```{r bullpen-home}
-#| output: asis
-cat(gt::as_raw_html(make_bullpen_gt(gpk, "home")))
+bp_away_html <- gt::as_raw_html(make_bullpen_gt(gpk, "away"))
+bp_home_html <- gt::as_raw_html(make_bullpen_gt(gpk, "home"))
+cat(side_by_side_html(bp_away_html, bp_home_html,
+                      label1 = paste0(away_team, " Bullpen"),
+                      label2 = paste0(home_team, " Bullpen")), "\n\n")
 ```
 
 ```{r page-links}

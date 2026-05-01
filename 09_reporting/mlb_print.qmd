@@ -98,13 +98,12 @@ body {
   margin-top: 2pt;
 }
 
-/* ── Two-column lineup layout ──────────────────── */
+/* ── Stacked lineup layout ─────────────────────── */
 .lineup-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14pt;
+  display: block;
   page-break-inside: avoid;
 }
+.lineup-grid > div + div { margin-top: 14pt; }
 .lineup-grid .gt_table { font-size: 9pt !important; }
 
 /* ── Compact game info ─────────────────────────── */

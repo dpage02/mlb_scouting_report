@@ -36,16 +36,31 @@ output_filename <- paste0("scouting_", report_date, ".html")
 
 message("Rendering scouting report for ", report_date, "...")
 
-quarto::quarto_render(
-  input       = "09_reporting/mlb_scouting_report.qmd",
-  output_file = output_filename
-)
+# Use absolute paths for both input and output so Quarto's self-contained
+# bundler finds _files/ next to the QMD (09_reporting/) rather than at CWD.
+# Passing relative cross-directory paths causes "No valid input files" or
+# a bundler readfile error depending on the quarto R package version.
+project_root <- normalizePath(getwd(), winslash = "/")
+qmd_abs      <- file.path(project_root, "09_reporting", "mlb_scouting_report.qmd")
 
-# Move rendered file to reports/
-# Quarto writes output_file relative to QMD dir, so "../name.html" lands at project root
-rendered_path <- output_filename
+# Temporarily cd into 09_reporting/ so the bare output filename and the
+# _files/ bundler directory both resolve next to the QMD.  Without this,
+# the output goes to the project root while _files/ stays in 09_reporting/,
+# and Quarto's self-contained bundler can't find the JS/CSS assets.
+local({
+  old_wd <- setwd(file.path(project_root, "09_reporting"))
+  on.exit(setwd(old_wd))
+  quarto::quarto_render(input = qmd_abs, output_file = output_filename)
+})
+
+# Move self-contained HTML from 09_reporting/ to reports/
+rendered_path <- file.path("09_reporting", output_filename)
 final_path    <- file.path("reports", output_filename)
 if (!dir.exists("reports")) dir.create("reports")
-file.rename(rendered_path, final_path)
+if (file.exists(rendered_path)) file.rename(rendered_path, final_path)
+
+# Clean up intermediate _files/ dir (resources already embedded in HTML)
+files_dir <- file.path("09_reporting", "mlb_scouting_report_files")
+if (dir.exists(files_dir)) unlink(files_dir, recursive = TRUE)
 
 message("Report saved: ", final_path)

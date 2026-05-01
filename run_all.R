@@ -60,7 +60,8 @@ source("run_pipeline_daily.R")
 
 source("09_reporting/render_report.R")
 source("09_reporting/render_recap.R")
+source("09_reporting/render_accuracy.R")
+source("09_reporting/render_game_results.R")
 source("09_reporting/render_deep_dives.R")
-if (interactive()) {
-  browseURL(file.path(getwd(), paste0("reports/scouting_", Sys.Date(), ".html")))
-}
+source("09_reporting/render_series.R")
+source("push_to_web.R")

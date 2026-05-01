@@ -1,0 +1,162 @@
+# ============================================================
+# MLB Scouting Report — Nightly Recap
+# ============================================================
+# Runs after West Coast games finish. Refreshes game context
+# and renders the overnight recap report so it's ready for
+# the morning push.
+#
+# Schedule (UTC — baseball season runs EDT = UTC-4):
+#   3:00 AM ET  →  07:00 UTC
+#
+# Manual trigger: Actions tab → Nightly Recap → Run workflow
+# ============================================================
+
+name: Nightly Recap
+
+on:
+  schedule:
+    - cron: "0 7 * * *"     #  3:00 AM ET (EDT = UTC-4)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  nightly-recap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      RENV_PATHS_LIBRARY: ~/.local/share/renv
+
+    steps:
+      # --------------------------------------------------------
+      # 1. Checkout source
+      # --------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # --------------------------------------------------------
+      # 2. Install Quarto
+      # --------------------------------------------------------
+      - name: Install Quarto
+        uses: quarto-dev/quarto-actions/setup@v2
+
+      # --------------------------------------------------------
+      # 3. Install R
+      # --------------------------------------------------------
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: "4.4"
+          use-public-rspm: true
+
+      # --------------------------------------------------------
+      # 4. Install R packages
+      # --------------------------------------------------------
+      - name: Install R dependencies
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          needs: website
+
+      # --------------------------------------------------------
+      # 5. Prepare directories
+      # --------------------------------------------------------
+      - name: Ensure data, logs, and reports directories exist
+        run: mkdir -p data logs reports
+
+      # --------------------------------------------------------
+      # 6. Restore base cache (built earlier in the day — no rebuild)
+      #    If base cache is missing entirely, skip this run gracefully.
+      # --------------------------------------------------------
+      - name: Get ISO week number
+        id: week
+        run: echo "week=$(date +%V)" >> $GITHUB_OUTPUT
+
+      - name: Restore base pipeline cache
+        id: base-cache
+        uses: actions/cache@v4
+        with:
+          path: data/base_cache.rds
+          key: base-cache-${{ runner.os }}-week-${{ steps.week.outputs.week }}
+          restore-keys: |
+            base-cache-${{ runner.os }}-week-
+
+      - name: Bootstrap base cache from release (if cache miss)
+        if: steps.base-cache.outputs.cache-hit != 'true'
+        run: |
+          gh release download cache-bootstrap \
+            --pattern "base_cache.rds" \
+            --dir data \
+            --clobber 2>/dev/null \
+            || echo "No bootstrap release found"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # --------------------------------------------------------
+      # 7. Run daily pipeline + render recap
+      #    Skips gracefully if base cache is still missing after
+      #    the bootstrap attempt above.
+      # --------------------------------------------------------
+      - name: Run daily pipeline and render recap
+        run: |
+          if [ ! -f "data/base_cache.rds" ]; then
+            echo "Base cache not found — skipping nightly recap (morning run will handle it)"
+            exit 0
+          fi
+          Rscript -e "
+            setwd('${{ github.workspace }}')
+            tryCatch({
+              source('run_pipeline_daily.R')
+              source('09_reporting/render_recap.R')
+            }, error = function(e) {
+              cat('Error:', conditionMessage(e), '\n')
+              quit(status = 1)
+            })
+          "
+
+      # --------------------------------------------------------
+      # 8. Pull existing gh-pages HTML into reports/ for index
+      # --------------------------------------------------------
+      - name: Restore past reports from gh-pages
+        run: |
+          git fetch origin gh-pages --depth=1 2>/dev/null || echo "No gh-pages branch yet"
+          if git cat-file -e FETCH_HEAD 2>/dev/null; then
+            git worktree add /tmp/ghpages-old FETCH_HEAD 2>/dev/null
+            find /tmp/ghpages-old -maxdepth 1 -name "*.html" ! -name "index.html" | while read f; do
+              bn=$(basename "$f")
+              [ -f "reports/$bn" ] && continue
+              cp "$f" "reports/$bn"
+            done
+            git worktree remove /tmp/ghpages-old --force 2>/dev/null || true
+          fi
+
+      # --------------------------------------------------------
+      # 9. Generate updated index (recap link will now appear)
+      # --------------------------------------------------------
+      - name: Generate index page
+        run: |
+          Rscript -e "
+            setwd('${{ github.workspace }}')
+            source('generate_index.R')
+          "
+
+      # --------------------------------------------------------
+      # 10. Deploy to GitHub Pages
+      # --------------------------------------------------------
+      - name: Get report date
+        id: date
+        run: echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./reports
+          publish_branch: gh-pages
+          keep_files: true
+          force_orphan: false
+          user_name: "github-actions[bot]"
+          user_email: "github-actions[bot]@users.noreply.github.com"
+          commit_message: "Deploy nightly recap ${{ steps.date.outputs.date }}"

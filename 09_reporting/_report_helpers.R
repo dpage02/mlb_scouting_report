@@ -304,6 +304,9 @@ make_bullpen_gt <- function(gpk, side_filter) {
     dplyr::filter(game_pk == gpk, side == side_filter) %>%
     dplyr::arrange(role_sort)
 
+  season_yr <- if (exists("pitching_master_season") && nrow(pitching_master_season) > 0)
+    unique(pitching_master_season$season)[1] else as.integer(format(Sys.Date(), "%Y"))
+
   display <- dplyr::tibble(
     Role   = raw$fg_role,
     Name   = raw$player_name,
@@ -332,7 +335,7 @@ make_bullpen_gt <- function(gpk, side_filter) {
       columns = dplyr::any_of(c("Status", "Rest", "P/Y", "P/3", "App"))
     ) %>%
     gt::tab_spanner(
-      label   = "2025 Season",
+      label   = paste0(season_yr, " Season"),
       columns = dplyr::any_of(c("IP", "ERA", "WHIP", "SV", "HLD", "WAR"))
     ) %>%
     gt::cols_width(Role ~ gt::px(45), Status ~ gt::px(85)) %>%

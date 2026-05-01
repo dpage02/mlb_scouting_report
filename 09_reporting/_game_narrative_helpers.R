@@ -140,6 +140,27 @@ WRC_STAB_PA <- 550L
   else NULL
 }
 
+# Rotation slot from depth_charts (SP1=1, SP2=2, ... SP5=5, NA if unavailable).
+.sp_rotation_slot <- function(sp_row) {
+  if (nrow(sp_row) == 0) return(NA_integer_)
+  if (!exists("depth_charts") || nrow(depth_charts) == 0) return(NA_integer_)
+  mid <- dplyr::coalesce(sp_row$mlbam_id[1], NA_integer_)
+  if (is.na(mid)) return(NA_integer_)
+  dc <- depth_charts %>% dplyr::filter(mlbam_id == mid) %>% dplyr::slice_head(n = 1)
+  if (nrow(dc) == 0 || !"fg_role" %in% names(dc)) return(NA_integer_)
+  suppressWarnings(as.integer(stringr::str_extract(dplyr::coalesce(dc$fg_role[1], ""), "\\d+")))
+}
+
+# TRUE when a SP is genuinely top-of-rotation caliber, not just "good numbers this week".
+# Requires slot 1-2 in the depth chart, OR (no slot data AND ERA+ >= 140 — very high bar).
+.sp_is_ace_caliber <- function(sp_row) {
+  blep <- tryCatch(.blended_era_plus(sp_row), error = function(e) NA_real_)
+  if (is.na(blep) || blep < 115) return(FALSE)
+  slot <- .sp_rotation_slot(sp_row)
+  if (is.na(slot)) return(blep >= 140)
+  slot <= 2
+}
+
 .era_plus_tier <- function(x) {
   if (is.na(x)) return(NULL)
   dplyr::case_when(x >= 150 ~ "elite", x >= 130 ~ "excellent",
@@ -490,10 +511,14 @@ make_game_bullets_html <- function(gpk) {
 
   # Quality label uses BLENDED ERA+ so a temporarily-struggling ace
   # still earns the right label (and a hot 2-start pitcher doesn't inflate it).
-  both_good <- !is.na(away_blep) && !is.na(home_blep) &&
-               away_blep >= 110 && home_blep >= 110
+  # Rotation slot gates "marquee" language — a #4 with great numbers is interesting,
+  # but not the same as two genuine front-line starters going head-to-head.
+  both_good      <- !is.na(away_blep) && !is.na(home_blep) &&
+                    away_blep >= 110 && home_blep >= 110
+  away_ace_cal   <- .sp_is_ace_caliber(away_sp)
+  home_ace_cal   <- .sp_is_ace_caliber(home_sp)
 
-  label <- if (both_good && away_blep >= 120 && home_blep >= 120) {
+  label <- if (both_good && away_ace_cal && home_ace_cal) {
     "Quality pitching matchup"
   } else if (both_good) {
     "Solid pitching matchup"
@@ -580,15 +605,14 @@ make_game_bullets_html <- function(gpk) {
       weaker       <- if (away_wrc > home_wrc) home_team else away_team
       weaker_wrc   <- min(away_wrc, home_wrc)
       bullets <- c(bullets, paste0(
-        "<strong>Offense edge</strong>: ", stronger, " (", .wrc_tier(stronger_wrc),
-        " offense, avg wRC+ ", round(stronger_wrc), ") vs ",
-        weaker, " (", round(weaker_wrc), ")"
+        "<strong>Offense edge \u2014 ", stronger, "</strong>: ",
+        round(stronger_wrc), " wRC+ vs ", round(weaker_wrc), " for ", weaker
       ))
     } else {
       bullets <- c(bullets, paste0(
-        "<strong>Balanced offenses</strong>: ",
-        away_team, " avg wRC+ ", round(away_wrc),
-        " · ", home_team, " avg wRC+ ", round(home_wrc)
+        "<strong>Even offenses</strong>: ",
+        away_team, " (", round(away_wrc), " wRC+)",
+        " \u00b7 ", home_team, " (", round(home_wrc), " wRC+)"
       ))
     }
   }
@@ -1398,28 +1422,55 @@ make_game_narrative_html <- function(gpk) {
       xfip <- .get_num(sp_row, "fg_xFIP")
       kpct <- .get_num(sp_row, "fg_K_pct")
       gs   <- .get_num(sp_row, "mlb_gs")
+      slot <- .sp_rotation_slot(sp_row)
       if (is.na(ep) || ep < 120) next
       parts <- character(0)
       if (!is.na(xfip)) parts <- c(parts, paste0(round(xfip, 2), " xFIP"))
       if (!is.na(kpct) && kpct >= 0.22) parts <- c(parts, paste0(.fmt_pct(kpct), " K rate"))
       if (length(parts) > 0) {
-        tier <- if (ep >= 150) "dominant" else if (ep >= 130) "excellent" else "above-average"
+        tier_adj  <- if (ep >= 150) "been dominant" else if (ep >= 130) "been excellent" else "pitched well"
+        above_slot <- !is.na(slot) && slot >= 3
+        closer_str <- if (above_slot) {
+          paste0(". Listed as a #", slot, " starter, he's been pitching well above that this season")
+        } else if (!is.na(gs) && gs >= 5) {
+          ". He's one of the nastier draws on today's card"
+        } else ""
         sentences <- c(sentences, paste0(
-          sp_info$nm, " has been ", tier, " this season with a ",
-          paste(parts, collapse = " and "), ", making ",
-          if (!is.na(gs) && gs >= 5) paste0("him one of the tougher matchups in tonight's slate") else "him a watch",
-          "."
+          sp_info$nm, " has ", tier_adj, " this season",
+          if (length(parts) > 0) paste0(" \u2014 ", paste(parts, collapse = ", ")) else "",
+          closer_str, "."
         ))
       }
     }
     if (length(sentences) > 0) paste(sentences, collapse = " ") else NULL
   }, error = function(e) NULL)
 
-  para1 <- paste0(
-    away_desc, " heads to ", venue, " to face ", home_desc,
-    " in what shapes up as ", pitch_tone, ".",
-    if (!is.null(sp_quality_sentence)) paste0(" ", sp_quality_sentence) else ""
-  )
+  para1 <- {
+    away_ace_p1 <- .sp_is_ace_caliber(away_sp)
+    home_ace_p1 <- .sp_is_ace_caliber(home_sp)
+    both_ace  <- away_ace_p1 && home_ace_p1 && !is.na(away_ep) && away_ep >= 120 && !is.na(home_ep) && home_ep >= 120
+    away_dom  <- !is.na(away_ep) && away_ep >= 130
+    home_dom  <- !is.na(home_ep) && home_ep >= 130
+    away_soft <- !is.na(away_ep) && away_ep < 95
+    home_soft <- !is.na(home_ep) && home_ep < 95
+
+    opening <- if (both_ace) {
+      paste0("A legitimate ace duel at ", venue, " \u2014 ", away_desc, " facing off against ", home_desc, ".")
+    } else if (away_dom && home_soft) {
+      paste0(away_desc, " is the pitching headliner today, making the trip to ", venue,
+             " against a ", home_team, " offense that'll need to earn their runs.")
+    } else if (home_dom && away_soft) {
+      paste0(away_team, " visits ", venue, " in a tough draw: ", home_desc,
+             " is the kind of arm that can shut down a road offense.")
+    } else if (!is.na(avg_ep) && avg_ep < 95) {
+      paste0(away_desc, " and ", home_desc, " square off at ", venue,
+             " \u2014 both starters carry some vulnerability, so expect the offenses to have their say.")
+    } else {
+      paste0(away_desc, " heads to ", venue, " to face ", home_desc, " in ", pitch_tone, ".")
+    }
+
+    paste0(opening, if (!is.null(sp_quality_sentence)) paste0(" ", sp_quality_sentence) else "")
+  }
 
   # ---- Paragraph 2: Lineup & matchup edge ----
   para2 <- tryCatch({
@@ -1434,11 +1485,12 @@ make_game_narrative_html <- function(gpk) {
       stronger_wrc <- max(away_wrc, home_wrc)
       weaker       <- if (away_wrc >= home_wrc) home_team else away_team
       weaker_wrc   <- min(away_wrc, home_wrc)
-      paste0("Offensively, ", stronger, " carries the advantage (avg wRC+ ",
-             round(stronger_wrc), " vs ", round(weaker_wrc), " for ", weaker, ").")
+      gap_note <- if (abs(away_wrc - home_wrc) >= 25) "a significant edge on paper" else "a meaningful advantage in the lineup"
+      paste0(stronger, " brings the bigger offensive threat here \u2014 ", round(stronger_wrc), " wRC+ to ",
+             weaker, "'s ", round(weaker_wrc), ", ", gap_note, ".")
     } else {
-      paste0("Both lineups enter on comparable footing (avg wRC+ ",
-             round(away_wrc), " for ", away_team, ", ", round(home_wrc), " for ", home_team, ").")
+      paste0("The lineups are fairly matched \u2014 ", away_team, " at ", round(away_wrc), " wRC+, ",
+             home_team, " at ", round(home_wrc), ". Execution will matter more than raw talent gap here.")
     }
 
     # Best split batter
@@ -2407,4 +2459,242 @@ make_prediction_html <- function(gpk) {
   )
 
   paste0(table_html, factors_html, method_html)
+}
+
+# ============================================================
+# make_beat_streak_html()
+# Ranks all of today's lineup batters by P(get a hit tonight).
+# Model: true-talent AVG × SP suppression × handedness split + recent form
+# P(hit) = 1 - (1 - p_per_AB)^expected_AB
+# ============================================================
+
+LEAGUE_H9   <- 8.8   # MLB avg H/9 allowed (2022-2024 empirical)
+H9_STAB_IP  <- 80L   # IP at which H/9 is 50/50 signal vs noise
+AVG_STAB_AB <- 150L  # AB at which observed AVG is 50/50 signal vs noise
+
+make_beat_streak_html <- function(top_n = 20) {
+  tryCatch({
+    if (!exists("lineup_context") || nrow(lineup_context) == 0) return("")
+
+    # ── 1. Base batter table ─────────────────────────────────────────────────
+    batters <- lineup_context %>%
+      dplyr::filter(!is.na(batting_slot), batting_slot %in% 1:9,
+                    !is.na(mlbam_id)) %>%
+      dplyr::select(game_pk, side, team_abbr, batting_slot, mlbam_id,
+                    player_name, mlb_pa, mlb_avg)
+
+    if (nrow(batters) == 0) return("")
+
+    # ── 2. xAVG from offense_master_season ──────────────────────────────────
+    xavg_tbl <- if (exists("offense_master_season") &&
+                    "fg_xAVG" %in% names(offense_master_season)) {
+      offense_master_season %>%
+        dplyr::distinct(mlbam_id, .keep_all = TRUE) %>%
+        dplyr::select(mlbam_id, fg_xAVG)
+    } else dplyr::tibble(mlbam_id = integer(), fg_xAVG = numeric())
+
+    batters <- batters %>% dplyr::left_join(xavg_tbl, by = "mlbam_id")
+
+    # ── 3. Opposing SP (flip side: away batter faces home SP, etc.) ──────────
+    sp_tbl <- starter_matchup %>%
+      dplyr::select(game_pk, sp_side = side, pitcher_name, pitch_hand,
+                    fg_H_per_9, mlb_ip) %>%
+      dplyr::mutate(side = dplyr::if_else(sp_side == "away", "home", "away")) %>%
+      dplyr::select(-sp_side)
+
+    batters <- batters %>%
+      dplyr::left_join(sp_tbl, by = c("game_pk", "side"))
+
+    # ── 4. Handedness splits ─────────────────────────────────────────────────
+    if (exists("lineup_context_splits") && nrow(lineup_context_splits) > 0 &&
+        "sp_avg" %in% names(lineup_context_splits)) {
+      split_tbl <- lineup_context_splits %>%
+        dplyr::select(game_pk, side, mlbam_id, sp_avg, sp_pa,
+                      mlb_avg_split = mlb_avg, split_label)
+      batters <- batters %>%
+        dplyr::left_join(split_tbl, by = c("game_pk", "side", "mlbam_id"))
+    } else {
+      batters <- batters %>%
+        dplyr::mutate(sp_avg = NA_real_, sp_pa = NA_integer_,
+                      mlb_avg_split = NA_real_, split_label = NA_character_)
+    }
+
+    # ── 5. Recent streaks ────────────────────────────────────────────────────
+    if (exists("recent_batter_streaks") && nrow(recent_batter_streaks) > 0) {
+      streak_tbl <- recent_batter_streaks %>%
+        dplyr::select(mlbam_id, hit_streak, last7_avg, is_hot, is_cold)
+      batters <- batters %>% dplyr::left_join(streak_tbl, by = "mlbam_id")
+    } else {
+      batters <- batters %>%
+        dplyr::mutate(hit_streak = NA_integer_, last7_avg = NA_real_,
+                      is_hot = FALSE, is_cold = FALSE)
+    }
+
+    # ── 6. Compute P(hit tonight) ────────────────────────────────────────────
+    batters <- batters %>%
+      dplyr::mutate(
+        pa_val  = dplyr::coalesce(suppressWarnings(as.numeric(mlb_pa)), 0),
+        obs_avg = suppressWarnings(as.numeric(mlb_avg)),
+        xa      = suppressWarnings(as.numeric(fg_xAVG)),
+
+        # True-talent AVG: blend xAVG with observed weighted by PA
+        base_avg = dplyr::case_when(
+          !is.na(xa) & !is.na(obs_avg) & pa_val >= 50 ~
+            xa * pmax(0.40, 1 - pa_val / (pa_val + AVG_STAB_AB)) +
+            obs_avg * pmin(0.60, pa_val / (pa_val + AVG_STAB_AB)),
+          !is.na(xa)      ~ xa,
+          !is.na(obs_avg) ~
+            (obs_avg * pa_val + .250 * AVG_STAB_AB) / (pa_val + AVG_STAB_AB),
+          TRUE ~ .250
+        ),
+
+        # SP H/9 regressed toward league mean (small-sample dampening)
+        sp_ip_val = dplyr::coalesce(suppressWarnings(as.numeric(mlb_ip)), 0),
+        sp_h9_val = suppressWarnings(as.numeric(fg_H_per_9)),
+        sp_h9_reg = dplyr::case_when(
+          !is.na(sp_h9_val) & sp_ip_val > 0 ~
+            (sp_h9_val * sp_ip_val + LEAGUE_H9 * H9_STAB_IP) /
+            (sp_ip_val + H9_STAB_IP),
+          TRUE ~ LEAGUE_H9
+        ),
+        # sp_factor < 1 = tough SP (allows fewer H), > 1 = hitter-friendly
+        sp_factor = pmin(1.18, pmax(0.82, sp_h9_reg / LEAGUE_H9)),
+
+        # Handedness split: sp_avg vs overall avg ratio
+        sp_avg_v  = suppressWarnings(as.numeric(sp_avg)),
+        mlb_avg_v = suppressWarnings(as.numeric(mlb_avg_split)),
+        sp_pa_v   = suppressWarnings(as.integer(sp_pa)),
+        split_mult = dplyr::case_when(
+          !is.na(sp_avg_v) & !is.na(mlb_avg_v) &
+            mlb_avg_v > .100 & !is.na(sp_pa_v) & sp_pa_v >= 25L ~
+            pmin(1.20, pmax(0.80, sp_avg_v / mlb_avg_v)),
+          TRUE ~ 1.0
+        ),
+
+        # Recent form additive
+        form_add = dplyr::case_when(
+          !is.na(hit_streak) & hit_streak >= 5 ~  0.015,
+          isTRUE(is_hot)                        ~  0.010,
+          isTRUE(is_cold)                       ~ -0.010,
+          TRUE                                  ~  0.000
+        ),
+
+        # P(hit per AB)
+        p_per_ab = pmin(0.450, pmax(0.100,
+          base_avg * sp_factor * split_mult + form_add)),
+
+        # Expected ABs by lineup slot
+        exp_ab = dplyr::case_when(
+          batting_slot == 1 ~ 3.70, batting_slot == 2 ~ 3.60,
+          batting_slot == 3 ~ 3.50, batting_slot == 4 ~ 3.40,
+          batting_slot == 5 ~ 3.30, batting_slot == 6 ~ 3.20,
+          batting_slot == 7 ~ 3.10, batting_slot == 8 ~ 3.00,
+          batting_slot == 9 ~ 2.90, TRUE ~ 3.30
+        ),
+
+        # P(at least 1 hit tonight)
+        p_hit = 1 - (1 - p_per_ab)^exp_ab,
+
+        # Note badges
+        note_streak = dplyr::case_when(
+          !is.na(hit_streak) & hit_streak >= 5 ~
+            paste0(hit_streak, "-game streak"),
+          isTRUE(is_hot) & !is.na(last7_avg) ~
+            paste0("hot L7 (.", sprintf("%03d", round(last7_avg * 1000)), ")"),
+          TRUE ~ ""
+        ),
+        note_split = dplyr::if_else(split_mult >= 1.10, "favorable split", ""),
+        note_sp    = dplyr::if_else(sp_factor <= 0.88, "tough SP", "")
+      )
+
+    # ── 7. Top N ─────────────────────────────────────────────────────────────
+    top <- batters %>%
+      dplyr::filter(!is.na(p_hit)) %>%
+      dplyr::arrange(dplyr::desc(p_hit)) %>%
+      dplyr::slice_head(n = top_n)
+
+    if (nrow(top) == 0) return("")
+
+    # ── 8. Render HTML ───────────────────────────────────────────────────────
+    rows_html <- vapply(seq_len(nrow(top)), function(i) {
+      r   <- top[i, ]
+      pct <- round(r$p_hit * 100, 1)
+      pct_col <- if (pct >= 70) "#27ae60" else if (pct >= 63) "#1a73e8" else "#555"
+
+      sp_lbl <- if (!is.na(r$pitcher_name) && nchar(r$pitcher_name) > 0) {
+        hand <- if (!is.na(r$pitch_hand) && r$pitch_hand %in% c("L", "R"))
+          paste0(" (", r$pitch_hand, "HP)") else ""
+        paste0(r$pitcher_name, hand)
+      } else "TBD"
+
+      note_parts <- c(
+        dplyr::coalesce(r$note_streak, ""),
+        dplyr::coalesce(r$note_split, ""),
+        dplyr::coalesce(r$note_sp, "")
+      )
+      note_parts <- note_parts[nchar(note_parts) > 0]
+      notes_html <- if (length(note_parts) > 0) {
+        paste(vapply(note_parts, function(n) {
+          if (grepl("streak|hot", n)) {
+            bg <- "#fff3cd"; fg <- "#856404"
+          } else if (grepl("split", n)) {
+            bg <- "#d4edda"; fg <- "#155724"
+          } else {
+            bg <- "#fce4e4"; fg <- "#721c24"
+          }
+          sprintf(
+            '<span style="background:%s;color:%s;font-size:0.72rem;padding:1px 6px;border-radius:3px;white-space:nowrap;">%s</span>',
+            bg, fg, n
+          )
+        }, character(1)), collapse = " ")
+      } else ""
+
+      sprintf(
+        '<tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:5px 8px;color:#aaa;font-size:0.82rem;text-align:right;">%d</td>
+          <td style="padding:5px 10px;font-weight:600;">%s</td>
+          <td style="padding:5px 8px;color:#666;font-size:0.85rem;">%s</td>
+          <td style="padding:5px 8px;color:#555;font-size:0.82rem;">%s</td>
+          <td style="padding:5px 8px;text-align:center;color:#888;font-size:0.85rem;">%s</td>
+          <td style="padding:5px 10px;text-align:center;font-weight:700;color:%s;font-size:0.95rem;">%.1f%%</td>
+          <td style="padding:5px 8px;">%s</td>
+        </tr>',
+        i,
+        r$player_name,
+        dplyr::coalesce(r$team_abbr, ""),
+        sp_lbl,
+        as.character(r$batting_slot),
+        pct_col, pct,
+        notes_html
+      )
+    }, character(1))
+
+    paste0(
+      '<div style="max-width:860px;">',
+      '<table style="width:100%;border-collapse:collapse;font-size:14px;">',
+      '<thead>',
+      '<tr style="border-bottom:2px solid #dee2e6;color:#777;font-size:0.75rem;',
+      'text-transform:uppercase;letter-spacing:0.04em;">',
+      '<th style="padding:5px 8px;text-align:right;width:32px;">#</th>',
+      '<th style="padding:5px 10px;text-align:left;">Player</th>',
+      '<th style="padding:5px 8px;text-align:left;">Team</th>',
+      '<th style="padding:5px 8px;text-align:left;">Opp SP</th>',
+      '<th style="padding:5px 8px;text-align:center;">Slot</th>',
+      '<th style="padding:5px 10px;text-align:center;">Hit%</th>',
+      '<th style="padding:5px 8px;text-align:left;"></th>',
+      '</tr>',
+      '</thead>',
+      '<tbody>',
+      paste(rows_html, collapse = "\n"),
+      '</tbody>',
+      '</table>',
+      '<p style="font-size:0.72rem;color:#aaa;margin-top:8px;line-height:1.5;">',
+      'Model: true-talent AVG (Statcast xAVG blended with season observed) ',
+      '\u00d7 SP suppression (regressed H/9) \u00d7 handedness split \u00b1 recent form. ',
+      'P(1+ hit) = 1 \u2212 (1 \u2212 p<sub>AB</sub>)<sup>exp AB</sup>. ',
+      'Early-season probabilities regressed toward mean until sample sizes stabilize.',
+      '</p>',
+      '</div>'
+    )
+  }, error = function(e) "")
 }
