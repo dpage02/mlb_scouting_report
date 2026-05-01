@@ -173,6 +173,7 @@ pull_yesterday_results <- function(recap_date = Sys.Date() - 1) {
         description = as.character(p$result$description),
         rbi         = as.integer(dplyr::coalesce(p$result$rbi, 0L)),
         captivating = as.integer(dplyr::coalesce(p$about$captivatingIndex, 0L)),
+        pitcher_id  = as.integer(dplyr::coalesce(p$matchup$pitcher$id, NA_integer_)),
         stringsAsFactors = FALSE
       )
     }))
@@ -426,30 +427,54 @@ make_game_narrative_html <- function(game, bs, sc) {
         }
       }
 
-      # Loss: note if reliever, not starter, was charged
+      # Loss: richer narrative when a reliever blew it
       if (!is.null(dec$loser)) {
         los_side     <- if (away_win) "home" else "away"
         los_pitchers <- bs$teams[[los_side]]$pitchers
-        loser_id     <- dec$loser$id
-        is_rp        <- length(los_pitchers) > 1 && loser_id != los_pitchers[[1]]
+        loser_id     <- as.integer(dec$loser$id)
+        is_rp        <- length(los_pitchers) > 1 && loser_id != as.integer(los_pitchers[[1]])
+
+        rp_line <- tryCatch({
+          p <- bs$teams[[los_side]]$players[[paste0("ID", loser_id)]]
+          if (!is.null(p)) list(ip = p$stats$pitching$inningsPitched,
+                                er = p$stats$pitching$earnedRuns) else NULL
+        }, error = function(e) NULL)
+
         if (is_rp) {
-          # Get their line
-          rp_line <- tryCatch({
-            p <- bs$teams[[los_side]]$players[[paste0("ID", loser_id)]]
-            if (!is.null(p)) {
-              s <- p$stats$pitching
-              list(ip = s$inningsPitched, er = s$earnedRuns)
-            } else NULL
+          # Find the inning they entered (first play with their pitcher_id in pbp)
+          entry_inn <- tryCatch({
+            if (is.null(pbp)) return(NULL)
+            all_plays_raw <- .fetch_play_by_play(game_pk)
+            # Re-use pbp$scoring_plays which already has pitcher_id
+            sp <- pbp$scoring_plays
+            if (is.null(sp) || nrow(sp) == 0) return(NULL)
+            rp_plays <- sp[!is.na(sp$pitcher_id) & sp$pitcher_id == loser_id, ]
+            if (nrow(rp_plays) == 0) return(NULL)
+            rp_plays[order(rp_plays$inning), ][1, ]
           }, error = function(e) NULL)
-          if (!is.null(rp_line) && !is.null(rp_line$ip)) {
+
+          if (!is.null(entry_inn)) {
+            # Trim play description to first sentence
+            desc <- gsub("\\.\\.+", ".", entry_inn$description[1])
+            desc <- regmatches(desc, regexpr("^[^.!?]+[.!?]", desc))
+            if (length(desc) == 0 || nchar(desc) == 0)
+              desc <- entry_inn$description[1]
+
+            line_str <- if (!is.null(rp_line) && !is.null(rp_line$ip))
+              sprintf(" (%s IP, %sER)", rp_line$ip, rp_line$er) else ""
+
             parts <- c(parts, sprintf(
-              "%s was charged with the loss out of the 'pen (%s IP, %sER).",
-              dec$loser$fullName, rp_line$ip, rp_line$er
+              "%s came in for the %s and things unraveled \u2014 %s %s was charged with the loss%s.",
+              dec$loser$fullName, .ordinal(entry_inn$inning[1]),
+              desc, dec$loser$fullName, line_str
             ))
           } else {
+            # Fallback: no matching scoring play found
+            line_str <- if (!is.null(rp_line) && !is.null(rp_line$ip))
+              sprintf(" (%s IP, %sER)", rp_line$ip, rp_line$er) else ""
             parts <- c(parts, sprintf(
-              "%s was charged with the loss in relief.",
-              dec$loser$fullName
+              "%s was charged with the loss out of the bullpen%s.",
+              dec$loser$fullName, line_str
             ))
           }
         }
