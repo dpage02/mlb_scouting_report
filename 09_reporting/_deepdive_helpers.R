@@ -257,11 +257,13 @@ make_lineup_tabset_html <- function(tables, uid) {
   }, character(1))
 
   paste0(
+    '<div class="lineup-desktop-all">',
     '<ul class="nav nav-tabs" id="lineup-', uid, '" role="tablist" style="margin-bottom:0;">',
     paste(btns,  collapse = ""),
     '</ul>',
     '<div class="tab-content" id="lineup-', uid, '-content">',
     paste(panes, collapse = ""),
+    '</div>',
     '</div>'
   )
 }

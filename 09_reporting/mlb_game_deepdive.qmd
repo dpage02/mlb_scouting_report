@@ -20,6 +20,34 @@ execute:
   message: false
 ---
 
+```{=html}
+<style>
+/*
+ * Lineup stat panels: tabs on mobile, all panels side-by-side on desktop.
+ * Breakpoint 1100px — roughly when a laptop has enough horizontal room.
+ */
+@media (min-width: 1100px) {
+  .lineup-desktop-all .nav-tabs {
+    display: none !important;
+  }
+  .lineup-desktop-all .tab-content {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+  }
+  .lineup-desktop-all .tab-pane {
+    display: block   !important;
+    opacity: 1       !important;
+    visibility: visible !important;
+    padding-top: 0   !important;
+    flex: 1 1 0;
+    min-width: 0;
+    overflow-x: auto;  /* each panel scrolls independently if needed */
+  }
+}
+</style>
+```
+
 ```{r setup}
 #| output: false
 if (basename(getwd()) == "09_reporting") setwd("..")
