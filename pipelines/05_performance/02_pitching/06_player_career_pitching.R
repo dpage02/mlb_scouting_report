@@ -257,7 +257,7 @@ join_fg_hist_p <- function(df) {
 
 player_career_pitching <- dplyr::bind_rows(
   lahman_career_p  %>% dplyr::mutate(season = as.integer(season)) %>% join_fg_hist_p(),
-  gap_seasons_p    %>% dplyr::mutate(season = as.integer(season)) %>% join_fg_hist_p(),
+  if (nrow(gap_seasons_p) > 0) gap_seasons_p %>% dplyr::mutate(season = as.integer(season)) %>% join_fg_hist_p() else NULL,
   current_season_p %>% dplyr::mutate(season = as.integer(season))
 ) %>%
   dplyr::arrange(mlbam_id, season)
