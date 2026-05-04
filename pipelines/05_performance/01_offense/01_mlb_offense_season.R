@@ -82,7 +82,7 @@ if (is.na(max_pa) || max_pa < 10) {
 player_season_mlb_offense <- mlb_league_raw %>%
   dplyr::transmute(
     mlbam_id = as.integer(player_id),
-    season   = as.integer(season),
+    season   = season_to_pull,
     team_id  = as.integer(team_id),
 
     # Counting stats

@@ -75,7 +75,7 @@ player_season_mlb_pitching <- mlb_pitching_raw %>%
 
     # Keys
     mlbam_id      = as.integer(player_id),
-    season        = as.integer(season),
+    season        = season_to_pull,
     team_name_raw = team_name,
     team_id       = team_id,
     
