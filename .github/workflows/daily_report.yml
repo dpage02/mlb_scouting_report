@@ -32,7 +32,6 @@ jobs:
 
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
-      RENV_PATHS_LIBRARY: renv/library
 
     steps:
       # --------------------------------------------------------
@@ -57,22 +56,31 @@ jobs:
           use-public-rspm: true
 
       # --------------------------------------------------------
-      # 4. Restore renv cache (keyed to renv.lock so any lockfile
-      #    change invalidates and rebuilds the library)
+      # 4. Cache R package library (keyed to DESCRIPTION so any
+      #    dependency change invalidates and rebuilds)
       # --------------------------------------------------------
-      - name: Restore renv library cache
+      - name: Cache R packages
         uses: actions/cache@v4
         with:
-          path: renv/library
-          key: renv-${{ runner.os }}-r4.4-${{ hashFiles('renv.lock') }}
-          restore-keys: renv-${{ runner.os }}-r4.4-
+          path: /home/runner/work/_temp/Library
+          key: r-pkgs-${{ runner.os }}-r4.4-${{ hashFiles('DESCRIPTION') }}
+          restore-keys: r-pkgs-${{ runner.os }}-r4.4-
 
       # --------------------------------------------------------
-      # 5. Install R packages from lockfile — no resolution,
-      #    no CRAN availability surprises
+      # 5. Install R packages
+      #    - baseballr and Lahman from GitHub (CRAN versions
+      #      have issues or stale data)
+      #    - everything else from DESCRIPTION via remotes
       # --------------------------------------------------------
       - name: Install R dependencies
-        run: Rscript -e "renv::restore()"
+        run: |
+          Rscript -e "
+            options(repos = c(CRAN = 'https://packagemanager.posit.co/cran/__linux__/noble/latest'))
+            install.packages('remotes', quiet = TRUE)
+            remotes::install_github('BillPetti/baseballr', upgrade = 'never', quiet = TRUE)
+            remotes::install_github('cdalzell/Lahman', upgrade = 'never', quiet = TRUE)
+            remotes::install_deps('.', dependencies = FALSE, upgrade = 'never', quiet = TRUE)
+          "
 
       # --------------------------------------------------------
       # 5. Prepare directories
