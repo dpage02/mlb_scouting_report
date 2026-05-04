@@ -121,13 +121,9 @@ jobs:
           fi
           Rscript -e "
             setwd('${{ github.workspace }}')
-            tryCatch({
-              source('run_pipeline_daily.R')
-              source('09_reporting/render_recap.R')
-            }, error = function(e) {
-              cat('Error:', conditionMessage(e), '\n')
-              quit(status = 1)
-            })
+            options(error = function() { traceback(3); quit(status = 1) })
+            source('run_pipeline_daily.R')
+            source('09_reporting/render_recap.R')
           "
 
       # --------------------------------------------------------

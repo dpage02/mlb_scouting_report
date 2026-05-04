@@ -133,13 +133,8 @@ jobs:
         run: |
           Rscript -e "
             setwd('${{ github.workspace }}')
-            tryCatch(
-              source('run_all.R'),
-              error = function(e) {
-                cat('Pipeline error:', conditionMessage(e), '\n')
-                quit(status = 1)
-              }
-            )
+            options(error = function() { traceback(3); quit(status = 1) })
+            source('run_all.R')
           "
 
       # --------------------------------------------------------
