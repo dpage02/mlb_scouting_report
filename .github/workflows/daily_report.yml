@@ -32,7 +32,7 @@ jobs:
 
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
-      RENV_PATHS_LIBRARY: ~/.local/share/renv
+      RENV_PATHS_LIBRARY: renv/library
 
     steps:
       # --------------------------------------------------------
@@ -57,19 +57,22 @@ jobs:
           use-public-rspm: true
 
       # --------------------------------------------------------
-      # 4. Install R packages
-      #    qs was archived from CRAN (needed by baseballr) — install
-      #    it from GitHub first so remotes skips it when resolving
-      #    baseballr's deps.
+      # 4. Restore renv cache (keyed to renv.lock so any lockfile
+      #    change invalidates and rebuilds the library)
+      # --------------------------------------------------------
+      - name: Restore renv library cache
+        uses: actions/cache@v4
+        with:
+          path: renv/library
+          key: renv-${{ runner.os }}-r4.4-${{ hashFiles('renv.lock') }}
+          restore-keys: renv-${{ runner.os }}-r4.4-
+
+      # --------------------------------------------------------
+      # 5. Install R packages from lockfile — no resolution,
+      #    no CRAN availability surprises
       # --------------------------------------------------------
       - name: Install R dependencies
-        run: |
-          Rscript -e "
-            options(repos = c(CRAN = 'https://packagemanager.posit.co/cran/__linux__/jammy/latest'))
-            install.packages('remotes', quiet = TRUE)
-            remotes::install_github('traversc/qs', quiet = TRUE)
-            remotes::install_deps('.', dependencies = TRUE, quiet = TRUE)
-          "
+        run: Rscript -e "renv::restore()"
 
       # --------------------------------------------------------
       # 5. Prepare directories
