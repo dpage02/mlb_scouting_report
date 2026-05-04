@@ -43,6 +43,26 @@ parse_report_file <- function(f) {
                       file=f, stringsAsFactors=FALSE))
   }
 
+  if (grepl("^series_preview_", f)) {
+    dm <- regmatches(f, regexpr("\\d{4}-\\d{2}-\\d{2}", f))
+    parts <- strsplit(gsub("\\.html$", "", f), "_")[[1]]
+    n <- length(parts)
+    return(data.frame(type="series_preview", date=dm,
+                      away=if(n>=5) parts[n-1] else NA_character_,
+                      home=if(n>=5) parts[n]   else NA_character_,
+                      file=f, stringsAsFactors=FALSE))
+  }
+
+  if (grepl("^series_recap_", f)) {
+    dm <- regmatches(f, regexpr("\\d{4}-\\d{2}-\\d{2}", f))
+    parts <- strsplit(gsub("\\.html$", "", f), "_")[[1]]
+    n <- length(parts)
+    return(data.frame(type="series_recap", date=dm,
+                      away=if(n>=5) parts[n-1] else NA_character_,
+                      home=if(n>=5) parts[n]   else NA_character_,
+                      file=f, stringsAsFactors=FALSE))
+  }
+
   m <- regmatches(f, regexec(
     "^(scouting|deepdive|print|team|matchup|prediction|hitting|result)_(\\d{4}-\\d{2}-\\d{2})(?:_([A-Z0-9]+)(?:_([A-Z0-9]+))?)?\\.html$",
     f
@@ -202,6 +222,38 @@ if (nchar(past_rows) == 0) {
   past_rows <- '<p style="color:#888;padding:8px 0;">No past reports yet.</p>'
 }
 
+# ------------------------------------------------------------
+# Series preview / recap cards
+# ------------------------------------------------------------
+
+series_files <- file_df[file_df$type %in% c("series_preview", "series_recap"), ]
+series_files <- series_files[order(series_files$date, decreasing = TRUE), ]
+
+series_cards_html <- ""
+if (nrow(series_files) > 0) {
+  for (i in seq_len(nrow(series_files))) {
+    sf <- series_files[i, ]
+    label <- if (sf$type == "series_preview") "Series Preview" else "Series Recap"
+    matchup <- if (!is.na(sf$away) && !is.na(sf$home)) {
+      paste0(sf$away, " @ ", sf$home)
+    } else sf$file
+    color <- if (sf$type == "series_preview") "#1a73e8" else "#0f9d58"
+    series_cards_html <- paste0(series_cards_html, sprintf(
+      '<a href="%s" class="series-card" style="border-left:4px solid %s;">
+        <span class="series-label" style="color:%s;">%s</span>
+        <span class="series-matchup">%s</span>
+        <span class="series-date">%s</span>
+      </a>',
+      sf$file, color, color, label, matchup, sf$date
+    ))
+  }
+}
+
+series_section <- if (nchar(series_cards_html) > 0) {
+  paste0('<div class="section-title">Braves Series</div>',
+         '<div class="series-grid">', series_cards_html, '</div>')
+} else ""
+
 # Stat reference link
 ref_link <- if ("stat_reference.html" %in% all_files) {
   '<a href="stat_reference.html" class="ref-link">Stat Reference &amp; Grade Ranges</a>'
@@ -359,6 +411,27 @@ html <- sprintf('<!DOCTYPE html>
       border-radius: 5px;
     }
     .past-game-link:hover { color: #e6edf3; border-color: #58a6ff; }
+    .series-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+    .series-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 10px;
+      padding: 14px 18px;
+      text-decoration: none;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 220px;
+    }
+    .series-card:hover { border-color: #58a6ff; }
+    .series-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+    .series-matchup { font-size: 1rem; font-weight: 700; color: #e6edf3; }
+    .series-date { font-size: 0.78rem; color: #8b949e; }
     .footer {
       text-align: center;
       font-size: 0.75rem;
@@ -374,6 +447,7 @@ html <- sprintf('<!DOCTYPE html>
   </header>
   <main>
     <div class="today-date">%s</div>
+    %s
     %s
     <div class="section-title">Today\'s Games</div>
     <div class="games-grid">%s</div>
@@ -396,6 +470,7 @@ html <- sprintf('<!DOCTYPE html>
   accuracy_link,        # header accuracy link
   today_str,            # h2 date
   scouting_link,        # overview link
+  series_section,       # series preview / recap
   today_cards,          # game cards
   past_rows,            # past games
   format(Sys.time(), "%Y-%m-%d %I:%M %p", tz = "America/New_York")
