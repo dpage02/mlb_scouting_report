@@ -58,7 +58,7 @@ jobs:
       - name: Install R dependencies
         uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          needs: website
+          extra-packages: github::traversc/qs
 
       # --------------------------------------------------------
       # 5. Prepare directories
