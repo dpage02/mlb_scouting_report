@@ -24,6 +24,4 @@ Imports:
     ggplot2,
     baseballr,
     Lahman
-Suggests:
-    qs
 Encoding: UTF-8
