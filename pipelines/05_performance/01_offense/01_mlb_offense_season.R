@@ -79,10 +79,12 @@ if (is.na(max_pa) || max_pa < 10) {
 # Build Fact Table
 # ------------------------------------------------------------
 
+cat("DEBUG 01_mlb_offense_season: cols = ", paste(names(mlb_league_raw), collapse = ", "), "\n")
+
 player_season_mlb_offense <- mlb_league_raw %>%
   dplyr::transmute(
     mlbam_id = as.integer(player_id),
-    season   = season_to_pull,
+    season   = as.integer(season_to_pull),
     team_id  = as.integer(team_id),
 
     # Counting stats

@@ -70,12 +70,14 @@ if (is.na(max_ip) || max_ip < 1) {
 # Build Canonical Table
 # ------------------------------------------------------------
 
+cat("DEBUG 01_mlb_pitching_season: cols = ", paste(names(mlb_pitching_raw), collapse = ", "), "\n")
+
 player_season_mlb_pitching <- mlb_pitching_raw %>%
   dplyr::transmute(
 
     # Keys
     mlbam_id      = as.integer(player_id),
-    season        = season_to_pull,
+    season        = as.integer(season_to_pull),
     team_name_raw = team_name,
     team_id       = team_id,
     
