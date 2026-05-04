@@ -116,7 +116,17 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # --------------------------------------------------------
-      # 7. Run full pipeline and render all reports
+      # 7. Diagnostics — confirm which commit and code CI is using
+      # --------------------------------------------------------
+      - name: Verify source code
+        run: |
+          echo "=== Git commit ==="
+          git log --oneline -1
+          echo "=== 01_mlb_offense_season.R lines 82-87 ==="
+          sed -n '82,87p' pipelines/05_performance/01_offense/01_mlb_offense_season.R
+
+      # --------------------------------------------------------
+      # 8. Run full pipeline and render all reports
       #    push_to_web.R is a no-op in CI (GITHUB_ACTIONS is set)
       # --------------------------------------------------------
       - name: Run pipeline and render reports
