@@ -2236,13 +2236,13 @@ Gerrit Cole
 </tr>
 <tr style>
 <td style="padding:6px 14px; border-bottom:1px solid #eee;">
-SP Quality (ERA / ERA)
+SP Quality (xFIP / xFIP)
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-3.07
+3.06
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-0
+3.71
 </td>
 </tr>
 <tr style>
@@ -2250,21 +2250,21 @@ SP Quality (ERA / ERA)
 Bullpen ERA (avail/fresh arms)
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-3.95
+3.87
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-3.99
+4.08
 </td>
 </tr>
 <tr style>
 <td style="padding:6px 14px; border-bottom:1px solid #eee;">
-Pitcher Quality (ERA+BP / ERA+BP)
+Pitcher Quality (xFIP+BP / xFIP+BP)
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-<strong>3.35</strong>
+<strong>3.32</strong>
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-<strong>1.29</strong>
+<strong>3.83</strong>
 </td>
 </tr>
 <tr style>
@@ -2272,10 +2272,10 @@ Pitcher Quality (ERA+BP / ERA+BP)
 Lineup avg wRC+
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-100
+101
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-100
+121
 </td>
 </tr>
 <tr>
@@ -2291,10 +2291,10 @@ Park Factor (1.02×)
 <strong>Projected Runs</strong>
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-<strong>1.5</strong>
+<strong>4.1</strong>
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-<strong>3.8</strong>
+<strong>4.1</strong>
 </td>
 </tr>
 <tr style>
@@ -2302,44 +2302,47 @@ Park Factor (1.02×)
 <strong>Win Probability</strong>
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-<span style="padding:2px 10px; border-radius:4px; font-weight:bold;">16%</span>
+<span style="background:#e8f5e9;padding:2px 10px; border-radius:4px; font-weight:bold;">51%</span>
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-<span style="background:#e8f5e9;padding:2px 10px; border-radius:4px; font-weight:bold;">84%</span>
+<span style="padding:2px 10px; border-radius:4px; font-weight:bold;">49%</span>
 </td>
 </tr>
 </tbody>
 </table>
 <p style="font-size:12px; color:#444; margin:0 0 0.8rem 0;">
-<strong>Projected total: 5.3 runs</strong> · Projected winner: <strong>New York Yankees</strong> (84% win probability)
+<strong>Projected total: 8.2 runs</strong> · Projected winner: <strong>Cleveland Guardians</strong> (51% win probability)
 </p>
 <p style="font-size:12px; font-weight:bold; color:#444; margin:0.8rem 0 4px 0;">
 Model inputs:
 </p>
 <ul style="font-size:12px; color:#555; margin:0 0 0.8rem 0; padding-left:18px; line-height:1.8;">
 <li>
-Gavin Williams ERA = 3.07 · bullpen xFIP = 3.95 → blended = 3.35 (68% SP / 32% BP innings)
+Gavin Williams xFIP = 3.06 · bullpen xFIP = 3.87 → blended = 3.32 (68% SP / 32% BP innings)
 </li>
 <li>
-Gerrit Cole ERA = 0 · bullpen xFIP = 3.99 → blended = 1.29 (68% SP / 32% BP innings)
+Gerrit Cole xFIP = 3.71 · bullpen xFIP = 4.08 → blended = 3.83 (68% SP / 32% BP innings)
 </li>
 <li>
-Cleveland Guardians lineup avg wRC+ = 100 <em>(stabilized regression + age curve — Steamer not available)</em>
+Cleveland Guardians lineup avg wRC+ = 99 <em>(stabilized regression + age curve — Steamer not available)</em>
 </li>
 <li>
-New York Yankees lineup avg wRC+ = 100 <em>(stabilized regression + age curve — Steamer not available)</em>
+New York Yankees lineup avg wRC+ = 112 <em>(stabilized regression + age curve — Steamer not available)</em>
 </li>
 <li>
 Yankee Stadium park factor = 1.02 (+2% run environment)
 </li>
 <li>
-Temperature: 85°F (+3% run environment)
+Temperature: 85°F (+1% run environment)
 </li>
 <li>
-Wind: 11 mph (unknown) (+0.4% run environment)
+Wind: 10 mph (unknown) (+0.3% run environment)
 </li>
 <li>
-New York Yankees defense adj: ×0.989 on Cleveland Guardians runs (OAA/DRS based, 30% signal weight)
+New York Yankees defense adj: ×0.992 on Cleveland Guardians runs (OAA/DRS based, 30% signal weight)
+</li>
+<li>
+Cleveland Guardians defense adj: ×0.994 on New York Yankees runs (OAA/DRS based, 30% signal weight)
 </li>
 <li>
 Home field residual: +0.02 R/game (last-at-bat/crowd; empirical run diff ≈0 over 2022–2024)

@@ -2231,18 +2231,18 @@ Starting Pitcher
 Logan Webb
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-TBD
+Robert Gasser
 </td>
 </tr>
 <tr style>
 <td style="padding:6px 14px; border-bottom:1px solid #eee;">
-SP Quality (ERA / Lg Avg)
+SP Quality (xFIP / xFIP)
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-4.82
+3.48
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-4.15
+7.22
 </td>
 </tr>
 <tr style>
@@ -2250,21 +2250,21 @@ SP Quality (ERA / Lg Avg)
 Bullpen ERA (avail/fresh arms)
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-3.87
+4.13
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-3.41
+4
 </td>
 </tr>
 <tr style>
 <td style="padding:6px 14px; border-bottom:1px solid #eee;">
-Pitcher Quality (ERA+BP / Lg Avg+BP)
+Pitcher Quality (xFIP+BP / xFIP+BP)
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-<strong>4.49</strong>
+<strong>3.71</strong>
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-<strong>3.86</strong>
+<strong>5.07</strong>
 </td>
 </tr>
 <tr style>
@@ -2272,10 +2272,10 @@ Pitcher Quality (ERA+BP / Lg Avg+BP)
 Lineup avg wRC+
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-100
+110
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-100
+108
 </td>
 </tr>
 <tr>
@@ -2291,10 +2291,10 @@ Park Factor (1.01×)
 <strong>Projected Runs</strong>
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-<strong>4.2</strong>
+<strong>5.7</strong>
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-<strong>5</strong>
+<strong>4.5</strong>
 </td>
 </tr>
 <tr style>
@@ -2302,32 +2302,32 @@ Park Factor (1.01×)
 <strong>Win Probability</strong>
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-<span style="padding:2px 10px; border-radius:4px; font-weight:bold;">40%</span>
+<span style="background:#e8f5e9;padding:2px 10px; border-radius:4px; font-weight:bold;">64%</span>
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-<span style="background:#e8f5e9;padding:2px 10px; border-radius:4px; font-weight:bold;">60%</span>
+<span style="padding:2px 10px; border-radius:4px; font-weight:bold;">36%</span>
 </td>
 </tr>
 </tbody>
 </table>
 <p style="font-size:12px; color:#444; margin:0 0 0.8rem 0;">
-<strong>Projected total: 9.1 runs</strong> · Projected winner: <strong>Milwaukee Brewers</strong> (60% win probability)
+<strong>Projected total: 10.3 runs</strong> · Projected winner: <strong>San Francisco Giants</strong> (64% win probability)
 </p>
 <p style="font-size:12px; font-weight:bold; color:#444; margin:0.8rem 0 4px 0;">
 Model inputs:
 </p>
 <ul style="font-size:12px; color:#555; margin:0 0 0.8rem 0; padding-left:18px; line-height:1.8;">
 <li>
-Logan Webb ERA = 4.82 · bullpen xFIP = 3.87 → blended = 4.49 (66% SP / 34% BP innings)
+Logan Webb xFIP = 3.48 · bullpen xFIP = 4.13 → blended = 3.71 (66% SP / 34% BP innings)
 </li>
 <li>
-TBD Lg Avg = 4.15 · bullpen xFIP = 3.41 → blended = 3.86 (61% SP / 39% BP innings)
+Robert Gasser xFIP = 7.22 · bullpen xFIP = 4 → blended = 5.07 (33% SP / 67% BP innings)
 </li>
 <li>
-San Francisco Giants lineup avg wRC+ = 100 <em>(stabilized regression + age curve — Steamer not available)</em>
+San Francisco Giants lineup avg wRC+ = 103 <em>(stabilized regression + age curve — Steamer not available)</em>
 </li>
 <li>
-Milwaukee Brewers lineup avg wRC+ = 100 <em>(stabilized regression + age curve — Steamer not available)</em>
+Milwaukee Brewers lineup avg wRC+ = 111 <em>(stabilized regression + age curve — Steamer not available)</em>
 </li>
 <li>
 American Family Field park factor = 1.01 (+1% run environment)
@@ -2336,13 +2336,13 @@ American Family Field park factor = 1.01 (+1% run environment)
 Temperature: 80°F (+1% run environment)
 </li>
 <li>
-Wind: 12 mph (unknown) (+0.6% run environment)
+Wind: 14 mph (unknown) (+0.7% run environment)
 </li>
 <li>
-Milwaukee Brewers defense adj: ×0.987 on San Francisco Giants runs (OAA/DRS based, 30% signal weight)
+Milwaukee Brewers defense adj: ×0.997 on San Francisco Giants runs (OAA/DRS based, 30% signal weight)
 </li>
 <li>
-San Francisco Giants defense adj: ×1.004 on Milwaukee Brewers runs (OAA/DRS based, 30% signal weight)
+San Francisco Giants defense adj: ×1.005 on Milwaukee Brewers runs (OAA/DRS based, 30% signal weight)
 </li>
 <li>
 Home field residual: +0.02 R/game (last-at-bat/crowd; empirical run diff ≈0 over 2022–2024)

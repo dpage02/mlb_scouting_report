@@ -2236,13 +2236,13 @@ Cristopher Sánchez
 </tr>
 <tr style>
 <td style="padding:6px 14px; border-bottom:1px solid #eee;">
-SP Quality (ERA / ERA)
+SP Quality (xFIP / xFIP)
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-4.88
+3.92
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-1.47
+2.33
 </td>
 </tr>
 <tr style>
@@ -2250,21 +2250,21 @@ SP Quality (ERA / ERA)
 Bullpen ERA (avail/fresh arms)
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-3.11
+3.62
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-3.58
+3.74
 </td>
 </tr>
 <tr style>
 <td style="padding:6px 14px; border-bottom:1px solid #eee;">
-Pitcher Quality (ERA+BP / ERA+BP)
+Pitcher Quality (xFIP+BP / xFIP+BP)
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-<strong>4.06</strong>
+<strong>3.78</strong>
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-<strong>2.05</strong>
+<strong>2.72</strong>
 </td>
 </tr>
 <tr style>
@@ -2272,10 +2272,10 @@ Pitcher Quality (ERA+BP / ERA+BP)
 Lineup avg wRC+
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-100
+89
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-100
+98
 </td>
 </tr>
 <tr>
@@ -2291,10 +2291,10 @@ Park Factor (1.04×)
 <strong>Projected Runs</strong>
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-<strong>2.3</strong>
+<strong>2.9</strong>
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-<strong>4.6</strong>
+<strong>4.3</strong>
 </td>
 </tr>
 <tr style>
@@ -2302,44 +2302,47 @@ Park Factor (1.04×)
 <strong>Win Probability</strong>
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-<span style="padding:2px 10px; border-radius:4px; font-weight:bold;">19%</span>
+<span style="padding:2px 10px; border-radius:4px; font-weight:bold;">31%</span>
 </td>
 <td style="padding:6px 16px; text-align:center; border-bottom:1px solid #eee;">
-<span style="background:#e8f5e9;padding:2px 10px; border-radius:4px; font-weight:bold;">81%</span>
+<span style="background:#e8f5e9;padding:2px 10px; border-radius:4px; font-weight:bold;">69%</span>
 </td>
 </tr>
 </tbody>
 </table>
 <p style="font-size:12px; color:#444; margin:0 0 0.8rem 0;">
-<strong>Projected total: 6.9 runs</strong> · Projected winner: <strong>Philadelphia Phillies</strong> (81% win probability)
+<strong>Projected total: 7.2 runs</strong> · Projected winner: <strong>Philadelphia Phillies</strong> (69% win probability)
 </p>
 <p style="font-size:12px; font-weight:bold; color:#444; margin:0.8rem 0 4px 0;">
 Model inputs:
 </p>
 <ul style="font-size:12px; color:#555; margin:0 0 0.8rem 0; padding-left:18px; line-height:1.8;">
 <li>
-Walker Buehler ERA = 4.88 · bullpen xFIP = 3.11 → blended = 4.06 (53% SP / 47% BP innings)
+Walker Buehler xFIP = 3.92 · bullpen xFIP = 3.62 → blended = 3.78 (53% SP / 47% BP innings)
 </li>
 <li>
-Cristopher Sánchez ERA = 1.47 · bullpen xFIP = 3.58 → blended = 2.05 (73% SP / 27% BP innings)
+Cristopher Sánchez xFIP = 2.33 · bullpen xFIP = 3.74 → blended = 2.72 (73% SP / 27% BP innings)
 </li>
 <li>
-San Diego Padres lineup avg wRC+ = 100 <em>(stabilized regression + age curve — Steamer not available)</em>
+San Diego Padres lineup avg wRC+ = 96 <em>(stabilized regression + age curve — Steamer not available)</em>
 </li>
 <li>
-Philadelphia Phillies lineup avg wRC+ = 100 <em>(stabilized regression + age curve — Steamer not available)</em>
+Philadelphia Phillies lineup avg wRC+ = 101 <em>(stabilized regression + age curve — Steamer not available)</em>
 </li>
 <li>
 Citizens Bank Park park factor = 1.04 (+4% run environment)
 </li>
 <li>
-Temperature: 84°F (+1% run environment)
+Temperature: 85°F (+1% run environment)
+</li>
+<li>
+Wind: 9 mph (unknown) (+0.2% run environment)
 </li>
 <li>
 Philadelphia Phillies defense adj: ×0.99 on San Diego Padres runs (OAA/DRS based, 30% signal weight)
 </li>
 <li>
-San Diego Padres defense adj: ×1.003 on Philadelphia Phillies runs (OAA/DRS based, 30% signal weight)
+San Diego Padres defense adj: ×0.992 on Philadelphia Phillies runs (OAA/DRS based, 30% signal weight)
 </li>
 <li>
 Home field residual: +0.02 R/game (last-at-bat/crowd; empirical run diff ≈0 over 2022–2024)
