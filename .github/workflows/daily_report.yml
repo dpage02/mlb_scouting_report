@@ -138,6 +138,78 @@ jobs:
           "
 
       # --------------------------------------------------------
+      # Prune reports older than 21 days from gh-pages.
+      # keep_files:true below means old dated reports accumulate
+      # forever otherwise — the branch hit ~16.6GB in mid-June and
+      # every GitHub Pages build has failed since (10GB artifact
+      # limit), even though the git push itself kept succeeding.
+      # Operates via the Git Data API directly (no checkout) since
+      # the branch can be large; runs before the restore step below
+      # so it never pulls pruned files back in.
+      # --------------------------------------------------------
+      - name: Prune reports older than 21 days from gh-pages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          REPO="${{ github.repository }}"
+          cutoff=$(date -d "21 days ago" +%Y-%m-%d)
+          echo "Pruning gh-pages report files older than $cutoff"
+
+          head_sha=$(gh api "repos/$REPO/git/refs/heads/gh-pages" --jq '.object.sha' 2>/dev/null || echo "")
+          if [ -z "$head_sha" ]; then
+            echo "No gh-pages branch yet — skipping prune"
+            exit 0
+          fi
+          tree_sha=$(gh api "repos/$REPO/git/commits/$head_sha" --jq '.tree.sha')
+
+          gh api "repos/$REPO/git/trees/$tree_sha?recursive=true" --paginate --jq \
+            '.tree[] | select(.type=="blob") | .path' > /tmp/gh_pages_paths.txt
+
+          python3 - "$cutoff" > /tmp/delete_paths.json <<'PYEOF'
+          import json, re, sys
+          cutoff = sys.argv[1]
+          paths = []
+          with open('/tmp/gh_pages_paths.txt') as f:
+              for line in f:
+                  p = line.rstrip('\n')
+                  if not p:
+                      continue
+                  m = re.search(r'(\d{4}-\d{2}-\d{2})', p)
+                  if m and m.group(1) < cutoff:
+                      paths.append(p)
+          print(json.dumps(paths))
+          PYEOF
+
+          n=$(python3 -c "import json; print(len(json.load(open('/tmp/delete_paths.json'))))")
+          echo "Files to prune: $n"
+
+          if [ "$n" -eq 0 ]; then
+            echo "Nothing to prune"
+            exit 0
+          fi
+
+          python3 - "$tree_sha" <<'PYEOF'
+          import json, sys
+          base_tree = sys.argv[1]
+          paths = json.load(open('/tmp/delete_paths.json'))
+          payload = {
+              "base_tree": base_tree,
+              "tree": [{"path": p, "mode": "100644", "type": "blob", "sha": None} for p in paths]
+          }
+          json.dump(payload, open('/tmp/new_tree_payload.json', 'w'))
+          PYEOF
+
+          new_tree=$(gh api -X POST "repos/$REPO/git/trees" --input /tmp/new_tree_payload.json --jq '.sha')
+          new_commit=$(gh api -X POST "repos/$REPO/git/commits" \
+            -f message="Prune reports older than 21 days from gh-pages [automated]" \
+            -f tree="$new_tree" \
+            -f "parents[]=$head_sha" \
+            --jq '.sha')
+          gh api -X PATCH "repos/$REPO/git/refs/heads/gh-pages" -f sha="$new_commit" -F force=false
+          echo "Pruned $n files, new commit: $new_commit"
+
+      # --------------------------------------------------------
       # 8. Pull existing gh-pages HTML into reports/ so the
       #    index page can link to past dates
       # --------------------------------------------------------
