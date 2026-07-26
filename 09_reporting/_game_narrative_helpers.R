@@ -1546,7 +1546,10 @@ make_game_narrative_html <- function(gpk) {
         sp_name  <- dplyr::coalesce(sp_row$pitcher_name[1], "The starter")
 
         # Get lineup stats joined from offense_master_season
-        lu_stats <- tryCatch({
+        # (function() {...})() wrapper — a bare tryCatch({..return()..}) would
+        # otherwise have return() escape all the way out of
+        # make_game_narrative_html() instead of just setting lu_stats.
+        lu_stats <- tryCatch((function() {
           if (!exists("offense_master_season") || nrow(offense_master_season) == 0)
             return(dplyr::tibble())
           full_stats <- offense_master_season %>%
@@ -1556,7 +1559,7 @@ make_game_narrative_html <- function(gpk) {
             dplyr::left_join(full_stats, by = "mlbam_id", suffix = c("", "_dup")) %>%
             dplyr::select(-dplyr::ends_with("_dup")) %>%
             dplyr::filter(dplyr::coalesce(mlb_pa, 0L) >= 10)
-        }, error = function(e) dplyr::tibble())
+        })(), error = function(e) dplyr::tibble())
 
         # 1. K pitcher vs K lineup
         tryCatch({

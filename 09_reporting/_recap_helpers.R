@@ -302,7 +302,11 @@ make_game_narrative_html <- function(game, bs, sc) {
       } else "solid"
 
       # Best whiff pitch from Statcast
-      best_pitch_note <- tryCatch({
+      # NOTE: block is wrapped in (function() {...})() so early return()s only
+      # exit this lookup, not the whole make_game_narrative_html() call —
+      # a bare tryCatch({..return()..}) would otherwise short-circuit the
+      # entire function (return() targets the nearest enclosing function).
+      best_pitch_note <- tryCatch((function() {
         if (is.null(sc)) return("")
         win_sp_id <- if (away_win) bs$teams$away$pitchers[[1]] else bs$teams$home$pitchers[[1]]
         pm <- sc %>%
@@ -319,7 +323,7 @@ make_game_narrative_html <- function(game, bs, sc) {
         if (nrow(pm) == 0 || pm$whiff[1] < 0.20) return("")
         sprintf(" His %s was filthy, generating %.0f%% whiff.",
                 pm$pitch_name[1], pm$whiff[1] * 100)
-      }, error = function(e) "")
+      })(), error = function(e) "")
 
       k_note <- if (!is.na(k_val) && k_val >= 8) paste0(", fanning ", k_val) else
                 if (!is.na(k_val) && k_val >= 6) paste0(", with ", k_val, " strikeouts") else ""
@@ -340,7 +344,8 @@ make_game_narrative_html <- function(game, bs, sc) {
     }
 
     # ── 2. Key batter from top performers ──────────────────────
-    top_batter_note <- tryCatch({
+    # (function() {...})() wrapper — see note above on return() escaping.
+    top_batter_note <- tryCatch((function() {
       if (is.null(bs) || length(bs$topPerformers) == 0) return("")
       for (tp in bs$topPerformers) {
         if (!tp$type %in% c("hitter", "batter")) next
@@ -350,7 +355,7 @@ make_game_narrative_html <- function(game, bs, sc) {
           return(sprintf("%s paced the offense, going %s.", nm, summ))
       }
       ""
-    }, error = function(e) "")
+    })(), error = function(e) "")
     if (nchar(top_batter_note) > 0) parts <- c(parts, top_batter_note)
 
     # ── 3. Score flow / turning point from play-by-play ────────
@@ -402,7 +407,8 @@ make_game_narrative_html <- function(game, bs, sc) {
 
       # Save — give more detail
       if (!is.null(dec$save)) {
-        sv_line <- tryCatch({
+        # (function() {...})() wrapper — see note above on return() escaping.
+        sv_line <- tryCatch((function() {
           sv_id <- dec$save$id
           for (side in c("away", "home")) {
             p <- bs$teams[[side]]$players[[paste0("ID", sv_id)]]
@@ -412,7 +418,7 @@ make_game_narrative_html <- function(game, bs, sc) {
             }
           }
           NULL
-        }, error = function(e) NULL)
+        })(), error = function(e) NULL)
 
         if (!is.null(sv_line) && !is.null(sv_line$ip)) {
           er_part <- if (!is.null(sv_line$er) && as.integer(sv_line$er) > 0)
@@ -442,7 +448,8 @@ make_game_narrative_html <- function(game, bs, sc) {
 
         if (is_rp) {
           # Find the inning they entered (first play with their pitcher_id in pbp)
-          entry_inn <- tryCatch({
+          # (function() {...})() wrapper — see note above on return() escaping.
+          entry_inn <- tryCatch((function() {
             if (is.null(pbp)) return(NULL)
             all_plays_raw <- .fetch_play_by_play(game_pk)
             # Re-use pbp$scoring_plays which already has pitcher_id
@@ -451,7 +458,7 @@ make_game_narrative_html <- function(game, bs, sc) {
             rp_plays <- sp[!is.na(sp$pitcher_id) & sp$pitcher_id == loser_id, ]
             if (nrow(rp_plays) == 0) return(NULL)
             rp_plays[order(rp_plays$inning), ][1, ]
-          }, error = function(e) NULL)
+          })(), error = function(e) NULL)
 
           if (!is.null(entry_inn)) {
             # Trim play description to first sentence
@@ -576,7 +583,8 @@ make_game_recap_card <- function(game) {
     }, error = function(e) "")
 
     # Decisions + key reliever stat lines (W, L, SV from boxscore)
-    decisions_html <- tryCatch({
+    # (function() {...})() wrapper — see note above on return() escaping.
+    decisions_html <- tryCatch((function() {
       dec <- game$decisions
       if (is.null(dec)) return("")
 
@@ -621,7 +629,7 @@ make_game_recap_card <- function(game) {
       }
       if (length(lines) == 0) "" else
         paste0('<div class="decisions">', paste(lines, collapse = " &nbsp;&middot;&nbsp; "), '</div>')
-    }, error = function(e) "")
+    })(), error = function(e) "")
 
     # Pitch mix per starter (from Statcast)
     pitch_mix_html <- tryCatch({
