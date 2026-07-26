@@ -56,7 +56,10 @@ get_team_game_pks <- function(date) {
     error = function(e) NULL
   )
 
-  if (is.null(pks) || nrow(pks) == 0) return(NULL)
+  # mlb_game_pks() returns a plain list() (not a data.frame) on dates with
+  # no scheduled games (e.g. All-Star break) — guard against that shape
+  # before checking nrow(), or the || short-circuit evaluates to NA.
+  if (is.null(pks) || !is.data.frame(pks) || nrow(pks) == 0) return(NULL)
 
   pks %>%
     dplyr::filter(
