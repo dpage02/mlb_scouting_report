@@ -58,13 +58,17 @@ make_game_header_gt <- function(gpk) {
     if (length(flags) > 0) paste0(label, " — ", paste(flags, collapse = ", ")) else label
   } else "—"
 
-  # Weather
+  # Weather — rounded to match the other two places this same
+  # game_context data is displayed (Ballpark & Conditions card, game
+  # narrative's "Conditions:" sentence), which round with sprintf("%.0f").
+  # Without this, the same underlying value showed as e.g. "85.6°F" here
+  # vs "86°F" elsewhere on the same page.
   weather_str <- if (!is.na(game$game_temp_f)) {
-    paste0(game$game_temp_f, "°F")
+    sprintf("%.0f°F", game$game_temp_f)
   } else "—"
 
   wind_str <- if (!is.na(game$wind_speed_mph)) {
-    paste0(game$wind_speed_mph, " mph")
+    sprintf("%.0f mph", game$wind_speed_mph)
   } else "—"
 
   # Game type flags
@@ -307,11 +311,21 @@ make_bullpen_gt <- function(gpk, side_filter) {
   season_yr <- if (exists("pitching_master_season") && nrow(pitching_master_season) > 0)
     unique(pitching_master_season$season)[1] else as.integer(format(Sys.Date(), "%Y"))
 
+  # days_rest is NA specifically when a pitcher hasn't appeared within the
+  # 7-day recent-outings lookback (pipelines/07_bullpen_context/
+  # 01_recent_pitching_logs.R) — it means "well-rested, hasn't pitched
+  # recently enough to have an exact count", not "unknown"/0. Showing "0"
+  # would misleadingly imply he pitched today; the generic em-dash reads
+  # as "no data" rather than "rested." Show the bounded ">7" instead.
+  rest_display <- dplyr::if_else(
+    is.na(raw$days_rest), ">7", as.character(raw$days_rest)
+  )
+
   display <- dplyr::tibble(
     Role   = raw$fg_role,
     Name   = raw$player_name,
     Status = raw$availability,
-    Rest   = raw$days_rest,
+    Rest   = rest_display,
     `P/Y`  = raw$pitches_yesterday,
     `P/3`  = raw$pitches_last_3_days,
     `App`  = raw$appearances_last_7d
