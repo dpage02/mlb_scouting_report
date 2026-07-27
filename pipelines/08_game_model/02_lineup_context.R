@@ -334,6 +334,53 @@ lineup_context <- lineup_rows %>%
   dplyr::arrange(game_pk, side, batting_slot)
 
 # ------------------------------------------------------------
+# Join baserunning + defense stats (one row per mlbam_id — highest
+# games/innings stint for players traded mid-season). Only net-new
+# signal columns are pulled in; anything already covered by off_stats
+# (mlb_sb, fg_SB/CS, etc.) is left alone to avoid duplicate columns.
+# ------------------------------------------------------------
+
+if (exists("baserunning_master_season") && nrow(baserunning_master_season) > 0) {
+  br_stats <- baserunning_master_season %>%
+    dplyr::arrange(mlbam_id, dplyr::desc(dplyr::coalesce(mlb_sb, 0L) + dplyr::coalesce(mlb_cs, 0L))) %>%
+    dplyr::distinct(mlbam_id, .keep_all = TRUE) %>%
+    dplyr::select(
+      mlbam_id,
+      br_sb_pct   = mlb_sb_pct,
+      br_wBsR     = fg_wBsR,
+      br_UBR      = fg_UBR,
+      br_Spd      = fg_Spd,
+      br_sprint_speed = sc_sprint_speed
+    )
+  lineup_context <- lineup_context %>%
+    dplyr::left_join(br_stats, by = "mlbam_id")
+}
+
+if (exists("defense_master_season") && nrow(defense_master_season) > 0) {
+  def_stats <- defense_master_season %>%
+    dplyr::arrange(mlbam_id, dplyr::desc(dplyr::coalesce(mlb_innings_fielding, 0))) %>%
+    dplyr::distinct(mlbam_id, .keep_all = TRUE) %>%
+    dplyr::select(
+      mlbam_id,
+      def_primary_position = primary_position,
+      def_position_group    = position_group,
+      def_OAA               = fg_OAA,
+      def_DRS                = fg_DRS,
+      def_Defense            = fg_Defense,
+      def_fielding_pct       = mlb_fielding_pct,
+      # Catcher-specific (NA for non-catchers)
+      def_c_framing          = fg_CFraming,
+      def_c_FRP              = fg_FRP,
+      def_c_rCERA            = fg_rCERA,
+      def_c_PB                = fg_PB,
+      def_c_WP                = fg_WP,
+      def_c_rSB               = fg_rSB
+    )
+  lineup_context <- lineup_context %>%
+    dplyr::left_join(def_stats, by = "mlbam_id")
+}
+
+# ------------------------------------------------------------
 # Validate
 # ------------------------------------------------------------
 

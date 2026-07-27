@@ -2423,8 +2423,12 @@ make_batter_intelligence_gt <- function(gpk, side_filter) {
       )
 
     # ── TAB 2: Discipline & Contact ──────────────────────────────────
+    zswing_col <- intersect(c("fg_Z.Swing.", "fg_Z_Swing_pct"),    names(raw))[1]
+    swing_col  <- intersect(c("fg_Swing.",   "fg_Swing_pct"),      names(raw))[1]
     chase_col  <- intersect(c("fg_O.Swing.", "fg_O_Swing_pct"),    names(raw))[1]
     zcon_col   <- intersect(c("fg_Z.Contact.", "fg_Z_Contact_pct"), names(raw))[1]
+    ocon_col   <- intersect(c("fg_O.Contact.", "fg_O_Contact_pct"), names(raw))[1]
+    con_col    <- intersect(c("fg_Contact.",   "fg_Contact_pct"),   names(raw))[1]
     swstr_col  <- intersect(c("fg_SwStr.", "fg_SwStr_pct"),         names(raw))[1]
     csw_col    <- intersect(c("fg_CSW.", "fg_C_plusSwStr_pct"),     names(raw))[1]
     fstrike_col<- intersect(c("fg_F.Strike.", "fg_F_Strike_pct"),   names(raw))[1]
@@ -2432,14 +2436,20 @@ make_batter_intelligence_gt <- function(gpk, side_filter) {
     d2 <- dplyr::tibble(
       `#`        = raw$batting_slot,
       Name       = raw$player_name,
+      `Z-Swing%` = if (!is.na(zswing_col))  raw[[zswing_col]]  else NA_real_,
+      `Swing%`   = if (!is.na(swing_col))   raw[[swing_col]]   else NA_real_,
       `Chase%`   = if (!is.na(chase_col))   raw[[chase_col]]   else NA_real_,
       `ZCon%`    = if (!is.na(zcon_col))    raw[[zcon_col]]    else NA_real_,
+      `OCon%`    = if (!is.na(ocon_col))    raw[[ocon_col]]    else NA_real_,
+      `Contact%` = if (!is.na(con_col))     raw[[con_col]]     else NA_real_,
       `SwStr%`   = if (!is.na(swstr_col))   raw[[swstr_col]]   else NA_real_,
       `CSW%`     = if (!is.na(csw_col))     raw[[csw_col]]     else NA_real_,
       `F-Strike%`= if (!is.na(fstrike_col)) raw[[fstrike_col]] else NA_real_,
       EV         = if ("sc_avg_hit_speed"  %in% names(raw)) raw$sc_avg_hit_speed  else NA_real_,
+      `Max EV`   = if ("fg_maxEV"          %in% names(raw)) raw$fg_maxEV          else NA_real_,
       `HH%`      = if ("sc_ev95percent"    %in% names(raw)) raw$sc_ev95percent    else NA_real_,
       `Brl%`     = if ("sc_brl_percent"    %in% names(raw)) raw$sc_brl_percent    else NA_real_,
+      `SwSpot%`  = if ("sc_anglesweetspotpercent" %in% names(raw)) raw$sc_anglesweetspotpercent else NA_real_,
       BABIP      = if ("fg_BABIP"          %in% names(raw)) raw$fg_BABIP          else NA_real_
     )
 
@@ -2450,14 +2460,15 @@ make_batter_intelligence_gt <- function(gpk, side_filter) {
         subtitle = paste0("Plate discipline & contact quality \u00b7 ", season_label)
       ) %>%
       gt::fmt_percent(
-        columns  = dplyr::any_of(c("Chase%", "ZCon%", "SwStr%", "CSW%", "F-Strike%")),
+        columns  = dplyr::any_of(c("Z-Swing%", "Swing%", "Chase%", "ZCon%", "OCon%",
+                                    "Contact%", "SwStr%", "CSW%", "F-Strike%")),
         decimals = 1
       ) %>%
-      gt::fmt_number(columns = dplyr::any_of(c("EV")),    decimals = 1) %>%
+      gt::fmt_number(columns = dplyr::any_of(c("EV", "Max EV")), decimals = 1) %>%
       gt::fmt_number(columns = dplyr::any_of(c("BABIP")), decimals = 3) %>%
-      gt::fmt_number(columns = dplyr::any_of(c("HH%", "Brl%")), decimals = 1) %>%
+      gt::fmt_number(columns = dplyr::any_of(c("HH%", "Brl%", "SwSpot%")), decimals = 1) %>%
       gt::text_transform(
-        locations = gt::cells_body(columns = dplyr::any_of(c("HH%", "Brl%"))),
+        locations = gt::cells_body(columns = dplyr::any_of(c("HH%", "Brl%", "SwSpot%"))),
         fn = function(x) {
           ifelse(x == "\u2014" | is.na(x), "\u2014",
                  paste0(gsub("\\s+$", "", x), "%"))
@@ -2465,12 +2476,16 @@ make_batter_intelligence_gt <- function(gpk, side_filter) {
       ) %>%
       gt::fmt_missing(columns = dplyr::everything(), missing_text = "\u2014") %>%
       gt::tab_spanner(
-        label   = "Plate Discipline",
-        columns = dplyr::any_of(c("Chase%", "ZCon%", "SwStr%", "CSW%", "F-Strike%"))
+        label   = "Approach",
+        columns = dplyr::any_of(c("Z-Swing%", "Swing%", "Chase%"))
+      ) %>%
+      gt::tab_spanner(
+        label   = "Bat-to-Ball",
+        columns = dplyr::any_of(c("ZCon%", "OCon%", "Contact%", "SwStr%", "CSW%", "F-Strike%"))
       ) %>%
       gt::tab_spanner(
         label   = "Contact Quality",
-        columns = dplyr::any_of(c("EV", "HH%", "Brl%", "BABIP"))
+        columns = dplyr::any_of(c("EV", "Max EV", "HH%", "Brl%", "SwSpot%", "BABIP"))
       ) %>%
       gt::cols_width(`#` ~ gt::px(28)) %>%
       base_opts()
@@ -2735,12 +2750,15 @@ make_sustainability_gt <- function(gpk, side_filter) {
 
     avg_vals  <- if ("mlb_avg"      %in% names(raw)) raw$mlb_avg      else NA_real_
     xba_vals  <- if ("sc_est_ba"    %in% names(raw)) raw$sc_est_ba    else NA_real_
+    slg_vals  <- if ("mlb_slg"      %in% names(raw)) raw$mlb_slg      else NA_real_
+    xslg_vals <- if ("sc_est_slg"   %in% names(raw)) raw$sc_est_slg   else NA_real_
     woba_vals <- if ("fg_wOBA"      %in% names(raw)) raw$fg_wOBA      else NA_real_
     xwoba_vals<- if ("sc_est_woba"  %in% names(raw)) raw$sc_est_woba  else NA_real_
     babip_vals<- if ("fg_BABIP"     %in% names(raw)) raw$fg_BABIP     else NA_real_
     pa_vals   <- dplyr::coalesce(raw$mlb_pa, 0L)
 
     avg_diff  <- avg_vals  - xba_vals
+    slg_diff  <- slg_vals  - xslg_vals
     woba_diff <- woba_vals - xwoba_vals
 
     note_fn <- function(ad, wd, pa) {
@@ -2764,6 +2782,9 @@ make_sustainability_gt <- function(gpk, side_filter) {
       AVG          = avg_vals,
       xBA          = xba_vals,
       `AVG Diff`   = avg_diff,
+      SLG          = slg_vals,
+      xSLG         = xslg_vals,
+      `SLG Diff`   = slg_diff,
       wOBA         = woba_vals,
       xwOBA        = xwoba_vals,
       `wOBA Diff`  = woba_diff,
@@ -2778,17 +2799,21 @@ make_sustainability_gt <- function(gpk, side_filter) {
         subtitle = paste0("xStats vs actual \u00b7 ", stats_yr, " season (min 10 PA shown; note requires 30 PA)")
       ) %>%
       gt::fmt_number(
-        columns  = dplyr::any_of(c("AVG", "xBA", "wOBA", "xwOBA", "BABIP")),
+        columns  = dplyr::any_of(c("AVG", "xBA", "SLG", "xSLG", "wOBA", "xwOBA", "BABIP")),
         decimals = 3
       ) %>%
       gt::fmt_number(
-        columns  = dplyr::any_of(c("AVG Diff", "wOBA Diff")),
+        columns  = dplyr::any_of(c("AVG Diff", "SLG Diff", "wOBA Diff")),
         decimals = 3
       ) %>%
       gt::fmt_missing(columns = dplyr::everything(), missing_text = "\u2014") %>%
       gt::tab_spanner(
         label   = "Batting Average",
         columns = dplyr::any_of(c("AVG", "xBA", "AVG Diff"))
+      ) %>%
+      gt::tab_spanner(
+        label   = "Power",
+        columns = dplyr::any_of(c("SLG", "xSLG", "SLG Diff"))
       ) %>%
       gt::tab_spanner(
         label   = "Run Creation",
@@ -2822,6 +2847,15 @@ make_sustainability_gt <- function(gpk, side_filter) {
         na_color = "white"
       )
 
+    slg_diff_vals <- display[["SLG Diff"]]
+    if (sum(!is.na(slg_diff_vals) & is.finite(slg_diff_vals)) >= 2)
+      tbl <- tbl %>% gt::data_color(
+        columns  = "SLG Diff",
+        palette  = c("#f8d7da", "#f8f9fa", "#d4edda"),
+        domain   = c(-0.080, 0.080),
+        na_color = "white"
+      )
+
     tbl
 
   }, error = function(e) {
@@ -2831,6 +2865,126 @@ make_sustainability_gt <- function(gpk, side_filter) {
       gt::tab_options(table.font.size = 12, heading.align = "left",
                       data_row.padding = gt::px(4)) %>%
       gt::opt_stylize(style = 1, color = "blue")
+  })
+}
+
+# ------------------------------------------------------------
+# Clutch/Leverage + season-long Handedness Split
+# Returns a list of 2 gt tables (same list-of-tabs shape as
+# make_batter_intelligence_gt) for use in a tabset.
+# ------------------------------------------------------------
+
+make_offense_clutch_platoon_gt <- function(gpk, side_filter) {
+  tryCatch({
+    game <- game_context %>% dplyr::filter(game_pk == gpk)
+    team <- if (side_filter == "home") game$home_team_name else game$away_team_name
+
+    stats_yr <- if (exists("offense_master_season") && nrow(offense_master_season) > 0)
+      unique(offense_master_season$season)[1] else as.integer(format(Sys.Date(), "%Y"))
+    season_label <- paste0(stats_yr, " season")
+
+    lineup <- lineup_context %>%
+      dplyr::filter(game_pk == gpk, side == side_filter) %>%
+      dplyr::arrange(batting_slot)
+
+    if (nrow(lineup) == 0) return(list())
+
+    base_opts <- function(tbl) {
+      tbl %>%
+        gt::fmt_missing(columns = dplyr::everything(), missing_text = "—") %>%
+        gt::tab_options(
+          table.font.size           = 12,
+          heading.align             = "left",
+          data_row.padding          = gt::px(4),
+          column_labels.font.weight = "bold"
+        ) %>%
+        gt::opt_stylize(style = 1, color = "blue")
+    }
+
+    # ── TAB 1: Clutch / Leverage ─────────────────────────────────────
+    full_stats <- offense_master_season %>%
+      dplyr::arrange(mlbam_id, dplyr::desc(dplyr::coalesce(mlb_pa, 0L))) %>%
+      dplyr::distinct(mlbam_id, .keep_all = TRUE)
+
+    raw <- lineup %>%
+      dplyr::left_join(full_stats, by = "mlbam_id", suffix = c("", "_dup")) %>%
+      dplyr::select(-dplyr::ends_with("_dup"))
+
+    d1 <- dplyr::tibble(
+      `#`     = raw$batting_slot,
+      Name    = raw$player_name,
+      WPA     = if ("fg_WPA"    %in% names(raw)) raw$fg_WPA    else NA_real_,
+      RE24    = if ("fg_RE24"   %in% names(raw)) raw$fg_RE24   else NA_real_,
+      Clutch  = if ("fg_Clutch" %in% names(raw)) raw$fg_Clutch else NA_real_,
+      pLI     = if ("fg_pLI"    %in% names(raw)) raw$fg_pLI    else NA_real_
+    )
+
+    t1 <- d1 %>%
+      gt::gt() %>%
+      gt::tab_header(
+        title    = gt::md(paste0("**", team, "** — Clutch / Leverage")),
+        subtitle = paste0("Season total · ", season_label)
+      ) %>%
+      gt::fmt_number(columns = dplyr::any_of(c("WPA", "RE24", "Clutch", "pLI")), decimals = 2) %>%
+      gt::cols_width(`#` ~ gt::px(28)) %>%
+      base_opts()
+
+    wpa_vals <- d1[["WPA"]]
+    if (sum(!is.na(wpa_vals) & is.finite(wpa_vals)) >= 2)
+      t1 <- t1 %>% gt::data_color(
+        columns  = "WPA",
+        palette  = c("#f8d7da", "#f8f9fa", "#d4edda"),
+        domain   = c(-2, 2),
+        na_color = "white"
+      )
+
+    # ── TAB 2: Handedness Split (season-long, vs the Matchups tab's
+    #    game-specific version) ───────────────────────────────────────
+    splits <- if (exists("player_season_mlb_offense_splits"))
+      player_season_mlb_offense_splits %>%
+        dplyr::filter(mlbam_id %in% lineup$mlbam_id, split_code %in% c("vl", "vr"))
+    else dplyr::tibble()
+
+    vl <- splits %>% dplyr::filter(split_code == "vl") %>%
+      dplyr::select(mlbam_id, vl_avg = mlb_avg, vl_obp = mlb_obp,
+                    vl_slg = mlb_slg, vl_ops = mlb_ops, vl_pa = mlb_pa)
+    vr <- splits %>% dplyr::filter(split_code == "vr") %>%
+      dplyr::select(mlbam_id, vr_avg = mlb_avg, vr_obp = mlb_obp,
+                    vr_slg = mlb_slg, vr_ops = mlb_ops, vr_pa = mlb_pa)
+
+    raw2 <- lineup %>%
+      dplyr::left_join(vl, by = "mlbam_id") %>%
+      dplyr::left_join(vr, by = "mlbam_id")
+
+    d2 <- dplyr::tibble(
+      `#`       = raw2$batting_slot,
+      Name      = raw2$player_name,
+      `vL PA`   = raw2$vl_pa,
+      `vL OPS`  = raw2$vl_ops,
+      `vR PA`   = raw2$vr_pa,
+      `vR OPS`  = raw2$vr_ops
+    )
+
+    t2 <- d2 %>%
+      gt::gt() %>%
+      gt::tab_header(
+        title    = gt::md(paste0("**", team, "** — Handedness Split")),
+        subtitle = paste0("Season-long vs LHP/RHP (independent of tonight's starter) · ", season_label)
+      ) %>%
+      gt::fmt_integer(columns = dplyr::any_of(c("vL PA", "vR PA"))) %>%
+      gt::fmt_number(columns = dplyr::any_of(c("vL OPS", "vR OPS")), decimals = 3) %>%
+      gt::tab_spanner(label = "vs LHP", columns = dplyr::any_of(c("vL PA", "vL OPS"))) %>%
+      gt::tab_spanner(label = "vs RHP", columns = dplyr::any_of(c("vR PA", "vR OPS"))) %>%
+      gt::cols_width(`#` ~ gt::px(28)) %>%
+      base_opts()
+
+    list(
+      "Clutch / Leverage"  = t1,
+      "Handedness Split"   = t2
+    )
+
+  }, error = function(e) {
+    list()
   })
 }
 
@@ -2963,6 +3117,80 @@ make_baserunning_gt <- function(gpk, side_filter) {
     dplyr::tibble(Note = paste0("Baserunning data unavailable: ", conditionMessage(e))) %>%
       gt::gt() %>%
       gt::tab_header(title = "Baserunning") %>%
+      gt::tab_options(table.font.size = 12, heading.align = "left",
+                      data_row.padding = gt::px(4)) %>%
+      gt::opt_stylize(style = 1, color = "blue")
+  })
+}
+
+# ------------------------------------------------------------
+# Catcher-specific defense — framing, blocking, throwing, game-calling.
+# Catchers need a different lens than general OAA/DRS (range/arm don't
+# capture what matters behind the plate). Returns NULL if this team has
+# no catcher in the lineup (position-gated in the UI, not shown empty).
+# ------------------------------------------------------------
+
+make_catcher_defense_gt <- function(gpk, side_filter) {
+  tryCatch({
+    game <- game_context %>% dplyr::filter(game_pk == gpk)
+    team <- if (side_filter == "home") game$home_team_name else game$away_team_name
+
+    stats_yr <- if (exists("offense_master_season") && nrow(offense_master_season) > 0)
+      unique(offense_master_season$season)[1] else as.integer(format(Sys.Date(), "%Y"))
+
+    catchers <- lineup_context %>%
+      dplyr::filter(game_pk == gpk, side == side_filter,
+                    dplyr::coalesce(def_primary_position, "") == "C") %>%
+      dplyr::arrange(batting_slot)
+
+    if (nrow(catchers) == 0) return(NULL)
+
+    display <- dplyr::tibble(
+      Name       = catchers$player_name,
+      `Framing`  = catchers$def_c_framing,
+      `PB`       = catchers$def_c_PB,
+      `WP`       = catchers$def_c_WP,
+      `rSB`      = catchers$def_c_rSB,
+      `cERA`     = catchers$def_c_rCERA,
+      `FRP`      = catchers$def_c_FRP
+    )
+
+    tbl <- display %>%
+      gt::gt() %>%
+      gt::tab_header(
+        title    = gt::md(paste0("**", team, "** — Catcher Defense")),
+        subtitle = paste0("Framing, blocking, throwing & game-calling · ", stats_yr, " season")
+      ) %>%
+      gt::fmt_number(columns = dplyr::any_of(c("Framing", "rSB", "cERA", "FRP")), decimals = 1) %>%
+      gt::fmt_integer(columns = dplyr::any_of(c("PB", "WP"))) %>%
+      gt::sub_missing(missing_text = "—") %>%
+      gt::tab_spanner(label = "Blocking", columns = dplyr::any_of(c("PB", "WP"))) %>%
+      gt::tab_source_note(
+        source_note = "Framing/rSB/cERA/FRP: FanGraphs catcher defense runs above average. PB/WP: passed balls / wild pitches allowed (raw counts, not normalized). cERA: pitching staff ERA specifically with this catcher behind the plate."
+      ) %>%
+      gt::tab_options(
+        table.font.size           = 12,
+        heading.align             = "left",
+        data_row.padding          = gt::px(4),
+        column_labels.font.weight = "bold"
+      ) %>%
+      gt::opt_stylize(style = 1, color = "blue")
+
+    frp_vals <- display[["FRP"]]
+    if (sum(!is.na(frp_vals) & is.finite(frp_vals)) >= 1)
+      tbl <- tbl %>% gt::data_color(
+        columns  = "FRP",
+        palette  = c("#f8d7da", "#f8f9fa", "#d4edda"),
+        domain   = c(-5, 5),
+        na_color = "white"
+      )
+
+    tbl
+
+  }, error = function(e) {
+    dplyr::tibble(Note = paste0("Catcher defense data unavailable: ", conditionMessage(e))) %>%
+      gt::gt() %>%
+      gt::tab_header(title = "Catcher Defense") %>%
       gt::tab_options(table.font.size = 12, heading.align = "left",
                       data_row.padding = gt::px(4)) %>%
       gt::opt_stylize(style = 1, color = "blue")
