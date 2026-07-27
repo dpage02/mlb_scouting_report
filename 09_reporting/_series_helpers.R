@@ -67,6 +67,28 @@ make_series_header_html <- function(ns) {
 make_series_team_overview_gt <- function(team_id_1, team_id_2) {
   tryCatch({
 
+    # Team defense (OAA/DRS) — one live FanGraphs team-leaderboard pull,
+    # shared across both teams. team_name_abb uses FanGraphs' own
+    # abbreviation scheme (e.g. "SDP" not "SD"), which can silently
+    # mismatch this codebase's team_abbr convention — match on the full
+    # team name (endsWith the FG mascot name) instead.
+    fg_team_def <- tryCatch({
+      season_yr <- if (exists("offense_master_season") && nrow(offense_master_season) > 0)
+        as.character(unique(offense_master_season$season)[1]) else as.character(format(Sys.Date(), "%Y"))
+      baseballr::fg_team_fielder(startseason = season_yr, endseason = season_yr, qual = "0")
+    }, error = function(e) NULL)
+
+    .team_defense <- function(tid) {
+      tryCatch({
+        if (is.null(fg_team_def) || !exists("team_ids")) return(list(oaa = NA_integer_, drs = NA_integer_))
+        full_name <- team_ids %>% dplyr::filter(mlbam_team_id == tid) %>% dplyr::pull(team_name)
+        if (length(full_name) == 0) return(list(oaa = NA_integer_, drs = NA_integer_))
+        hit <- fg_team_def[endsWith(full_name[1], fg_team_def$team_name), ]
+        if (nrow(hit) == 0) return(list(oaa = NA_integer_, drs = NA_integer_))
+        list(oaa = as.integer(hit$OAA[1]), drs = as.integer(hit$DRS[1]))
+      }, error = function(e) list(oaa = NA_integer_, drs = NA_integer_))
+    }
+
     .team_row <- function(tid) {
       # Standings
       std <- if (exists("team_standings") && nrow(team_standings) > 0)
@@ -90,14 +112,18 @@ make_series_team_overview_gt <- function(team_id_1, team_id_2) {
 
       # Resolve team_abbr once — offense_master_season/pitching_master_season
       # have no mlb_team_id/fg_team_id columns, only team_abbr.
-      tid_abbr <- tryCatch({
+      # (function() {...})() wrappers below — a bare tryCatch({..return()..})
+      # would otherwise have return() escape .team_row entirely instead of
+      # just setting the local variable (return() targets the nearest
+      # enclosing function in R, and tryCatch's block isn't one).
+      tid_abbr <- tryCatch((function() {
         if (!exists("team_ids")) return(NA_character_)
         r <- team_ids %>% dplyr::filter(mlbam_team_id == tid)
         if (nrow(r) == 0) NA_character_ else r$team_abbr[1]
-      }, error = function(e) NA_character_)
+      })(), error = function(e) NA_character_)
 
       # Team wRC+ (PA-weighted mean from offense_master_season)
-      team_wrc <- tryCatch({
+      team_wrc <- tryCatch((function() {
         if (!exists("offense_master_season") || nrow(offense_master_season) == 0 ||
             is.na(tid_abbr))
           return(NA_real_)
@@ -107,10 +133,10 @@ make_series_team_overview_gt <- function(team_id_1, team_id_2) {
         if (nrow(team_off) == 0) return(NA_real_)
         round(sum(team_off$fg_wRC_plus * team_off$mlb_pa, na.rm = TRUE) /
               sum(team_off$mlb_pa, na.rm = TRUE))
-      }, error = function(e) NA_real_)
+      })(), error = function(e) NA_real_)
 
       # Team ERA (SP + RP combined, for starters: role == "SP")
-      team_era <- tryCatch({
+      team_era <- tryCatch((function() {
         if (!exists("pitching_master_season") || nrow(pitching_master_season) == 0 ||
             is.na(tid_abbr))
           return(NA_real_)
@@ -124,7 +150,29 @@ make_series_team_overview_gt <- function(team_id_1, team_id_2) {
         total_ip <- sum(team_pit$mlb_ip, na.rm = TRUE)
         if (total_ip == 0) return(NA_real_)
         round(total_er / total_ip * 9, 2)
-      }, error = function(e) NA_real_)
+      })(), error = function(e) NA_real_)
+
+      # Team Baserunning — BsR (sum, counting stat) + SB/SB% (from raw
+      # SB/CS totals, not an average of per-player rates).
+      # (function() {...})() wrapper — a bare tryCatch({..return()..}) would
+      # otherwise have return() escape .team_row entirely instead of just
+      # setting br (return() targets the nearest enclosing function in R).
+      br <- tryCatch((function() {
+        if (!exists("baserunning_master_season") || nrow(baserunning_master_season) == 0 ||
+            is.na(tid_abbr))
+          return(list(bsr = NA_real_, sb = NA_integer_, sb_pct = NA_real_))
+        team_br <- baserunning_master_season %>% dplyr::filter(team_abbr == tid_abbr)
+        if (nrow(team_br) == 0) return(list(bsr = NA_real_, sb = NA_integer_, sb_pct = NA_real_))
+        total_sb <- sum(team_br$mlb_sb, na.rm = TRUE)
+        total_cs <- sum(team_br$mlb_cs, na.rm = TRUE)
+        list(
+          bsr    = round(sum(team_br$fg_wBsR, na.rm = TRUE), 1),
+          sb     = as.integer(total_sb),
+          sb_pct = if ((total_sb + total_cs) > 0) round(total_sb / (total_sb + total_cs), 3) else NA_real_
+        )
+      })(), error = function(e) list(bsr = NA_real_, sb = NA_integer_, sb_pct = NA_real_))
+
+      def <- .team_defense(tid)
 
       dplyr::tibble(
         Team       = team_name,
@@ -134,7 +182,12 @@ make_series_team_overview_gt <- function(team_id_1, team_id_2) {
         RA         = if (!is.na(ra)) ra else NA_integer_,
         `Run Diff` = rdiff_str,
         `Team wRC+`= if (!is.na(team_wrc)) as.integer(team_wrc) else NA_integer_,
-        `Team ERA` = if (!is.na(team_era)) team_era else NA_real_
+        `Team ERA` = if (!is.na(team_era)) team_era else NA_real_,
+        `Team BsR` = br$bsr,
+        `Team SB`  = br$sb,
+        `Team SB%` = br$sb_pct,
+        `Team OAA` = def$oaa,
+        `Team DRS` = def$drs
       )
     }
 
@@ -146,7 +199,13 @@ make_series_team_overview_gt <- function(team_id_1, team_id_2) {
       gt::cols_align(align = "center", columns = -Team) %>%
       gt::cols_align(align = "left",   columns = Team) %>%
       gt::fmt_number(columns = `Team ERA`, decimals = 2) %>%
+      gt::fmt_number(columns = `Team BsR`, decimals = 1) %>%
+      gt::fmt_percent(columns = `Team SB%`, decimals = 1) %>%
       gt::sub_missing(missing_text = "\u2014") %>%
+      gt::tab_spanner(label = "Offense",     columns = `Team wRC+`) %>%
+      gt::tab_spanner(label = "Pitching",    columns = `Team ERA`) %>%
+      gt::tab_spanner(label = "Baserunning", columns = c(`Team BsR`, `Team SB`, `Team SB%`)) %>%
+      gt::tab_spanner(label = "Defense",     columns = c(`Team OAA`, `Team DRS`)) %>%
       gt::tab_options(
         table.font.size      = 13,
         heading.align        = "left",
@@ -158,6 +217,18 @@ make_series_team_overview_gt <- function(team_id_1, team_id_2) {
         columns = `Team wRC+`,
         palette = c("#d6eaf8", "#f8f9fa", "#d5f5e3"),
         domain  = c(85, 115),
+        na_color = "white"
+      ) %>%
+      gt::data_color(
+        columns = `Team BsR`,
+        palette = c("#d6eaf8", "#f8f9fa", "#d5f5e3"),
+        domain  = c(-10, 10),
+        na_color = "white"
+      ) %>%
+      gt::data_color(
+        columns = `Team OAA`,
+        palette = c("#d6eaf8", "#f8f9fa", "#d5f5e3"),
+        domain  = c(-15, 15),
         na_color = "white"
       )
 
@@ -214,24 +285,28 @@ make_series_batting_gt <- function(team_id, opp_sp_name = NULL) {
       dplyr::filter(roster_role == "Lineup" | mlb_pa >= 25)
 
     # offense_master_season's own name columns (lahman_player_name, etc.) are
-    # unpopulated in this pipeline — player_master_ids is the reliable
-    # mlbam_id -> name lookup used across the rest of the codebase.
+    # unpopulated in this pipeline. player_master_ids is the primary
+    # mlbam_id -> name lookup used elsewhere, but it's built from a
+    # crosswalk that lags behind on very recent call-ups; depth_charts
+    # (FanGraphs) has since proven more complete for those stragglers.
+    # Row-level coalesce (not column-level intersect) so each player falls
+    # back independently rather than one missing column blanking everyone.
+    team_off$.pmi_name <- NA_character_
     if (exists("player_master_ids")) {
-      team_off <- team_off %>%
-        dplyr::left_join(
-          player_master_ids %>% dplyr::select(mlbam_id, .pmi_name = player_name),
-          by = "mlbam_id"
-        )
+      pmi_lookup <- player_master_ids %>%
+        dplyr::distinct(mlbam_id, .keep_all = TRUE) %>%
+        dplyr::select(mlbam_id, player_name)
+      team_off$.pmi_name <- pmi_lookup$player_name[match(team_off$mlbam_id, pmi_lookup$mlbam_id)]
     }
+    team_off$.dc_name <- NA_character_
+    if (exists("depth_charts")) {
+      dc_lookup <- depth_charts %>%
+        dplyr::distinct(mlbam_id, .keep_all = TRUE) %>%
+        dplyr::select(mlbam_id, player_name)
+      team_off$.dc_name <- dc_lookup$player_name[match(team_off$mlbam_id, dc_lookup$mlbam_id)]
+    }
+    team_off$.resolved_name <- dplyr::coalesce(team_off$.pmi_name, team_off$.dc_name)
 
-    # Resolve player names — .pmi_name (player_master_ids) takes priority
-    # since offense_master_season's own name columns are unpopulated; it's
-    # listed first so it wins over those known-empty candidates.
-    name_col <- intersect(
-      c(".pmi_name", "fg_name", "player_name", "mlb_player_name",
-        "name_full", "lahman_player_name"),
-      names(team_off)
-    )[1]
     pos_col <- intersect(
       c("fg_position", "mlb_position", "position", "sc_position"),
       names(team_off)
@@ -243,7 +318,7 @@ make_series_batting_gt <- function(team_id, opp_sp_name = NULL) {
     df <- team_off %>%
       dplyr::transmute(
         roster_role,
-        Name    = if (!is.na(name_col)) .data[[name_col]] else as.character(mlbam_id),
+        Name    = dplyr::coalesce(.resolved_name, as.character(mlbam_id)),
         Pos     = if (!is.na(pos_col))  toupper(.data[[pos_col]]) else "—",
         PA      = dplyr::coalesce(as.integer(mlb_pa), NA_integer_),
         HR      = dplyr::coalesce(as.integer(mlb_hr), NA_integer_),
@@ -438,23 +513,28 @@ make_series_bullpen_gt <- function(team_id) {
     if (nrow(bp) == 0) stop("No bullpen arms found")
 
     # pitching_master_season's own player_name column is unpopulated in this
-    # pipeline — player_master_ids is the reliable mlbam_id -> name lookup.
+    # pipeline. player_master_ids lags behind on very recent call-ups;
+    # depth_charts (FanGraphs) has proven more complete for those stragglers.
+    # Row-level coalesce so each player falls back independently.
+    bp$.pmi_name <- NA_character_
     if (exists("player_master_ids")) {
-      bp <- bp %>%
-        dplyr::left_join(
-          player_master_ids %>% dplyr::select(mlbam_id, .pmi_name = player_name),
-          by = "mlbam_id"
-        )
+      pmi_lookup <- player_master_ids %>%
+        dplyr::distinct(mlbam_id, .keep_all = TRUE) %>%
+        dplyr::select(mlbam_id, player_name)
+      bp$.pmi_name <- pmi_lookup$player_name[match(bp$mlbam_id, pmi_lookup$mlbam_id)]
     }
-
-    name_col <- intersect(
-      c(".pmi_name", "fg_name", "player_name", "mlb_player_name", "name_full"),
-      names(bp)
-    )[1]
+    bp$.dc_name <- NA_character_
+    if (exists("depth_charts")) {
+      dc_lookup <- depth_charts %>%
+        dplyr::distinct(mlbam_id, .keep_all = TRUE) %>%
+        dplyr::select(mlbam_id, player_name)
+      bp$.dc_name <- dc_lookup$player_name[match(bp$mlbam_id, dc_lookup$mlbam_id)]
+    }
+    bp$.resolved_name <- dplyr::coalesce(bp$.pmi_name, bp$.dc_name)
 
     df <- bp %>%
       dplyr::transmute(
-        Name  = if (!is.na(name_col)) .data[[name_col]] else as.character(mlbam_id),
+        Name  = dplyr::coalesce(.resolved_name, as.character(mlbam_id)),
         G     = dplyr::coalesce(as.integer(mlb_g),   NA_integer_),
         IP    = dplyr::coalesce(as.numeric(mlb_ip),  NA_real_),
         ERA   = dplyr::coalesce(as.numeric(mlb_era), NA_real_),
@@ -749,9 +829,41 @@ make_series_arsenal_html <- function(next_series_probables) {
       )
     }, error = function(e) list(away_runs = NA, home_runs = NA, away_hits = NA, home_hits = NA))
 
+    # Standout performances — MLB's own pre-computed top-performer summaries
+    # (hitter + starter box-score lines), used to ground the narrative in
+    # what actually happened rather than generic result-tone filler.
+    standouts <- tryCatch({
+      box_raw <- httr::GET(
+        sprintf("https://statsapi.mlb.com/api/v1/game/%d/boxscore", as.integer(gpk)),
+        httr::timeout(15)
+      )
+      box <- jsonlite::fromJSON(
+        httr::content(box_raw, "text", encoding = "UTF-8"),
+        simplifyVector = TRUE, simplifyDataFrame = FALSE, flatten = FALSE
+      )
+      tp <- box$topPerformers
+      if (length(tp) == 0) return(list(hitter = NULL, starter = NULL))
+      hitter_note  <- NULL
+      starter_note <- NULL
+      for (p in tp) {
+        nm   <- p$player$person$fullName
+        if (is.null(nm)) next
+        if (is.null(hitter_note) && p$type %in% c("hitter", "batter")) {
+          summ <- p$player$stats$batting$summary
+          if (!is.null(summ)) hitter_note <- paste0(nm, " (", summ, ")")
+        }
+        if (is.null(starter_note) && p$type == "starter") {
+          summ <- p$player$stats$pitching$summary
+          if (!is.null(summ)) starter_note <- paste0(nm, " (", summ, ")")
+        }
+      }
+      list(hitter = hitter_note, starter = starter_note)
+    }, error = function(e) list(hitter = NULL, starter = NULL))
+
     list(
       game_pk   = gpk,
-      linescore = linescore
+      linescore = linescore,
+      standouts = standouts
     )
   }, error = function(e) {
     message("  .fetch_game_summary failed for gpk ", gpk, ": ", e$message)
@@ -791,6 +903,11 @@ make_series_recap_boxscores <- function(cs) {
         score_str <- if (!is.na(away_r) && !is.na(home_r))
           paste0(away_r, " - ", home_r) else "—"
 
+        standout_hitter  <- if (!is.null(gs) && !is.null(gs$standouts$hitter))
+          gs$standouts$hitter else NA_character_
+        standout_pitcher <- if (!is.null(gs) && !is.null(gs$standouts$starter))
+          gs$standouts$starter else NA_character_
+
         dplyr::tibble(
           Game   = paste0("Game ", i),
           Date   = format(gdate, "%a %b %d"),
@@ -799,7 +916,9 @@ make_series_recap_boxscores <- function(cs) {
           `Home` = cs$home_team_name,
           Winner = winner,
           away_r = away_r,
-          home_r = home_r
+          home_r = home_r,
+          standout_hitter  = standout_hitter,
+          standout_pitcher = standout_pitcher
         )
       }
     )
@@ -878,7 +997,9 @@ make_series_recap_narrative <- function(cs, recap_data) {
       peak_game
     )
 
-    # --- Paragraph 2: offensive highlights (placeholder — no per-game batter data) ---
+    # --- Paragraph 2: offensive highlights — real standout hitter per game
+    # (MLB's own top-performer box-score line) rather than generic tone
+    # filler ---
     run_avg  <- if (n > 0) round(total_rs / n, 1) else NA
     off_tone <- dplyr::case_when(
       !is.na(run_avg) & run_avg >= 5.5 ~ "productive",
@@ -887,31 +1008,47 @@ make_series_recap_narrative <- function(cs, recap_data) {
       TRUE ~ "quiet"
     )
 
+    hitter_lines <- purrr::map_chr(seq_len(nrow(rows)), function(i) {
+      h <- rows$standout_hitter[i]
+      if (is.na(h)) return("")
+      paste0("Game ", i, "'s top performer at the plate was ", h, ".")
+    })
+    hitter_lines <- hitter_lines[nchar(hitter_lines) > 0]
+    hitter_summary <- if (length(hitter_lines) > 0)
+      paste(hitter_lines, collapse = " ")
+    else
+      "Full batting breakdowns for each game are available in the individual game deep dive pages."
+
     p2 <- paste0(
       "Offensively, Atlanta was ", off_tone, ", averaging ", run_avg, " runs per game. ",
-      if (bw > ow)
-        "The lineup delivered in key spots when it mattered most. "
-      else if (ow > bw)
-        "The lineup struggled to sustain pressure over the course of the series. "
-      else
-        "Offensive production came in bursts rather than consistently. ",
-      "Full batting breakdowns for each game are available in the individual game deep dive pages."
+      hitter_summary
     )
 
-    # --- Paragraph 3: pitching highlights ---
+    # --- Paragraph 3: pitching highlights — real standout starter per game,
+    # same box-score-line approach as the batting side ---
     best_game_braves_idx <- which.min(opp_r)
     min_ra <- min(opp_r, na.rm = TRUE)
+
+    pitcher_lines <- purrr::map_chr(seq_len(nrow(rows)), function(i) {
+      p <- rows$standout_pitcher[i]
+      if (is.na(p)) return("")
+      paste0("Game ", i, "'s standout arm was ", p, ".")
+    })
+    pitcher_lines <- pitcher_lines[nchar(pitcher_lines) > 0]
+    pitcher_summary <- if (length(pitcher_lines) > 0)
+      paste(pitcher_lines, collapse = " ")
+    else if (total_ra / n < 3.5)
+      "The staff was largely sharp throughout, limiting the opponent's offense."
+    else if (total_ra / n < 5)
+      "Pitching was a mixed story — solid at times but unable to consistently shut down the opposition."
+    else
+      "Pitching struggled across the series, giving up too many runs to keep the Braves competitive."
 
     p3 <- paste0(
       "On the mound, Atlanta's best outing came in Game ", best_game_braves_idx,
       ", holding ", opp_name, " to just ", min_ra, " run",
       if (min_ra != 1) "s" else "", ". ",
-      if (total_ra / n < 3.5)
-        "The staff was largely sharp throughout, limiting the opponent's offense."
-      else if (total_ra / n < 5)
-        "Pitching was a mixed story — solid at times but unable to consistently shut down the opposition."
-      else
-        "Pitching struggled across the series, giving up too many runs to keep the Braves competitive."
+      pitcher_summary
     )
 
     # Wrap paragraphs
