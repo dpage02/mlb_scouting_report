@@ -88,29 +88,35 @@ make_series_team_overview_gt <- function(team_id_1, team_id_2) {
       rdiff_str  <- if (!is.na(run_diff))
         paste0(if (run_diff >= 0) "+" else "", run_diff) else "—"
 
+      # Resolve team_abbr once — offense_master_season/pitching_master_season
+      # have no mlb_team_id/fg_team_id columns, only team_abbr.
+      tid_abbr <- tryCatch({
+        if (!exists("team_ids")) return(NA_character_)
+        r <- team_ids %>% dplyr::filter(mlbam_team_id == tid)
+        if (nrow(r) == 0) NA_character_ else r$team_abbr[1]
+      }, error = function(e) NA_character_)
+
       # Team wRC+ (PA-weighted mean from offense_master_season)
       team_wrc <- tryCatch({
-        if (!exists("offense_master_season") || nrow(offense_master_season) == 0)
+        if (!exists("offense_master_season") || nrow(offense_master_season) == 0 ||
+            is.na(tid_abbr))
           return(NA_real_)
         team_off <- offense_master_season %>%
-          dplyr::filter(
-            dplyr::coalesce(mlb_team_id, 0L) == tid |
-            dplyr::coalesce(fg_team_id,  0L) == tid
-          ) %>%
-          dplyr::filter(!is.na(fg_wrc_plus), !is.na(mlb_pa), mlb_pa >= 25)
+          dplyr::filter(team_abbr == tid_abbr) %>%
+          dplyr::filter(!is.na(fg_wRC_plus), !is.na(mlb_pa), mlb_pa >= 25)
         if (nrow(team_off) == 0) return(NA_real_)
-        round(sum(team_off$fg_wrc_plus * team_off$mlb_pa, na.rm = TRUE) /
+        round(sum(team_off$fg_wRC_plus * team_off$mlb_pa, na.rm = TRUE) /
               sum(team_off$mlb_pa, na.rm = TRUE))
       }, error = function(e) NA_real_)
 
       # Team ERA (SP + RP combined, for starters: role == "SP")
       team_era <- tryCatch({
-        if (!exists("pitching_master_season") || nrow(pitching_master_season) == 0)
+        if (!exists("pitching_master_season") || nrow(pitching_master_season) == 0 ||
+            is.na(tid_abbr))
           return(NA_real_)
         team_pit <- pitching_master_season %>%
           dplyr::filter(
-            dplyr::coalesce(mlb_team_id, 0L) == tid |
-            dplyr::coalesce(fg_team_id,  0L) == tid,
+            team_abbr == tid_abbr,
             !is.na(mlb_era), !is.na(mlb_ip), mlb_ip >= 10
           )
         if (nrow(team_pit) == 0) return(NA_real_)
@@ -173,19 +179,28 @@ make_series_batting_gt <- function(team_id, opp_sp_name = NULL) {
     if (!exists("offense_master_season") || nrow(offense_master_season) == 0)
       stop("offense_master_season unavailable")
 
+    # offense_master_season has no mlb_team_id/fg_team_id column, only
+    # team_abbr — resolve it from the MLBAM team_id via team_ids.
+    team_abbr_match <- if (exists("team_ids")) {
+      r <- team_ids %>% dplyr::filter(mlbam_team_id == team_id)
+      if (nrow(r) == 0) NA_character_ else r$team_abbr[1]
+    } else NA_character_
+    if (is.na(team_abbr_match)) stop("Could not resolve team_abbr for team_id ", team_id)
+    team_name_match <- if (exists("team_ids")) {
+      r <- team_ids %>% dplyr::filter(mlbam_team_id == team_id)
+      if (nrow(r) == 0) team_abbr_match else r$team_name[1]
+    } else team_abbr_match
+
     # Filter to this team's players
     team_off <- offense_master_season %>%
-      dplyr::filter(
-        dplyr::coalesce(mlb_team_id, 0L) == team_id |
-        dplyr::coalesce(fg_team_id,  0L) == team_id
-      ) %>%
+      dplyr::filter(team_abbr == team_abbr_match) %>%
       dplyr::filter(!is.na(mlb_pa), mlb_pa >= 10) %>%
       # One row per player (highest PA stint for traded players)
       dplyr::arrange(mlbam_id, dplyr::desc(dplyr::coalesce(mlb_pa, 0L))) %>%
       dplyr::distinct(mlbam_id, .keep_all = TRUE) %>%
       # Exclude pitchers: position flag or very low PA
       dplyr::filter(
-        !dplyr::coalesce(tolower(fg_position), "") %in% c("p", "sp", "rp")
+        !dplyr::coalesce(tolower(sc_position), "") %in% c("p", "sp", "rp")
       ) %>%
       dplyr::arrange(dplyr::desc(dplyr::coalesce(mlb_pa, 0L)))
 
@@ -198,15 +213,32 @@ make_series_batting_gt <- function(team_id, opp_sp_name = NULL) {
       ) %>%
       dplyr::filter(roster_role == "Lineup" | mlb_pa >= 25)
 
-    # Resolve player names
+    # offense_master_season's own name columns (lahman_player_name, etc.) are
+    # unpopulated in this pipeline — player_master_ids is the reliable
+    # mlbam_id -> name lookup used across the rest of the codebase.
+    if (exists("player_master_ids")) {
+      team_off <- team_off %>%
+        dplyr::left_join(
+          player_master_ids %>% dplyr::select(mlbam_id, .pmi_name = player_name),
+          by = "mlbam_id"
+        )
+    }
+
+    # Resolve player names — .pmi_name (player_master_ids) takes priority
+    # since offense_master_season's own name columns are unpopulated; it's
+    # listed first so it wins over those known-empty candidates.
     name_col <- intersect(
-      c("fg_name", "player_name", "mlb_player_name", "name_full"),
+      c(".pmi_name", "fg_name", "player_name", "mlb_player_name",
+        "name_full", "lahman_player_name"),
       names(team_off)
     )[1]
     pos_col <- intersect(
-      c("fg_position", "mlb_position", "position"),
+      c("fg_position", "mlb_position", "position", "sc_position"),
       names(team_off)
     )[1]
+
+    # Resolve wOBA column (FanGraphs normalizes to fg_wOBA after prefix)
+    woba_col <- intersect(c("fg_wOBA", "fg_woba"), names(team_off))[1]
 
     df <- team_off %>%
       dplyr::transmute(
@@ -214,14 +246,15 @@ make_series_batting_gt <- function(team_id, opp_sp_name = NULL) {
         Name    = if (!is.na(name_col)) .data[[name_col]] else as.character(mlbam_id),
         Pos     = if (!is.na(pos_col))  toupper(.data[[pos_col]]) else "—",
         PA      = dplyr::coalesce(as.integer(mlb_pa), NA_integer_),
-        `wRC+`  = dplyr::coalesce(as.integer(fg_wrc_plus), NA_integer_),
+        HR      = dplyr::coalesce(as.integer(mlb_hr), NA_integer_),
+        RBI     = dplyr::coalesce(as.integer(mlb_rbi), NA_integer_),
+        `wRC+`  = dplyr::coalesce(as.integer(fg_wRC_plus), NA_integer_),
+        wOBA    = if (!is.na(woba_col)) dplyr::coalesce(as.numeric(.data[[woba_col]]), NA_real_) else NA_real_,
         AVG     = dplyr::coalesce(as.numeric(mlb_avg), NA_real_),
         OBP     = dplyr::coalesce(as.numeric(mlb_obp), NA_real_),
         SLG     = dplyr::coalesce(as.numeric(mlb_slg), NA_real_),
-        HR      = dplyr::coalesce(as.integer(mlb_hr), NA_integer_),
-        ISO     = dplyr::coalesce(as.numeric(fg_iso), NA_real_),
-        `BB%`   = dplyr::coalesce(as.numeric(fg_bb_pct), NA_real_),
-        `K%`    = dplyr::coalesce(as.numeric(fg_k_pct),  NA_real_)
+        `BB%`   = dplyr::coalesce(as.numeric(fg_BB_pct), NA_real_),
+        `K%`    = dplyr::coalesce(as.numeric(fg_K_pct),  NA_real_)
       )
 
     subtitle_txt <- if (!is.null(opp_sp_name) && !is.na(opp_sp_name))
@@ -232,7 +265,10 @@ make_series_batting_gt <- function(team_id, opp_sp_name = NULL) {
     tbl <- df %>%
       dplyr::select(-roster_role) %>%
       gt::gt() %>%
-      gt::tab_header(subtitle = subtitle_txt) %>%
+      gt::tab_header(
+        title    = gt::md(paste0("**", team_name_match, "**")),
+        subtitle = subtitle_txt
+      ) %>%
       gt::tab_row_group(
         label = "Bench",
         rows  = df$roster_role == "Bench"
@@ -244,8 +280,8 @@ make_series_batting_gt <- function(team_id, opp_sp_name = NULL) {
       gt::row_group_order(groups = c("Lineup", "Bench")) %>%
       gt::cols_align(align = "center", columns = -Name) %>%
       gt::cols_align(align = "left",   columns = Name) %>%
-      gt::fmt_number(columns = c(AVG, OBP, SLG, ISO), decimals = 3) %>%
-      gt::fmt_percent(columns = c(`BB%`, `K%`), decimals = 1) %>%
+      gt::fmt_number(columns = dplyr::any_of(c("wOBA", "AVG", "OBP", "SLG")), decimals = 3) %>%
+      gt::fmt_percent(columns = dplyr::any_of(c("BB%", "K%")), decimals = 1) %>%
       gt::sub_missing(missing_text = "\u2014") %>%
       gt::tab_options(
         table.font.size           = 12,
@@ -306,8 +342,8 @@ make_series_rotation_gt <- function(next_series, next_series_probables) {
       if (nrow(r) == 0) return("")
       era <- dplyr::coalesce(r$mlb_era[1], NA_real_)
       ip  <- dplyr::coalesce(r$mlb_ip[1],  NA_real_)
-      fip <- dplyr::coalesce(r$fg_fip[1],  NA_real_)
-      k9  <- dplyr::coalesce(r$fg_k_9[1],  NA_real_)
+      fip <- dplyr::coalesce(r$fg_FIP[1],  NA_real_)
+      k9  <- dplyr::coalesce(r$fg_K_per_9[1],  NA_real_)
       parts <- c(
         if (!is.na(era)) paste0("ERA ", sprintf("%.2f", era)),
         if (!is.na(ip))  paste0(sprintf("%.0f", ip), " IP"),
@@ -343,7 +379,7 @@ make_series_rotation_gt <- function(next_series, next_series_probables) {
       gt::tab_spanner(label = ns$home_team_name, columns = c(`Home SP`, `Home Stats`)) %>%
       gt::cols_align(align = "left") %>%
       gt::tab_style(
-        style = gt::cell_text(color = "#888", font_size = gt::px(11), style = "italic"),
+        style = gt::cell_text(color = "#888", size = gt::px(11), style = "italic"),
         locations = gt::cells_body(columns = c(`Away Stats`, `Home Stats`))
       ) %>%
       gt::tab_style(
@@ -379,12 +415,20 @@ make_series_bullpen_gt <- function(team_id) {
     if (!exists("pitching_master_season") || nrow(pitching_master_season) == 0)
       stop("pitching_master_season unavailable")
 
+    # pitching_master_season has no mlb_team_id/fg_team_id column, only
+    # team_abbr — resolve it from the MLBAM team_id via team_ids.
+    team_abbr_match <- if (exists("team_ids")) {
+      r <- team_ids %>% dplyr::filter(mlbam_team_id == team_id)
+      if (nrow(r) == 0) NA_character_ else r$team_abbr[1]
+    } else NA_character_
+    if (is.na(team_abbr_match)) stop("Could not resolve team_abbr for team_id ", team_id)
+
+    # pitching_master_season has no position column — games-started == 0
+    # with meaningful innings is a sufficient reliever definition on its own.
     bp <- pitching_master_season %>%
       dplyr::filter(
-        dplyr::coalesce(mlb_team_id, 0L) == team_id |
-        dplyr::coalesce(fg_team_id,  0L) == team_id,
-        dplyr::coalesce(tolower(fg_position), "") %in% c("rp", "rel", "reliever") |
-        (!is.na(mlb_ip) & !is.na(mlb_gs) & mlb_gs == 0 & mlb_ip >= 5)
+        team_abbr == team_abbr_match,
+        !is.na(mlb_ip), !is.na(mlb_gs), mlb_gs == 0, mlb_ip >= 5
       ) %>%
       dplyr::arrange(mlbam_id, dplyr::desc(dplyr::coalesce(mlb_ip, 0))) %>%
       dplyr::distinct(mlbam_id, .keep_all = TRUE) %>%
@@ -393,8 +437,18 @@ make_series_bullpen_gt <- function(team_id) {
 
     if (nrow(bp) == 0) stop("No bullpen arms found")
 
+    # pitching_master_season's own player_name column is unpopulated in this
+    # pipeline — player_master_ids is the reliable mlbam_id -> name lookup.
+    if (exists("player_master_ids")) {
+      bp <- bp %>%
+        dplyr::left_join(
+          player_master_ids %>% dplyr::select(mlbam_id, .pmi_name = player_name),
+          by = "mlbam_id"
+        )
+    }
+
     name_col <- intersect(
-      c("fg_name", "player_name", "mlb_player_name", "name_full"),
+      c(".pmi_name", "fg_name", "player_name", "mlb_player_name", "name_full"),
       names(bp)
     )[1]
 
@@ -404,13 +458,13 @@ make_series_bullpen_gt <- function(team_id) {
         G     = dplyr::coalesce(as.integer(mlb_g),   NA_integer_),
         IP    = dplyr::coalesce(as.numeric(mlb_ip),  NA_real_),
         ERA   = dplyr::coalesce(as.numeric(mlb_era), NA_real_),
-        FIP   = dplyr::coalesce(as.numeric(fg_fip),  NA_real_),
+        FIP   = dplyr::coalesce(as.numeric(fg_FIP),  NA_real_),
         WHIP  = dplyr::coalesce(as.numeric(mlb_whip),NA_real_),
-        `K%`  = dplyr::coalesce(as.numeric(fg_k_pct),NA_real_),
-        `BB%` = dplyr::coalesce(as.numeric(fg_bb_pct),NA_real_),
+        `K%`  = dplyr::coalesce(as.numeric(fg_K_pct),NA_real_),
+        `BB%` = dplyr::coalesce(as.numeric(fg_BB_pct),NA_real_),
         `K-BB%` = dplyr::if_else(
-          !is.na(fg_k_pct) & !is.na(fg_bb_pct),
-          fg_k_pct - fg_bb_pct, NA_real_
+          !is.na(fg_K_pct) & !is.na(fg_BB_pct),
+          fg_K_pct - fg_BB_pct, NA_real_
         )
       ) %>%
       dplyr::slice_head(n = 10)
@@ -450,6 +504,220 @@ make_series_bullpen_gt <- function(team_id) {
   })
 }
 
+# ------------------------------------------------------------
+# Divisional standings for both teams' divisions
+# ------------------------------------------------------------
+
+make_series_standings_html <- function(team_id_1, team_id_2) {
+  tryCatch({
+    if (!exists("team_standings") || nrow(team_standings) == 0)
+      return('<p style="color:#888;font-style:italic;">Standings unavailable.</p>')
+
+    # Division name lookup (MLB standard IDs)
+    .div_name <- function(did) {
+      switch(as.character(did),
+        "200" = "AL West",  "201" = "AL East",  "202" = "AL Central",
+        "203" = "NL West",  "204" = "NL East",  "205" = "NL Central",
+        paste0("Division ", did)
+      )
+    }
+
+    div_of <- function(tid) {
+      r <- team_standings %>% dplyr::filter(mlbam_team_id == tid)
+      if (nrow(r) > 0 && "division_id" %in% names(r)) r$division_id[1] else NA_integer_
+    }
+
+    divs_to_show <- unique(na.omit(c(div_of(team_id_1), div_of(team_id_2))))
+    if (length(divs_to_show) == 0)
+      return('<p style="color:#888;font-style:italic;">Standings unavailable.</p>')
+
+    .div_block <- function(did) {
+      div_teams <- team_standings %>%
+        dplyr::filter(division_id == did) %>%
+        dplyr::arrange(division_rank)
+      if (nrow(div_teams) == 0) return("")
+
+      rows_html <- paste(
+        vapply(seq_len(nrow(div_teams)), function(i) {
+          r          <- div_teams[i, ]
+          highlight  <- r$mlbam_team_id %in% c(team_id_1, team_id_2)
+          gb_val     <- suppressWarnings(as.numeric(r$games_back))
+          gb_str     <- if (!is.na(gb_val) && gb_val == 0) "—"
+                        else if (!is.na(gb_val)) paste0("-", gb_val)
+                        else dplyr::coalesce(as.character(r$games_back), "—")
+          wl_str     <- paste0(
+            dplyr::coalesce(as.character(r$wins), "—"), "-",
+            dplyr::coalesce(as.character(r$losses), "—")
+          )
+          bg <- if (highlight) "background:#eaf2ff;" else ""
+          fw <- if (highlight) "font-weight:700;" else ""
+          paste0(
+            '<tr style="', bg, '">',
+            '<td style="padding:3px 10px;', fw, '">', r$division_rank, '. ', r$team_name, '</td>',
+            '<td style="padding:3px 10px;text-align:center;', fw, '">', wl_str, '</td>',
+            '<td style="padding:3px 10px;text-align:center;color:#555;">', gb_str, '</td>',
+            '</tr>'
+          )
+        }, character(1)),
+        collapse = ""
+      )
+
+      paste0(
+        '<div style="flex:1;min-width:200px;">',
+        '<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.8px;',
+        'color:#888;font-weight:600;margin-bottom:6px;">', .div_name(did), '</div>',
+        '<table style="width:100%;border-collapse:collapse;font-size:13px;">',
+        '<thead><tr style="border-bottom:1px solid #dee2e6;">',
+        '<th style="padding:3px 10px;text-align:left;color:#888;font-weight:600;">Team</th>',
+        '<th style="padding:3px 10px;text-align:center;color:#888;font-weight:600;">W-L</th>',
+        '<th style="padding:3px 10px;text-align:center;color:#888;font-weight:600;">GB</th>',
+        '</tr></thead>',
+        '<tbody>', rows_html, '</tbody>',
+        '</table></div>'
+      )
+    }
+
+    blocks <- paste(vapply(divs_to_show, .div_block, character(1)), collapse = "")
+    paste0('<div style="display:flex;flex-wrap:wrap;gap:2rem;">', blocks, '</div>')
+
+  }, error = function(e) {
+    paste0('<p style="color:#888;font-style:italic;">Standings unavailable: ', conditionMessage(e), '</p>')
+  })
+}
+
+# ------------------------------------------------------------
+# Pitch arsenal cards for all probable starters in a series
+# Shows top 5 pitches: name, usage bar, velocity, whiff%
+# ------------------------------------------------------------
+
+make_series_arsenal_html <- function(next_series_probables) {
+  tryCatch({
+    prb <- next_series_probables
+    if (is.null(prb) || nrow(prb) == 0 ||
+        !exists("pitcher_arsenal") || nrow(pitcher_arsenal) == 0)
+      return('<p style="color:#888;font-style:italic;">Pitch arsenal data unavailable.</p>')
+
+    # Collect all confirmed probable pitchers with names
+    all_pitchers <- dplyr::bind_rows(
+      dplyr::transmute(prb,
+        mlbam_id = away_pitcher_mlbam_id,
+        name     = away_pitcher_name,
+        game_date
+      ),
+      dplyr::transmute(prb,
+        mlbam_id = home_pitcher_mlbam_id,
+        name     = home_pitcher_name,
+        game_date
+      )
+    ) %>%
+      dplyr::filter(!is.na(mlbam_id)) %>%
+      dplyr::arrange(game_date, mlbam_id) %>%
+      dplyr::distinct(mlbam_id, .keep_all = TRUE)
+
+    if (nrow(all_pitchers) == 0)
+      return('<p style="color:#888;font-style:italic;">No confirmed probable starters yet.</p>')
+
+    .pitch_color <- function(code) {
+      switch(toupper(code),
+        "FF" = , "FA" = "#2980b9",
+        "SI" = , "FT" = "#1a6696",
+        "FC" = "#e67e22",
+        "FS" = "#16a085",
+        "SL" = "#c0392b",
+        "ST" = "#d35400",
+        "SV" = "#a04000",
+        "CU" = , "KC" = "#8e44ad",
+        "CH" = "#27ae60",
+        "KN" = "#f39c12",
+        "#7f8c8d"
+      )
+    }
+
+    .pitcher_card <- function(pid, pname) {
+      arsenal <- pitcher_arsenal %>%
+        dplyr::filter(mlbam_id == pid) %>%
+        dplyr::arrange(dplyr::desc(dplyr::coalesce(usage_pct, 0))) %>%
+        dplyr::slice_head(n = 5)
+
+      if (nrow(arsenal) == 0)
+        return(paste0(
+          '<div style="flex:1;min-width:260px;max-width:340px;background:#fafbfc;',
+          'border:1px solid #dee2e6;border-radius:8px;padding:14px 16px;">',
+          '<div style="font-size:14px;font-weight:700;color:#1a2a4a;margin-bottom:8px;">',
+          dplyr::coalesce(pname, paste0("Pitcher ", pid)), '</div>',
+          '<div style="color:#888;font-style:italic;font-size:12px;">Arsenal not available</div>',
+          '</div>'
+        ))
+
+      pitch_rows <- paste(
+        vapply(seq_len(nrow(arsenal)), function(i) {
+          a         <- arsenal[i, ]
+          nm        <- dplyr::coalesce(a$pitch_name, a$pitch_code, "?")
+          usage_pct <- dplyr::coalesce(a$usage_pct, 0)
+          velo      <- if ("avg_speed"  %in% names(a)) a$avg_speed  else NA_real_
+          whiff     <- if ("whiff_pct"  %in% names(a)) a$whiff_pct  else NA_real_
+
+          bar_w   <- round(usage_pct * 100)
+          bar_col <- .pitch_color(dplyr::coalesce(a$pitch_code, ""))
+
+          velo_str  <- if (!is.na(velo))  paste0(round(velo, 1), " mph") else "—"
+          usage_str <- paste0(round(usage_pct * 100, 0), "%")
+          whiff_str <- if (!is.na(whiff)) paste0(round(whiff * 100, 0), "%") else ""
+
+          paste0(
+            '<div style="display:flex;align-items:center;gap:6px;',
+            'padding:4px 0;border-bottom:1px solid #f0f0f0;">',
+            '<div style="width:100px;font-size:12px;font-weight:600;color:#2c3e50;',
+            'white-space:nowrap;">', nm, '</div>',
+            '<div style="flex:1;height:6px;background:#eee;border-radius:3px;overflow:hidden;">',
+            '<div style="width:', bar_w, '%;height:100%;background:', bar_col,
+            ';border-radius:3px;"></div></div>',
+            '<div style="width:32px;text-align:right;font-size:12px;font-weight:600;">',
+            usage_str, '</div>',
+            '<div style="width:54px;text-align:right;font-size:12px;color:#555;">',
+            velo_str, '</div>',
+            if (nchar(whiff_str) > 0)
+              paste0('<div style="width:40px;text-align:right;font-size:11px;color:#888;">',
+                     whiff_str, '</div>')
+            else '',
+            '</div>'
+          )
+        }, character(1)),
+        collapse = ""
+      )
+
+      paste0(
+        '<div style="flex:1;min-width:260px;max-width:360px;background:#fafbfc;',
+        'border:1px solid #dee2e6;border-radius:8px;padding:14px 16px;">',
+        '<div style="font-size:14px;font-weight:700;color:#1a2a4a;margin-bottom:6px;">',
+        dplyr::coalesce(pname, paste0("Pitcher ", pid)), '</div>',
+        '<div style="display:flex;font-size:10px;color:#aaa;font-weight:600;',
+        'margin-bottom:4px;padding-bottom:3px;border-bottom:1px solid #eee;">',
+        '<span style="width:100px;">Pitch</span>',
+        '<span style="flex:1;"></span>',
+        '<span style="width:32px;text-align:right;">Use%</span>',
+        '<span style="width:54px;text-align:right;">Velo</span>',
+        '<span style="width:40px;text-align:right;">Wh%</span>',
+        '</div>',
+        pitch_rows,
+        '</div>'
+      )
+    }
+
+    cards <- paste(
+      vapply(seq_len(nrow(all_pitchers)), function(i) {
+        .pitcher_card(all_pitchers$mlbam_id[i], all_pitchers$name[i])
+      }, character(1)),
+      collapse = ""
+    )
+
+    paste0('<div style="display:flex;flex-wrap:wrap;gap:1rem;">', cards, '</div>')
+
+  }, error = function(e) {
+    paste0('<p style="color:#888;font-style:italic;">Arsenal unavailable: ', conditionMessage(e), '</p>')
+  })
+}
+
 # ============================================================
 # SERIES RECAP HELPERS
 # ============================================================
@@ -461,9 +729,6 @@ make_series_bullpen_gt <- function(team_id) {
 
 .fetch_game_summary <- function(gpk) {
   tryCatch({
-    bs <- baseballr::mlb_boxscore(gpk)
-    if (is.null(bs)) return(NULL)
-
     # Linescore
     ls_raw <- tryCatch(
       httr::GET(
@@ -486,8 +751,7 @@ make_series_bullpen_gt <- function(team_id) {
 
     list(
       game_pk   = gpk,
-      linescore = linescore,
-      boxscore  = bs
+      linescore = linescore
     )
   }, error = function(e) {
     message("  .fetch_game_summary failed for gpk ", gpk, ": ", e$message)
@@ -589,15 +853,14 @@ make_series_recap_narrative <- function(cs, recap_data) {
       TRUE     ~ paste0("split the series with the ", opp_name, " (", bw, "-", ow, ")")
     )
 
-    # Run differential across series
-    total_rs <- sum(
-      dplyr::if_else(cs$away_team_id == 144L, rows$away_r, rows$home_r),
-      na.rm = TRUE
-    )
-    total_ra <- sum(
-      dplyr::if_else(cs$away_team_id == 144L, rows$home_r, rows$away_r),
-      na.rm = TRUE
-    )
+    # Run differential across series — cs$away_team_id is a single value for
+    # the whole series (side doesn't change game-to-game), so this is a
+    # scalar branch, not a row-wise one; dplyr::if_else requires matching
+    # sizes and errors here since rows$away_r/home_r are per-game vectors.
+    braves_r <- if (cs$away_team_id == 144L) rows$away_r else rows$home_r
+    opp_r    <- if (cs$away_team_id == 144L) rows$home_r else rows$away_r
+    total_rs <- sum(braves_r, na.rm = TRUE)
+    total_ra <- sum(opp_r, na.rm = TRUE)
 
     # Highest scoring game
     run_totals <- rows$away_r + rows$home_r
@@ -636,13 +899,8 @@ make_series_recap_narrative <- function(cs, recap_data) {
     )
 
     # --- Paragraph 3: pitching highlights ---
-    best_game_braves_idx <- which.min(
-      dplyr::if_else(cs$away_team_id == 144L, rows$home_r, rows$away_r)
-    )
-    min_ra <- min(
-      dplyr::if_else(cs$away_team_id == 144L, rows$home_r, rows$away_r),
-      na.rm = TRUE
-    )
+    best_game_braves_idx <- which.min(opp_r)
+    min_ra <- min(opp_r, na.rm = TRUE)
 
     p3 <- paste0(
       "On the mound, Atlanta's best outing came in Game ", best_game_braves_idx,
