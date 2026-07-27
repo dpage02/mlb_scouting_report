@@ -23,6 +23,18 @@ execute:
 ```{=html}
 <style>
 /*
+ * gt tables emit their own inline overflow-y:auto on the wrapping
+ * .gt_table_container div. With height:auto that's normally a no-op, but
+ * nested inside this page's flex/tab layout it can create an unwanted
+ * nested vertical scroll region instead of letting the page scroll
+ * normally. Same fix already applied to mlb_print.qmd for the same
+ * underlying gt behavior.
+ */
+.gt_table_container {
+  overflow-y: visible !important;
+}
+
+/*
  * Lineup stat panels: tabs on mobile, all panels side-by-side on desktop.
  * Breakpoint 1100px — roughly when a laptop has enough horizontal room.
  */
