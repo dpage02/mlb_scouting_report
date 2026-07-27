@@ -481,3 +481,38 @@ cat('</div>\n')
 
 cat('</div>\n')
 ```
+
+<div class="page-break"></div>
+
+```{r bullpen-section}
+#| output: asis
+cat('<div class="print-h2">Bullpen</div>\n')
+
+.compact_bullpen <- function(gpk, side_filter) {
+  tbl <- tryCatch(make_bullpen_gt(gpk, side_filter), error = function(e) NULL)
+  if (is.null(tbl)) return(NULL)
+  tbl %>%
+    gt::tab_options(
+      table.font.size  = 9,
+      data_row.padding = gt::px(2),
+      table.width      = gt::pct(100)
+    )
+}
+
+away_bp <- .compact_bullpen(gpk, "away")
+home_bp <- .compact_bullpen(gpk, "home")
+
+cat('<div class="lineup-grid">\n')
+
+cat('<div>\n')
+if (!is.null(away_bp)) cat(gt::as_raw_html(away_bp), "\n\n") else
+  cat("*Away bullpen not available.*\n\n")
+cat('</div>\n')
+
+cat('<div>\n')
+if (!is.null(home_bp)) cat(gt::as_raw_html(home_bp), "\n\n") else
+  cat("*Home bullpen not available.*\n\n")
+cat('</div>\n')
+
+cat('</div>\n')
+```
