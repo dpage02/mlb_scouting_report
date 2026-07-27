@@ -1,6 +1,7 @@
 ---
 title: "Team Deep Dive"
 date: today
+page-layout: full
 params:
   game_pk: null
   side: null

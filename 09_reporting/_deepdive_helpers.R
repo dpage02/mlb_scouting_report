@@ -794,7 +794,7 @@ make_arsenal_gt <- function(gpk) {
       columns = dplyr::any_of(c("Whiff%", "PutAwy%", "K%", "HH%", "xBA", "xwOBA", "RV/100"))
     ) %>%
     gt::tab_options(
-      table.font.size            = 12,
+      table.font.size            = 11,
       heading.align              = "left",
       data_row.padding           = gt::px(4),
       column_labels.font.weight  = "bold",
@@ -1473,7 +1473,7 @@ make_bullpen_arsenal_gt <- function(gpk, side_filter) {
     gt::tab_spanner(label = "Outcomes",
                     columns = dplyr::any_of(c("Whiff%", "PutAwy%", "K%", "HH%", "xBA", "xwOBA", "RV/100"))) %>%
     gt::tab_options(
-      table.font.size            = 12,
+      table.font.size            = 11,
       heading.align              = "left",
       data_row.padding           = gt::px(4),
       column_labels.font.weight  = "bold",
@@ -2488,7 +2488,10 @@ make_batter_intelligence_gt <- function(gpk, side_filter) {
         columns = dplyr::any_of(c("EV", "Max EV", "HH%", "Brl%", "SwSpot%", "BABIP"))
       ) %>%
       gt::cols_width(`#` ~ gt::px(28)) %>%
-      base_opts()
+      base_opts() %>%
+      # 17 columns — smaller than the other Batter Intelligence tabs to fit
+      # without triggering the table's own horizontal scroll.
+      gt::tab_options(table.font.size = 11)
 
     # data_color: SwStr% (red=high, green=low) — only if sufficient values
     swstr_vals <- d2[["SwStr%"]]
