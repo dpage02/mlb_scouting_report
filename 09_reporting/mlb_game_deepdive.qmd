@@ -200,12 +200,25 @@ slices. Existing sections below are unchanged and still the source of truth for
 now — this section will absorb them once the remaining pillars are built out.*
 
 ```{r offense-tab-helper, include=FALSE}
-# gt::as_raw_html() output contains blank lines inside its outermost <div>,
-# which prematurely terminates the HTML block under CommonMark's blank-line
-# rule and corrupts pandoc's fenced-div (panel-tabset) parsing downstream.
-# Strip them before emitting inside a tabset. Shared across all Lineup
-# sub-tabs (Offense/Baserunning/Defense/Catcher).
-.gt_html <- function(tbl) gsub("\n[ \t]*\n+", "\n", gt::as_raw_html(tbl))
+# Two independent pandoc/CommonMark quirks corrupt fenced-div (panel-tabset)
+# parsing when a gt table is emitted inside one, unless both are fixed:
+# 1. gt::as_raw_html() sometimes emits TWO consecutive whitespace-only lines
+#    (e.g. around an empty tfoot). A blank line inside a raw HTML block ends
+#    it early under CommonMark's rules; {2,} collapses runs of any length,
+#    not just one (a single-pass regex only catching one blank line at a
+#    time misses runs of 2+, since gsub doesn't backtrack/overlap matches).
+# 2. gt emits bare `<col style="...">` tags (HTML void elements) for column
+#    widths. Pandoc's block-tag matcher doesn't recognize <col> as
+#    self-closing and treats it as an unterminated open tag, silently
+#    swallowing everything through EOF into one Div (including this
+#    tabset's own closing ':::', which then leaks into the page as literal
+#    text). Self-closing the tag (`<col ... />`) fixes it.
+# Shared across all Lineup sub-tabs (Offense/Baserunning/Defense/Catcher).
+.gt_html <- function(tbl) {
+  html <- gt::as_raw_html(tbl)
+  html <- gsub("(\n[ \t]*){2,}", "\n", html)
+  gsub("<col([^>]*)>", "<col\\1 />", html)
+}
 
 # Combines Batter Intelligence (Overview / Discipline & Contact / Batted Ball),
 # Sustainability, and Clutch+Platoon into one Offense sub-tab, stacked as a

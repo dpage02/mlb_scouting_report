@@ -96,6 +96,17 @@ cat(gt::as_raw_html(tbl), "\n\n")
 
 ---
 
+## Standings
+
+*Both teams' divisional standings. Series participants highlighted.*
+
+```{r standings}
+#| output: asis
+cat(make_series_standings_html(away_id, home_id), "\n\n")
+```
+
+---
+
 ## Ballpark & Conditions
 
 ```{r ballpark}
@@ -154,6 +165,17 @@ if (nchar(bc_html) > 0) cat(bc_html, "\n\n")
 #| output: asis
 tbl <- make_series_rotation_gt(ns, prb)
 cat(gt::as_raw_html(tbl), "\n\n")
+```
+
+---
+
+## Pitch Arsenal
+
+*Top pitches per probable starter — usage, velocity, and whiff rate.*
+
+```{r arsenal}
+#| output: asis
+cat(make_series_arsenal_html(prb), "\n\n")
 ```
 
 ---

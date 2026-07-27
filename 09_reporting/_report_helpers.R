@@ -120,7 +120,7 @@ make_game_header_gt <- function(gpk) {
 # Starter Matchup
 # ------------------------------------------------------------
 
-make_starter_gt <- function(gpk) {
+make_starter_gt <- function(gpk, compact = FALSE) {
   raw <- starter_matchup %>%
     dplyr::filter(game_pk == gpk) %>%
     dplyr::mutate(side = factor(side, levels = c("away", "home"))) %>%
@@ -152,19 +152,29 @@ make_starter_gt <- function(gpk) {
   if (any(!is.na(era_plus_vec))) display$`ERA+` <- era_plus_vec
 
   # ERA estimators
-  if ("fg_FIP"   %in% names(raw)) display$FIP   <- raw$fg_FIP
-  if ("fg_xFIP"  %in% names(raw)) display$xFIP  <- raw$fg_xFIP
-  if ("fg_xERA"  %in% names(raw)) display$xERA  <- raw$fg_xERA
-  if ("fg_SIERA" %in% names(raw)) display$SIERA <- raw$fg_SIERA
+  if ("fg_FIP"  %in% names(raw)) display$FIP  <- raw$fg_FIP
+  if ("fg_xFIP" %in% names(raw)) display$xFIP <- raw$fg_xFIP
+  if (!compact) {
+    if ("fg_xERA"  %in% names(raw)) display$xERA  <- raw$fg_xERA
+    if ("fg_SIERA" %in% names(raw)) display$SIERA <- raw$fg_SIERA
+  }
 
-  # Batted ball / strand
-  if ("fg_BABIP"   %in% names(raw)) display$BABIP   <- raw$fg_BABIP
-  if ("fg_LOB_pct" %in% names(raw)) display$`LOB%`  <- raw$fg_LOB_pct
+  # Batted ball / strand — compact drops these (they're visible in arsenal section)
+  if (!compact) {
+    if ("fg_BABIP"   %in% names(raw)) display$BABIP  <- raw$fg_BABIP
+    if ("fg_LOB_pct" %in% names(raw)) display$`LOB%` <- raw$fg_LOB_pct
+  }
 
-  # Per-9
-  if ("fg_K_9"  %in% names(raw)) display$`K/9`  <- raw$fg_K_9
-  if ("fg_BB_9" %in% names(raw)) display$`BB/9` <- raw$fg_BB_9
-  if ("fg_HR_9" %in% names(raw)) display$`HR/9` <- raw$fg_HR_9
+  # Per-9 — compact drops K/9 and BB/9 in favour of % versions below
+  if (!compact) {
+    if ("fg_K_9"  %in% names(raw)) display$`K/9`  <- raw$fg_K_9
+    if ("fg_BB_9" %in% names(raw)) display$`BB/9` <- raw$fg_BB_9
+    if ("fg_HR_9" %in% names(raw)) display$`HR/9` <- raw$fg_HR_9
+  }
+
+  # Batted ball profile — GB% and HR/FB in both modes (key to understanding pitcher type)
+  if ("fg_GB_pct"    %in% names(raw)) display$`GB%`    <- raw$fg_GB_pct
+  if ("fg_HR_per_FB" %in% names(raw)) display$`HR/FB`  <- raw$fg_HR_per_FB
 
   # Rate %
   if ("fg_K_pct"    %in% names(raw)) display$`K%`    <- raw$fg_K_pct
@@ -194,7 +204,11 @@ make_starter_gt <- function(gpk) {
       decimals = 2
     ) %>%
     gt::fmt_percent(
-      columns  = dplyr::any_of(c("LOB%", "K%", "BB%", "K-BB%")),
+      columns  = dplyr::any_of(c("LOB%", "GB%", "K%", "BB%", "K-BB%")),
+      decimals = 1
+    ) %>%
+    gt::fmt_percent(
+      columns  = dplyr::any_of(c("HR/FB")),
       decimals = 1
     ) %>%
     gt::fmt_number(
@@ -220,7 +234,7 @@ make_starter_gt <- function(gpk) {
     ) %>%
     gt::tab_spanner(
       label   = "Batted Ball",
-      columns = dplyr::any_of(c("BABIP", "LOB%", "HR/9"))
+      columns = dplyr::any_of(c("BABIP", "LOB%", "HR/9", "GB%", "HR/FB"))
     ) %>%
     gt::tab_spanner(
       label   = "Discipline",

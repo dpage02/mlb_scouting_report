@@ -179,6 +179,15 @@ body {
 .ref-stat { color: #333; }
 .ref-val  { font-weight: 600; color: #1a1a1a; }
 
+/* ── Fix GT table overflow (prevent horizontal scrollbar) ── */
+.gt_table_container {
+  overflow-x: visible !important;
+  overflow-y: visible !important;
+}
+.gt_table {
+  overflow: visible !important;
+}
+
 /* ── Hide screen-only elements on print ────────── */
 @media screen {
   body { max-width: 850px; margin: 0 auto; padding: 20px; }
@@ -186,6 +195,7 @@ body {
 @media print {
   .no-print { display: none !important; }
   a { text-decoration: none !important; color: inherit !important; }
+  .gt_table_container { overflow-x: visible !important; }
 }
 </style>
 ```
@@ -244,8 +254,10 @@ make_lineup_print_gt <- function(gpk, side_filter) {
       Name   = raw$player_name,
       Pos    = raw$fg_position,
       PA     = dplyr::coalesce(raw$mlb_pa, NA_integer_),
+      HR     = dplyr::coalesce(raw$mlb_hr, NA_integer_),
+      RBI    = dplyr::coalesce(raw$mlb_rbi, NA_integer_),
       `wRC+` = col1(raw, c("fg_wRC_plus", "fg_wRC.")),
-      ISO    = col1(raw, c("fg_ISO")),
+      wOBA   = col1(raw, c("fg_wOBA")),
       AVG    = col1(raw, c("mlb_avg", "fg_AVG")),
       OBP    = col1(raw, c("mlb_obp", "fg_OBP")),
       SLG    = col1(raw, c("mlb_slg", "fg_SLG")),
@@ -259,11 +271,12 @@ make_lineup_print_gt <- function(gpk, side_filter) {
         title    = gt::md(paste0("**", team, "**")),
         subtitle = paste0("vs ", opp_sp, " \u00b7 ", stats_yr, " season")
       ) %>%
-      gt::fmt_integer(columns = dplyr::any_of(c("PA", "wRC+"))) %>%
-      gt::fmt_number(columns  = dplyr::any_of(c("ISO", "AVG", "OBP", "SLG")), decimals = 3) %>%
+      gt::fmt_integer(columns = dplyr::any_of(c("PA", "HR", "RBI", "wRC+"))) %>%
+      gt::fmt_number(columns  = dplyr::any_of(c("wOBA", "AVG", "OBP", "SLG")), decimals = 3) %>%
       gt::fmt_percent(columns = dplyr::any_of(c("BB%", "K%")), decimals = 1) %>%
       gt::fmt_missing(columns = dplyr::everything(), missing_text = "\u2014") %>%
-      gt::tab_spanner(label = "Core",       columns = dplyr::any_of(c("wRC+", "ISO"))) %>%
+      gt::tab_spanner(label = "Counting",   columns = dplyr::any_of(c("HR", "RBI"))) %>%
+      gt::tab_spanner(label = "Core",       columns = dplyr::any_of(c("wRC+", "wOBA"))) %>%
       gt::tab_spanner(label = "Slash",      columns = dplyr::any_of(c("AVG", "OBP", "SLG"))) %>%
       gt::tab_spanner(label = "Approach",   columns = dplyr::any_of(c("BB%", "K%"))) %>%
       {
@@ -422,7 +435,7 @@ tryCatch({
   }
 }, error = function(e) invisible(NULL))
 
-sp_tbl <- tryCatch(make_starter_gt(gpk), error = function(e) NULL)
+sp_tbl <- tryCatch(make_starter_gt(gpk, compact = TRUE), error = function(e) NULL)
 if (!is.null(sp_tbl)) {
   sp_tbl <- sp_tbl %>%
     gt::tab_options(
