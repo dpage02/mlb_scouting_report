@@ -33,6 +33,16 @@ game_date <- as.character(params$game_date)
 away_abbr <- params$away_abbr
 home_abbr <- params$home_abbr
 
+# Pandoc's default markdown reader treats a bare <div> as a "native Div"
+# and parses its CONTENTS as markdown rather than passing them through
+# as raw text. A multi-line HTML string literal written with the R
+# source's own indentation (as below, for readability) then has its
+# continuation lines misread as an indented code block (4+ leading
+# spaces = code block in CommonMark), rendering literal escaped tags
+# instead of the intended layout. Strip leading whitespace after each
+# newline before cat()'ing any multi-line raw-HTML string.
+.flatten_indent <- function(x) gsub("\n[ \t]+", "\n", x)
+
 # ── MLB Stats API helpers ──────────────────────────────────────
 
 mlb_get <- function(path) {
@@ -86,7 +96,7 @@ cat(sprintf(
 
 # Big score display
 if (!is.na(away_score) && !is.na(home_score)) {
-  cat(sprintf(
+  cat(.flatten_indent(sprintf(
     '<div style="display:flex;gap:3rem;align-items:center;
       background:#f8f9fa;border:1px solid #dee2e6;border-radius:10px;
       padding:20px 32px;margin:1rem 0 1.5rem;max-width:480px;">
@@ -110,7 +120,7 @@ if (!is.na(away_score) && !is.na(home_score)) {
     if (home_score > away_score) "#1a5276" else "#5d6d7e",
     home_score,
     coalesce(home_hits, 0L), coalesce(home_err, 0L)
-  ))
+  )))
 } else {
   cat('<p style="color:#888;font-style:italic;">Final score not yet available.</p>\n\n')
 }
@@ -128,7 +138,7 @@ if (!is.null(pred_row) && nrow(pred_row) > 0) {
   }
 
   cat("## Our Prediction\n\n")
-  cat(sprintf(
+  cat(.flatten_indent(sprintf(
     '<div style="background:#f0f4ff;border:1px solid #c5d4f5;border-radius:8px;padding:16px 20px;margin-bottom:1.5rem;">
       <div style="margin-bottom:8px;">%s &nbsp; Predicted: <strong>%s</strong></div>
       <div style="display:flex;gap:2rem;font-size:0.9rem;">
@@ -147,7 +157,7 @@ if (!is.null(pred_row) && nrow(pred_row) > 0) {
     p$home_team, coalesce(p$actual_home_runs, NA_real_),
     round(coalesce(p$away_win_pct, 0) * 100),
     round(coalesce(p$home_win_pct, 0) * 100)
-  ))
+  )))
 }
 ```
 
@@ -296,13 +306,21 @@ get_batting_leaders <- function(side_data, team_name) {
     s     <- tryCatch(b_info$stats$batting, error = function(e) list())
     name  <- tryCatch(b_info$person$fullName, error = function(e) as.character(bid))
 
-    ab   <- as.integer(tryCatch(s$atBats,        error = function(e) 0))
-    h    <- as.integer(tryCatch(s$hits,           error = function(e) 0))
-    hr   <- as.integer(tryCatch(s$homeRuns,       error = function(e) 0))
-    rbi  <- as.integer(tryCatch(s$rbi,            error = function(e) 0))
-    bb   <- as.integer(tryCatch(s$baseOnBalls,    error = function(e) 0))
-    k    <- as.integer(tryCatch(s$strikeOuts,     error = function(e) 0))
-    sb   <- as.integer(tryCatch(s$stolenBases,    error = function(e) 0))
+    # MLB API returns NULL (not an error) for fields that don't apply to a
+    # player (e.g. a pitcher's batting stats in an NL/interleague game with
+    # no PA) — as.integer(NULL) is integer(0), not NA, so is.na(ab) on it
+    # returns logical(0) and crashes the if() below. Force length-1 first.
+    safe_int <- function(x) {
+      v <- tryCatch(as.integer(x), error = function(e) NA_integer_)
+      if (length(v) == 0) NA_integer_ else v
+    }
+    ab   <- safe_int(s$atBats)
+    h    <- safe_int(s$hits)
+    hr   <- safe_int(s$homeRuns)
+    rbi  <- safe_int(s$rbi)
+    bb   <- safe_int(s$baseOnBalls)
+    k    <- safe_int(s$strikeOuts)
+    sb   <- safe_int(s$stolenBases)
 
     if (is.na(ab) || ab == 0) return(NULL)
     data.frame(

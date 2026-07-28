@@ -104,6 +104,9 @@ body {
   page-break-inside: avoid;
 }
 .lineup-grid > div + div { margin-top: 14pt; }
+/* Default (also the @media print size): fits letter-size paper. Screen
+   viewing gets a larger, more comfortable size below — nothing forces
+   the on-screen page to stay this cramped just because print does. */
 .lineup-grid .gt_table { font-size: 9pt !important; }
 
 /* ── Compact game info ─────────────────────────── */
@@ -188,9 +191,13 @@ body {
   overflow: visible !important;
 }
 
-/* ── Hide screen-only elements on print ────────── */
+/* ── Screen viewing: responsive width, not the fixed 8.5in-page
+   width used for actual printing. Scales with the viewport instead
+   of always sitting at a print-page width, and the tables get a
+   more comfortable size since there's no paper to fit on screen. ── */
 @media screen {
-  body { max-width: 850px; margin: 0 auto; padding: 20px; }
+  body { max-width: min(1400px, 96vw); margin: 0 auto; padding: 20px; }
+  .lineup-grid .gt_table { font-size: 11.5pt !important; }
 }
 @media print {
   .no-print { display: none !important; }

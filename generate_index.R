@@ -192,10 +192,15 @@ for (d in past_dates) {
       !is.na(file_df$away) & file_df$away == aw &
       !is.na(file_df$home) & file_df$home == hm]
 
-    if (length(dd_file) > 0) {
+    # Prefer the post-game result page (final score, prediction accuracy,
+    # box score highlights) over the pre-game deep dive once the game is
+    # actually over — that's what a past game should link to.
+    link_file <- if (length(res_file) > 0) res_file[1] else if (length(dd_file) > 0) dd_file[1] else NA_character_
+
+    if (!is.na(link_file)) {
       game_links <- paste0(game_links, sprintf(
         '<a href="%s" class="past-game-link">%s @ %s</a>',
-        dd_file[1], aw, hm
+        link_file, aw, hm
       ))
     }
   }
@@ -229,29 +234,70 @@ if (nchar(past_rows) == 0) {
 series_files <- file_df[file_df$type %in% c("series_preview", "series_recap"), ]
 series_files <- series_files[order(series_files$date, decreasing = TRUE), ]
 
-series_cards_html <- ""
+.series_card <- function(sf) {
+  label <- if (sf$type == "series_preview") "Series Preview" else "Series Recap"
+  matchup <- if (!is.na(sf$away) && !is.na(sf$home)) {
+    paste0(sf$away, " @ ", sf$home)
+  } else sf$file
+  color <- if (sf$type == "series_preview") "#1a73e8" else "#0f9d58"
+  sprintf(
+    '<a href="%s" class="series-card" style="border-left:4px solid %s;">
+      <span class="series-label" style="color:%s;">%s</span>
+      <span class="series-matchup">%s</span>
+      <span class="series-date">%s</span>
+    </a>',
+    sf$file, color, color, label, matchup, sf$date
+  )
+}
+
+# Only the most recent preview and most recent recap are promoted to the
+# homepage — a series from weeks ago shouldn't sit front and center.
+# Everything else (still fully rendered and linkable) moves into the
+# collapsed Series Archive below, same idea as Past Games.
+current_series <- series_files[0, ]
 if (nrow(series_files) > 0) {
-  for (i in seq_len(nrow(series_files))) {
-    sf <- series_files[i, ]
-    label <- if (sf$type == "series_preview") "Series Preview" else "Series Recap"
-    matchup <- if (!is.na(sf$away) && !is.na(sf$home)) {
-      paste0(sf$away, " @ ", sf$home)
-    } else sf$file
-    color <- if (sf$type == "series_preview") "#1a73e8" else "#0f9d58"
-    series_cards_html <- paste0(series_cards_html, sprintf(
-      '<a href="%s" class="series-card" style="border-left:4px solid %s;">
-        <span class="series-label" style="color:%s;">%s</span>
-        <span class="series-matchup">%s</span>
-        <span class="series-date">%s</span>
-      </a>',
-      sf$file, color, color, label, matchup, sf$date
-    ))
+  latest_preview <- series_files[series_files$type == "series_preview", ][1, ]
+  latest_recap   <- series_files[series_files$type == "series_recap", ][1, ]
+  current_series <- rbind(
+    series_files[0, ],
+    latest_preview[!is.na(latest_preview$file), ],
+    latest_recap[!is.na(latest_recap$file), ]
+  )
+}
+archived_series <- if (nrow(current_series) > 0) {
+  series_files[!series_files$file %in% current_series$file, ]
+} else {
+  series_files
+}
+
+series_cards_html <- ""
+if (nrow(current_series) > 0) {
+  for (i in seq_len(nrow(current_series))) {
+    series_cards_html <- paste0(series_cards_html, .series_card(current_series[i, ]))
   }
 }
 
 series_section <- if (nchar(series_cards_html) > 0) {
   paste0('<div class="section-title">Braves Series</div>',
          '<div class="series-grid">', series_cards_html, '</div>')
+} else ""
+
+archived_series_html <- ""
+if (nrow(archived_series) > 0) {
+  for (i in seq_len(nrow(archived_series))) {
+    archived_series_html <- paste0(archived_series_html, .series_card(archived_series[i, ]))
+  }
+}
+
+series_archive_section <- if (nchar(archived_series_html) > 0) {
+  paste0(
+    '<details class="past-section">',
+    '<summary class="section-title" style="cursor:pointer; list-style:none; display:flex; align-items:center; gap:8px;">',
+    'Series Archive <span style="font-size:0.7rem; color:#58a6ff; font-weight:400;">click to expand</span>',
+    '</summary>',
+    '<div class="series-grid" style="margin-top:10px;">', archived_series_html, '</div>',
+    '</details>'
+  )
 } else ""
 
 # Stat reference link
@@ -458,6 +504,7 @@ html <- sprintf('<!DOCTYPE html>
       </summary>
       <div style="margin-top:10px;">%s</div>
     </details>
+    %s
   </main>
   <div class="footer">
     Updated %s ET &nbsp;·&nbsp; Reports auto-refresh at 7:30 AM, 4:30 PM, 3 AM ET
@@ -473,6 +520,7 @@ html <- sprintf('<!DOCTYPE html>
   series_section,       # series preview / recap
   today_cards,          # game cards
   past_rows,            # past games
+  series_archive_section, # older series preview/recap archive
   format(Sys.time(), "%Y-%m-%d %I:%M %p", tz = "America/New_York")
 )
 

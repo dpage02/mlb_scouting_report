@@ -116,6 +116,26 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # --------------------------------------------------------
+      # 6b. Predictions log cache — data/predictions_log.csv is gitignored
+      #     and each run starts from a fresh checkout, so without this it
+      #     never accumulates history: log_predictions.R (called from
+      #     run_pipeline_phase01.R) can never find a past prediction to
+      #     backfill an actual score onto, and render_game_results.R
+      #     (called from run_all.R) always sees zero completed games and
+      #     silently renders nothing. Key includes run_id so every run
+      #     saves a fresh snapshot (actions/cache won't overwrite an
+      #     existing key); restore-keys prefix-matches the most recent
+      #     prior snapshot regardless of which run created it.
+      # --------------------------------------------------------
+      - name: Restore predictions log cache
+        uses: actions/cache@v4
+        with:
+          path: data/predictions_log.csv
+          key: predictions-log-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            predictions-log-${{ runner.os }}-
+
+      # --------------------------------------------------------
       # 7. Diagnostics — confirm which commit and code CI is using
       # --------------------------------------------------------
       - name: Verify source code
