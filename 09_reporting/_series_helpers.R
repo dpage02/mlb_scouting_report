@@ -633,7 +633,14 @@ make_series_standings_html <- function(team_id_1, team_id_2) {
           fw <- if (highlight) "font-weight:700;" else ""
           paste0(
             '<tr style="', bg, '">',
-            '<td style="padding:3px 10px;', fw, '">', r$division_rank, '. ', r$team_name, '</td>',
+            # &nbsp; (not a literal space) after the period — pandoc's
+            # native_divs parses raw HTML container contents as markdown,
+            # and "1. Team Name" with a real space is indistinguishable
+            # from a markdown ordered-list marker, corrupting any
+            # surrounding fenced div (only surfaces inside a panel-tabset;
+            # this table also renders standalone on Series Preview, where
+            # there's no fenced div for it to break).
+            '<td style="padding:3px 10px;', fw, '">', r$division_rank, '.&nbsp;', r$team_name, '</td>',
             '<td style="padding:3px 10px;text-align:center;', fw, '">', wl_str, '</td>',
             '<td style="padding:3px 10px;text-align:center;color:#555;">', gb_str, '</td>',
             '</tr>'
