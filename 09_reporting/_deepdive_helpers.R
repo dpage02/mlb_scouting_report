@@ -629,7 +629,7 @@ make_starter_splits_gt <- function(gpk) {
     dplyr::mutate(side = factor(side, levels = c("away", "home"))) %>%
     dplyr::arrange(side)
 
-  if (nrow(raw) == 0 || !"ps_era_vr" %in% names(raw)) {
+  if (nrow(raw) == 0 || !"ps_avg_vr" %in% names(raw)) {
     return(invisible(NULL))
   }
 
@@ -639,16 +639,25 @@ make_starter_splits_gt <- function(gpk) {
     Hand    = dplyr::coalesce(raw$pitch_hand, "?")
   )
 
-  if ("ps_ip_vr"   %in% names(raw)) display$`IP vs R`   <- raw$ps_ip_vr
-  if ("ps_era_vr"  %in% names(raw)) display$`ERA vs R`  <- raw$ps_era_vr
-  if ("ps_whip_vr" %in% names(raw)) display$`WHIP vs R` <- raw$ps_whip_vr
-  if ("ps_ops_vr"  %in% names(raw)) display$`OPS vs R`  <- raw$ps_ops_vr
-  if ("ps_so_vr"   %in% names(raw)) display$`K vs R`    <- raw$ps_so_vr
-  if ("ps_ip_vl"   %in% names(raw)) display$`IP vs L`   <- raw$ps_ip_vl
-  if ("ps_era_vl"  %in% names(raw)) display$`ERA vs L`  <- raw$ps_era_vl
-  if ("ps_whip_vl" %in% names(raw)) display$`WHIP vs L` <- raw$ps_whip_vl
-  if ("ps_ops_vl"  %in% names(raw)) display$`OPS vs L`  <- raw$ps_ops_vl
-  if ("ps_so_vl"   %in% names(raw)) display$`K vs L`    <- raw$ps_so_vl
+  # ERA/WHIP vs hand dropped — at typical in-season IP-vs-hand samples
+  # (often 10-30 IP, roughly 2-4 starts), runs-allowed stats are mostly
+  # noise and frequently missing outright. Season-long ERA/WHIP already
+  # appear on the main pitcher line above with a real sample size. The
+  # full slash line (AVG/OBP/SLG/OPS) says more at this sample: it shows
+  # *how* a side is getting to him (contact vs. discipline vs. power)
+  # instead of a runs-allowed number that's mostly sequencing/defense.
+  if ("ps_ip_vr"  %in% names(raw)) display$`IP vs R`  <- raw$ps_ip_vr
+  if ("ps_avg_vr" %in% names(raw)) display$`AVG vs R` <- raw$ps_avg_vr
+  if ("ps_obp_vr" %in% names(raw)) display$`OBP vs R` <- raw$ps_obp_vr
+  if ("ps_slg_vr" %in% names(raw)) display$`SLG vs R` <- raw$ps_slg_vr
+  if ("ps_ops_vr" %in% names(raw)) display$`OPS vs R` <- raw$ps_ops_vr
+  if ("ps_so_vr"  %in% names(raw)) display$`K vs R`   <- raw$ps_so_vr
+  if ("ps_ip_vl"  %in% names(raw)) display$`IP vs L`  <- raw$ps_ip_vl
+  if ("ps_avg_vl" %in% names(raw)) display$`AVG vs L` <- raw$ps_avg_vl
+  if ("ps_obp_vl" %in% names(raw)) display$`OBP vs L` <- raw$ps_obp_vl
+  if ("ps_slg_vl" %in% names(raw)) display$`SLG vs L` <- raw$ps_slg_vl
+  if ("ps_ops_vl" %in% names(raw)) display$`OPS vs L` <- raw$ps_ops_vl
+  if ("ps_so_vl"  %in% names(raw)) display$`K vs L`   <- raw$ps_so_vl
 
   display %>%
     gt::gt() %>%
@@ -660,9 +669,9 @@ make_starter_splits_gt <- function(gpk) {
                         else format(Sys.Date(), "%Y"))
     ) %>%
     gt::fmt_number(
-      columns  = dplyr::any_of(c("ERA vs R", "WHIP vs R", "OPS vs R",
-                                  "ERA vs L", "WHIP vs L", "OPS vs L")),
-      decimals = 2
+      columns  = dplyr::any_of(c("AVG vs R", "OBP vs R", "SLG vs R", "OPS vs R",
+                                  "AVG vs L", "OBP vs L", "SLG vs L", "OPS vs L")),
+      decimals = 3
     ) %>%
     gt::fmt_number(
       columns  = dplyr::any_of(c("IP vs R", "IP vs L")),
@@ -675,13 +684,13 @@ make_starter_splits_gt <- function(gpk) {
     gt::fmt_missing(columns = dplyr::everything(), missing_text = "—") %>%
     gt::tab_spanner(
       label   = "vs RHH",
-      columns = dplyr::any_of(c("IP vs R", "ERA vs R", "WHIP vs R",
-                                 "OPS vs R", "K vs R"))
+      columns = dplyr::any_of(c("IP vs R", "AVG vs R", "OBP vs R",
+                                 "SLG vs R", "OPS vs R", "K vs R"))
     ) %>%
     gt::tab_spanner(
       label   = "vs LHH",
-      columns = dplyr::any_of(c("IP vs L", "ERA vs L", "WHIP vs L",
-                                 "OPS vs L", "K vs L"))
+      columns = dplyr::any_of(c("IP vs L", "AVG vs L", "OBP vs L",
+                                 "SLG vs L", "OPS vs L", "K vs L"))
     ) %>%
     gt::tab_style(
       style     = gt::cell_fill(color = "#eaf2ff"),
