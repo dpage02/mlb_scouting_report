@@ -118,6 +118,47 @@ message("\nDeep dives complete: ", length(rendered), "/",
 message("Files saved to reports/")
 
 # ------------------------------------------------------------
+# Render Full Breakdown pages (one per game) — the 4-pillar tabset
+# (Pitching/Lineup/Team Context/Matchups) split out of mlb_game_deepdive.qmd
+# onto its own page, linked from the Deep Dive nav bar's "Full Breakdown"
+# button. Keeps the Deep Dive page itself short (Game Info and below)
+# rather than always rendering the full tabset underneath it.
+# ------------------------------------------------------------
+
+message("\nRendering Full Breakdown pages...")
+
+breakdown_rendered <- character()
+
+for (i in seq_len(nrow(game_files))) {
+  row      <- game_files[i, ]
+  gpk      <- row$game_pk
+  matchup  <- sprintf("%s @ %s", row$away_team_name, row$home_team_name)
+  out_file <- paste0("breakdown_", report_date, "_",
+                     row$away_abbr, "_", row$home_abbr, ".html")
+  final_path <- file.path("reports", out_file)
+
+  message(sprintf("  [%d/%d] %s...", i, nrow(game_files), matchup))
+
+  tryCatch({
+    rendered_path <- .qmd_render(
+      "mlb_game_breakdown.qmd",
+      params      = list(game_pk = gpk, game_date = report_date),
+      output_file = out_file
+    )
+    if (!is.null(rendered_path) && file.exists(rendered_path)) {
+      file.rename(rendered_path, final_path)
+      breakdown_rendered <- c(breakdown_rendered, final_path)
+      message("    Saved: ", final_path)
+    }
+  }, error = function(e) {
+    message("    ERROR rendering ", matchup, ": ", e$message)
+  })
+}
+
+message("\nFull Breakdown pages complete: ", length(breakdown_rendered), "/",
+        nrow(game_files), " rendered.")
+
+# ------------------------------------------------------------
 # Render team deep dives (one per side per game)
 # ------------------------------------------------------------
 

@@ -141,6 +141,7 @@ home_abbr_nav <- tryCatch({
 away_abbr_nav <- if (length(away_abbr_nav) == 0 || is.na(away_abbr_nav)) "AWAY" else away_abbr_nav
 home_abbr_nav <- if (length(home_abbr_nav) == 0 || is.na(home_abbr_nav)) "HOME" else home_abbr_nav
 
+breakdown_file <- paste0("breakdown_", params$game_date, "_", away_abbr_nav, "_", home_abbr_nav, ".html")
 matchup_file   <- paste0("matchup_",    params$game_date, "_", away_abbr_nav, "_", home_abbr_nav, ".html")
 prediction_file <- paste0("prediction_", params$game_date, "_", away_abbr_nav, "_", home_abbr_nav, ".html")
 hitting_file   <- paste0("hitting_",    params$game_date, "_", away_abbr_nav, "_", home_abbr_nav, ".html")
@@ -154,6 +155,9 @@ nav_html <- paste0(
   '&nbsp;&nbsp;|&nbsp;&nbsp;',
   '<a href="', scouting_file, '" style="color:#1a73e8; text-decoration:none;">',
   '\u2190 Today\'s Games</a>',
+  '&nbsp;&nbsp;|&nbsp;&nbsp;',
+  '<a href="', breakdown_file, '" style="color:#1a73e8; text-decoration:none; font-weight:600;">',
+  '\U0001f4ca Full Breakdown</a>',
   '&nbsp;&nbsp;|&nbsp;&nbsp;',
   '<a href="', prediction_file, '" style="color:#1a73e8; text-decoration:none; font-weight:600;">',
   '\u26a1 Prediction</a>',
@@ -189,187 +193,6 @@ narrative_html <- tryCatch(make_game_narrative_html(gpk), error = function(e) {
 })
 if (nchar(narrative_html) > 0) cat(narrative_html, "\n\n")
 ```
-
----
-
-## Full Breakdown
-
-*New 4-pillar tabset structure (Master Build Spec §3). This slice fully builds out
-the **Lineup → Offense** sub-tab for both teams; Pitching, Team Context, Matchups,
-and the Baserunning/Defense/Catcher sub-tabs are placeholders pending the next
-slices. Existing sections below are unchanged and still the source of truth for
-now — this section will absorb them once the remaining pillars are built out.*
-
-```{r offense-tab-helper, include=FALSE}
-# Two independent pandoc/CommonMark quirks corrupt fenced-div (panel-tabset)
-# parsing when a gt table is emitted inside one, unless both are fixed:
-# 1. gt::as_raw_html() sometimes emits TWO consecutive whitespace-only lines
-#    (e.g. around an empty tfoot). A blank line inside a raw HTML block ends
-#    it early under CommonMark's rules; {2,} collapses runs of any length,
-#    not just one (a single-pass regex only catching one blank line at a
-#    time misses runs of 2+, since gsub doesn't backtrack/overlap matches).
-# 2. gt emits bare `<col style="...">` tags (HTML void elements) for column
-#    widths. Pandoc's block-tag matcher doesn't recognize <col> as
-#    self-closing and treats it as an unterminated open tag, silently
-#    swallowing everything through EOF into one Div (including this
-#    tabset's own closing ':::', which then leaks into the page as literal
-#    text). Self-closing the tag (`<col ... />`) fixes it.
-# Shared across all Lineup sub-tabs (Offense/Baserunning/Defense/Catcher).
-.gt_html <- function(tbl) {
-  html <- gt::as_raw_html(tbl)
-  html <- gsub("(\n[ \t]*){2,}", "\n", html)
-  gsub("<col([^>]*)>", "<col\\1 />", html)
-}
-
-# Combines Batter Intelligence (Overview / Discipline & Contact / Batted Ball),
-# Sustainability, and Clutch+Platoon into one Offense sub-tab, stacked as a
-# narrative sequence (approach -> contact -> quality -> deserved outcomes ->
-# clutch -> platoon) rather than further nested tabs.
-.render_offense_tab <- function(gpk, side) {
-  sub_hdr <- function(txt) sprintf(
-    '<div style="font-size:0.85rem;font-weight:700;color:#2c3e50;margin:1.1rem 0 0.4rem 0;text-transform:uppercase;letter-spacing:0.02em;">%s</div>',
-    txt
-  )
-
-  bi <- tryCatch(make_batter_intelligence_gt(gpk, side), error = function(e) list())
-  if (length(bi) > 0) {
-    cat(sub_hdr("Production &amp; Approach"), "\n\n")
-    cat(.gt_html(bi[["Overview"]]), "\n\n")
-    cat(sub_hdr("Plate Discipline, Contact &amp; Quality of Contact"), "\n\n")
-    cat(.gt_html(bi[["Discipline & Contact"]]), "\n\n")
-    cat(sub_hdr("Batted Ball Profile"), "\n\n")
-    cat(.gt_html(bi[["Batted Ball & Profile"]]), "\n\n")
-  } else {
-    cat('<p style="color:#888;font-style:italic;">Batter intelligence data not available.</p>\n\n')
-  }
-
-  sust <- tryCatch(make_sustainability_gt(gpk, side), error = function(e) NULL)
-  if (!is.null(sust)) {
-    cat(sub_hdr("Deserved Outcomes (Sustainability)"), "\n\n")
-    cat(.gt_html(sust), "\n\n")
-  }
-
-  cp <- tryCatch(make_offense_clutch_platoon_gt(gpk, side), error = function(e) list())
-  if (length(cp) > 0) {
-    cat(sub_hdr("Clutch / Leverage"), "\n\n")
-    cat(.gt_html(cp[["Clutch / Leverage"]]), "\n\n")
-    cat(sub_hdr("Handedness Split (Season-Long)"), "\n\n")
-    cat(.gt_html(cp[["Handedness Split"]]), "\n\n")
-  }
-}
-
-.render_baserunning_tab <- function(gpk, side) {
-  tbl <- tryCatch(make_baserunning_gt(gpk, side), error = function(e) NULL)
-  if (!is.null(tbl)) cat(.gt_html(tbl), "\n\n")
-  else cat('<p style="color:#888;font-style:italic;">Baserunning data not available.</p>\n\n')
-}
-
-.render_defense_tab <- function(gpk, side) {
-  tbl <- tryCatch(make_lineup_defense_gt(gpk, side), error = function(e) NULL)
-  if (!is.null(tbl)) cat(.gt_html(tbl), "\n\n")
-  else cat('<p style="color:#888;font-style:italic;">Defense data not available.</p>\n\n')
-}
-
-# Position-gated: only emits content (and thus only becomes a meaningful
-# tab) when this team's lineup has a catcher; make_catcher_defense_gt
-# returns NULL otherwise.
-.render_catcher_tab <- function(gpk, side) {
-  tbl <- tryCatch(make_catcher_defense_gt(gpk, side), error = function(e) NULL)
-  if (!is.null(tbl)) cat(.gt_html(tbl), "\n\n")
-  else cat('<p style="color:#888;font-style:italic;">No catcher in this lineup.</p>\n\n')
-}
-```
-
-::: {.panel-tabset}
-
-### Pitching
-
-*Coming soon — will absorb the Starting Pitchers and Pitch Arsenal sections below.*
-
-### Lineup
-
-::: {.panel-tabset}
-
-### `r away_team`
-
-::: {.panel-tabset}
-
-### Offense
-
-```{r offense-away}
-#| output: asis
-.render_offense_tab(gpk, "away")
-```
-
-### Baserunning
-
-```{r baserunning-away}
-#| output: asis
-.render_baserunning_tab(gpk, "away")
-```
-
-### Defense
-
-```{r defense-away}
-#| output: asis
-.render_defense_tab(gpk, "away")
-```
-
-### Catcher
-
-```{r catcher-away}
-#| output: asis
-.render_catcher_tab(gpk, "away")
-```
-
-:::
-
-### `r home_team`
-
-::: {.panel-tabset}
-
-### Offense
-
-```{r offense-home}
-#| output: asis
-.render_offense_tab(gpk, "home")
-```
-
-### Baserunning
-
-```{r baserunning-home}
-#| output: asis
-.render_baserunning_tab(gpk, "home")
-```
-
-### Defense
-
-```{r defense-home}
-#| output: asis
-.render_defense_tab(gpk, "home")
-```
-
-### Catcher
-
-```{r catcher-home}
-#| output: asis
-.render_catcher_tab(gpk, "home")
-```
-
-:::
-
-:::
-
-### Team Context
-
-*Coming soon — standings, park factors, weather (Master Build Spec §3, View 3).*
-
-### Matchups
-
-*Coming soon — starter's last 3 starts, batter vs. pitcher, baserunning matchup
-(Master Build Spec §3, View 4).*
-
-:::
 
 ---
 

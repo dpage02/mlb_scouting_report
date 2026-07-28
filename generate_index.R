@@ -64,7 +64,7 @@ parse_report_file <- function(f) {
   }
 
   m <- regmatches(f, regexec(
-    "^(scouting|deepdive|print|team|matchup|prediction|hitting|result)_(\\d{4}-\\d{2}-\\d{2})(?:_([A-Z0-9]+)(?:_([A-Z0-9]+))?)?\\.html$",
+    "^(scouting|deepdive|breakdown|print|team|matchup|prediction|hitting|result)_(\\d{4}-\\d{2}-\\d{2})(?:_([A-Z0-9]+)(?:_([A-Z0-9]+))?)?\\.html$",
     f
   ))[[1]]
 

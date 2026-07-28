@@ -1,0 +1,357 @@
+---
+title: "Full Breakdown"
+date: today
+page-layout: full
+params:
+  game_pk: null
+  game_date: null
+format:
+  html:
+    self-contained: true
+    embed-resources: true
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    toc-title: "Sections"
+    toc-location: left
+    smooth-scroll: true
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{=html}
+<style>
+/*
+ * gt tables emit their own inline overflow-y:auto on the wrapping
+ * .gt_table_container div. With height:auto that's normally a no-op, but
+ * nested inside this page's flex/tab layout it can create an unwanted
+ * nested vertical scroll region instead of letting the page scroll
+ * normally. Same fix already applied to mlb_print.qmd for the same
+ * underlying gt behavior.
+ */
+.gt_table_container {
+  overflow-y: visible !important;
+}
+
+/*
+ * Lineup stat panels: tabs on mobile, all panels side-by-side on desktop.
+ * Breakpoint 1100px — roughly when a laptop has enough horizontal room.
+ */
+@media (min-width: 1100px) {
+  .lineup-desktop-all .nav-tabs {
+    display: none !important;
+  }
+  .lineup-desktop-all .tab-content {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+  }
+  .lineup-desktop-all .tab-pane {
+    display: block   !important;
+    opacity: 1       !important;
+    visibility: visible !important;
+    padding-top: 0   !important;
+    flex: 1 1 0;
+    min-width: 0;
+    overflow-x: auto;  /* each panel scrolls independently if needed */
+  }
+}
+</style>
+```
+
+```{r setup}
+#| output: false
+if (basename(getwd()) == "09_reporting") setwd("..")
+
+library(gt)
+library(dplyr)
+library(stringr)
+
+# Load from pipeline cache written by render_report.R (fast path).
+# Falls back to running the full pipeline if cache is missing or stale.
+cache_path <- "data/pipeline_cache.rds"
+cache_ok   <- file.exists(cache_path) &&
+              difftime(Sys.time(), file.mtime(cache_path), units = "hours") < 12
+
+if (cache_ok) {
+  cache <- readRDS(cache_path)
+  list2env(cache, envir = .GlobalEnv)
+  rm(cache)
+} else {
+  invisible(capture.output(source("run_pipeline_phase01.R")))
+}
+
+source("09_reporting/_report_helpers.R")
+source("09_reporting/_deepdive_helpers.R")
+source("09_reporting/_game_narrative_helpers.R")
+
+# Scope to this game
+gpk  <- as.integer(params$game_pk)
+game <- game_context %>% dplyr::filter(game_pk == gpk)
+
+away_team <- game$away_team_name
+home_team <- game$home_team_name
+matchup   <- sprintf("%s @ %s", away_team, home_team)
+```
+
+```{r header}
+#| output: asis
+cat(sprintf("# %s — Full Breakdown\n\n", matchup))
+
+stats_season <- if (exists("offense_master_season") && nrow(offense_master_season) > 0)
+  unique(offense_master_season$season)[1] else "—"
+
+cat(paste0(
+  "> **", format(as.Date(params$game_date), "%A, %B %d, %Y"), "**",
+  " · ", game$venue_name,
+  " · ", stats_season, " season stats\n\n"
+))
+```
+
+```{r nav-bar}
+#| output: asis
+scouting_file <- paste0("scouting_", params$game_date, ".html")
+deepdive_file <- paste0("deepdive_", params$game_date, "_",
+                        {
+                          a <- tryCatch(team_ids %>% dplyr::filter(mlbam_team_id == game$away_team_id) %>%
+                                          dplyr::pull(team_abbr) %>% dplyr::first(), error = function(e) "AWAY")
+                          if (length(a) == 0 || is.na(a)) "AWAY" else a
+                        }, "_",
+                        {
+                          h <- tryCatch(team_ids %>% dplyr::filter(mlbam_team_id == game$home_team_id) %>%
+                                          dplyr::pull(team_abbr) %>% dplyr::first(), error = function(e) "HOME")
+                          if (length(h) == 0 || is.na(h)) "HOME" else h
+                        }, ".html")
+
+away_abbr_str <- tryCatch({
+  team_ids %>% dplyr::filter(mlbam_team_id == game$away_team_id) %>%
+    dplyr::pull(team_abbr) %>% dplyr::first()
+}, error = function(e) "AWAY")
+
+home_abbr_str <- tryCatch({
+  team_ids %>% dplyr::filter(mlbam_team_id == game$home_team_id) %>%
+    dplyr::pull(team_abbr) %>% dplyr::first()
+}, error = function(e) "HOME")
+
+away_abbr_str <- if (length(away_abbr_str) == 0 || is.na(away_abbr_str)) "AWAY" else away_abbr_str
+home_abbr_str <- if (length(home_abbr_str) == 0 || is.na(home_abbr_str)) "HOME" else home_abbr_str
+
+away_team_file <- paste0("team_", params$game_date, "_", away_abbr_str, ".html")
+home_team_file <- paste0("team_", params$game_date, "_", home_abbr_str, ".html")
+
+matchup_file    <- paste0("matchup_",    params$game_date, "_", away_abbr_str, "_", home_abbr_str, ".html")
+prediction_file <- paste0("prediction_", params$game_date, "_", away_abbr_str, "_", home_abbr_str, ".html")
+hitting_file    <- paste0("hitting_",    params$game_date, "_", away_abbr_str, "_", home_abbr_str, ".html")
+print_file      <- paste0("print_",      params$game_date, "_", away_abbr_str, "_", home_abbr_str, ".html")
+
+nav_html <- paste0(
+  '<div style="margin-bottom:1.5rem; padding:10px 14px; background:#f8f9fa; ',
+  'border-radius:6px; border:1px solid #dee2e6; font-size:13px;">',
+  '<a href="https://dpage02.github.io/mlb_scouting_report/" style="color:#1a73e8; text-decoration:none;">',
+  '\U0001f3e0 Home</a>',
+  '&nbsp;&nbsp;|&nbsp;&nbsp;',
+  '<a href="', scouting_file, '" style="color:#1a73e8; text-decoration:none;">',
+  '← Today\'s Games</a>',
+  '&nbsp;&nbsp;|&nbsp;&nbsp;',
+  '<a href="', deepdive_file, '" style="color:#1a73e8; text-decoration:none; font-weight:600;">',
+  '← Game Overview</a>',
+  '&nbsp;&nbsp;|&nbsp;&nbsp;',
+  '<a href="', prediction_file, '" style="color:#1a73e8; text-decoration:none; font-weight:600;">',
+  '⚡ Prediction</a>',
+  '&nbsp;&nbsp;|&nbsp;&nbsp;',
+  '<a href="', matchup_file, '" style="color:#1a73e8; text-decoration:none; font-weight:600;">',
+  '⚾ Pitcher Matchup</a>',
+  '&nbsp;&nbsp;|&nbsp;&nbsp;',
+  '<a href="', hitting_file, '" style="color:#1a73e8; text-decoration:none; font-weight:600;">',
+  '⚾ Hitting</a>',
+  '&nbsp;&nbsp;|&nbsp;&nbsp;',
+  '<a href="', away_team_file, '" style="color:#1a73e8; text-decoration:none; font-weight:600;">',
+  away_team, ' Team Deep Dive ↗</a>',
+  '&nbsp;&nbsp;|&nbsp;&nbsp;',
+  '<a href="', home_team_file, '" style="color:#1a73e8; text-decoration:none; font-weight:600;">',
+  home_team, ' Team Deep Dive ↗</a>',
+  '&nbsp;&nbsp;|&nbsp;&nbsp;',
+  '<a href="', print_file, '" style="color:#1a73e8; text-decoration:none; font-weight:600;">',
+  '\U0001f5a8 Print</a>',
+  '</div>'
+)
+cat(nav_html, "\n\n")
+```
+
+*4-pillar tabset (Master Build Spec §3). This slice fully builds out
+the **Lineup → Offense** sub-tab for both teams; Pitching, Team Context, Matchups,
+and the Baserunning/Defense/Catcher sub-tabs are placeholders pending the next
+slices.*
+
+```{r offense-tab-helper, include=FALSE}
+# Two independent pandoc/CommonMark quirks corrupt fenced-div (panel-tabset)
+# parsing when a gt table is emitted inside one, unless both are fixed:
+# 1. gt::as_raw_html() sometimes emits TWO consecutive whitespace-only lines
+#    (e.g. around an empty tfoot). A blank line inside a raw HTML block ends
+#    it early under CommonMark's rules; {2,} collapses runs of any length,
+#    not just one (a single-pass regex only catching one blank line at a
+#    time misses runs of 2+, since gsub doesn't backtrack/overlap matches).
+# 2. gt emits bare `<col style="...">` tags (HTML void elements) for column
+#    widths. Pandoc's block-tag matcher doesn't recognize <col> as
+#    self-closing and treats it as an unterminated open tag, silently
+#    swallowing everything through EOF into one Div (including this
+#    tabset's own closing ':::', which then leaks into the page as literal
+#    text). Self-closing the tag (`<col ... />`) fixes it.
+# Shared across all Lineup sub-tabs (Offense/Baserunning/Defense/Catcher).
+.gt_html <- function(tbl) {
+  html <- gt::as_raw_html(tbl)
+  html <- gsub("(\n[ \t]*){2,}", "\n", html)
+  gsub("<col([^>]*)>", "<col\\1 />", html)
+}
+
+# Combines Batter Intelligence (Overview / Discipline & Contact / Batted Ball),
+# Sustainability, and Clutch+Platoon into one Offense sub-tab, stacked as a
+# narrative sequence (approach -> contact -> quality -> deserved outcomes ->
+# clutch -> platoon) rather than further nested tabs.
+.render_offense_tab <- function(gpk, side) {
+  sub_hdr <- function(txt) sprintf(
+    '<div style="font-size:0.85rem;font-weight:700;color:#2c3e50;margin:1.1rem 0 0.4rem 0;text-transform:uppercase;letter-spacing:0.02em;">%s</div>',
+    txt
+  )
+
+  bi <- tryCatch(make_batter_intelligence_gt(gpk, side), error = function(e) list())
+  if (length(bi) > 0) {
+    cat(sub_hdr("Production &amp; Approach"), "\n\n")
+    cat(.gt_html(bi[["Overview"]]), "\n\n")
+    cat(sub_hdr("Plate Discipline, Contact &amp; Quality of Contact"), "\n\n")
+    cat(.gt_html(bi[["Discipline & Contact"]]), "\n\n")
+    cat(sub_hdr("Batted Ball Profile"), "\n\n")
+    cat(.gt_html(bi[["Batted Ball & Profile"]]), "\n\n")
+  } else {
+    cat('<p style="color:#888;font-style:italic;">Batter intelligence data not available.</p>\n\n')
+  }
+
+  sust <- tryCatch(make_sustainability_gt(gpk, side), error = function(e) NULL)
+  if (!is.null(sust)) {
+    cat(sub_hdr("Deserved Outcomes (Sustainability)"), "\n\n")
+    cat(.gt_html(sust), "\n\n")
+  }
+
+  cp <- tryCatch(make_offense_clutch_platoon_gt(gpk, side), error = function(e) list())
+  if (length(cp) > 0) {
+    cat(sub_hdr("Clutch / Leverage"), "\n\n")
+    cat(.gt_html(cp[["Clutch / Leverage"]]), "\n\n")
+    cat(sub_hdr("Handedness Split (Season-Long)"), "\n\n")
+    cat(.gt_html(cp[["Handedness Split"]]), "\n\n")
+  }
+}
+
+.render_baserunning_tab <- function(gpk, side) {
+  tbl <- tryCatch(make_baserunning_gt(gpk, side), error = function(e) NULL)
+  if (!is.null(tbl)) cat(.gt_html(tbl), "\n\n")
+  else cat('<p style="color:#888;font-style:italic;">Baserunning data not available.</p>\n\n')
+}
+
+.render_defense_tab <- function(gpk, side) {
+  tbl <- tryCatch(make_lineup_defense_gt(gpk, side), error = function(e) NULL)
+  if (!is.null(tbl)) cat(.gt_html(tbl), "\n\n")
+  else cat('<p style="color:#888;font-style:italic;">Defense data not available.</p>\n\n')
+}
+
+# Position-gated: only emits content (and thus only becomes a meaningful
+# tab) when this team's lineup has a catcher; make_catcher_defense_gt
+# returns NULL otherwise.
+.render_catcher_tab <- function(gpk, side) {
+  tbl <- tryCatch(make_catcher_defense_gt(gpk, side), error = function(e) NULL)
+  if (!is.null(tbl)) cat(.gt_html(tbl), "\n\n")
+  else cat('<p style="color:#888;font-style:italic;">No catcher in this lineup.</p>\n\n')
+}
+```
+
+::: {.panel-tabset}
+
+### Pitching
+
+*Coming soon — will absorb the Starting Pitchers and Pitch Arsenal sections below.*
+
+### Lineup
+
+::: {.panel-tabset}
+
+### `r away_team`
+
+::: {.panel-tabset}
+
+### Offense
+
+```{r offense-away}
+#| output: asis
+.render_offense_tab(gpk, "away")
+```
+
+### Baserunning
+
+```{r baserunning-away}
+#| output: asis
+.render_baserunning_tab(gpk, "away")
+```
+
+### Defense
+
+```{r defense-away}
+#| output: asis
+.render_defense_tab(gpk, "away")
+```
+
+### Catcher
+
+```{r catcher-away}
+#| output: asis
+.render_catcher_tab(gpk, "away")
+```
+
+:::
+
+### `r home_team`
+
+::: {.panel-tabset}
+
+### Offense
+
+```{r offense-home}
+#| output: asis
+.render_offense_tab(gpk, "home")
+```
+
+### Baserunning
+
+```{r baserunning-home}
+#| output: asis
+.render_baserunning_tab(gpk, "home")
+```
+
+### Defense
+
+```{r defense-home}
+#| output: asis
+.render_defense_tab(gpk, "home")
+```
+
+### Catcher
+
+```{r catcher-home}
+#| output: asis
+.render_catcher_tab(gpk, "home")
+```
+
+:::
+
+:::
+
+### Team Context
+
+*Coming soon — standings, park factors, weather (Master Build Spec §3, View 3).*
+
+### Matchups
+
+*Coming soon — starter's last 3 starts, batter vs. pitcher, baserunning matchup
+(Master Build Spec §3, View 4).*
+
+:::
