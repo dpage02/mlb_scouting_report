@@ -86,6 +86,7 @@ if (cache_ok) {
 source("09_reporting/_report_helpers.R")
 source("09_reporting/_deepdive_helpers.R")
 source("09_reporting/_game_narrative_helpers.R")
+source("09_reporting/_series_helpers.R")
 
 # Scope to this game
 gpk  <- as.integer(params$game_pk)
@@ -343,11 +344,44 @@ slices.*
 
 ### Pitching
 
-*Coming soon — will absorb the Starting Pitchers and Pitch Arsenal sections below.*
+```{r pitching-tab}
+#| output: asis
+sp_tbl <- tryCatch(make_starter_gt(gpk), error = function(e) NULL)
+if (!is.null(sp_tbl)) cat(.gt_html(sp_tbl), "\n\n")
+
+sp_splits <- tryCatch(make_starter_splits_gt(gpk), error = function(e) NULL)
+if (!is.null(sp_splits)) cat(.gt_html(sp_splits), "\n\n")
+
+sp_full <- tryCatch(make_pitcher_full_gt(gpk), error = function(e) list())
+for (nm in names(sp_full)) {
+  cat(sprintf('<div style="font-size:0.85rem;font-weight:700;color:#2c3e50;margin:1.1rem 0 0.4rem 0;text-transform:uppercase;letter-spacing:0.02em;">%s</div>', nm), "\n\n")
+  cat(.gt_html(sp_full[[nm]]), "\n\n")
+}
+
+cat('<div style="font-size:0.85rem;font-weight:700;color:#2c3e50;margin:1.1rem 0 0.4rem 0;text-transform:uppercase;letter-spacing:0.02em;">Pitch Arsenal</div>', "\n\n")
+arsenal_tbl <- tryCatch(make_arsenal_gt(gpk), error = function(e) NULL)
+if (!is.null(arsenal_tbl)) {
+  cat(.gt_html(arsenal_tbl), "\n\n")
+} else {
+  cat('<p style="color:#888;font-style:italic;">Pitch arsenal data not available for this game.</p>\n\n')
+}
+```
 
 ### Team Context
 
-*Coming soon — standings, park factors, weather (Master Build Spec §3, View 3).*
+```{r team-context-tab}
+#| output: asis
+standings_html <- tryCatch(
+  make_series_standings_html(game$away_team_id, game$home_team_id),
+  error = function(e) ""
+)
+if (nchar(standings_html) > 0) cat(standings_html, "\n\n")
+
+cat('<div style="font-size:0.85rem;font-weight:700;color:#2c3e50;margin:1.1rem 0 0.4rem 0;text-transform:uppercase;letter-spacing:0.02em;">Ballpark &amp; Conditions</div>', "\n\n")
+bc_html <- tryCatch(make_ballpark_conditions_html(gpk), error = function(e) "")
+if (nchar(bc_html) > 0) cat(bc_html, "\n\n") else
+  cat('<p style="color:#888;font-style:italic;">Ballpark data unavailable.</p>\n\n')
+```
 
 ### Matchups
 

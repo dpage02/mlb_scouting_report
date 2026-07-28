@@ -284,16 +284,6 @@ if (exists("make_season_context_gt")) {
 
 ---
 
-## Lineup — vs Expected Stats
-
-*[Placeholder — coming soon]*
-
-<div style="padding:20px; background:#fff3cd; border:1px solid #ffc107; border-radius:6px; color:#856404; font-size:14px; margin:1rem 0;">
-  <strong>&#9888; Coming Soon</strong> — Expected vs actual stat comparison (xBA vs AVG, xwOBA vs wOBA, Barrel%) will appear here once historical Statcast data is integrated.
-</div>
-
----
-
 ## Career History
 
 *Last 5 seasons + current season, totals aggregated across teams.*
