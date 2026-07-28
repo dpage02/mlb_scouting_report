@@ -59,9 +59,14 @@ source("run_pipeline_daily.R")
 # ------------------------------------------------------------
 
 source("09_reporting/render_report.R")
+# render_game_results.R must run before render_recap.R: the daily recap
+# links to each game's result_*.html page, and it checks file.exists()
+# to skip the link gracefully when one isn't available rather than
+# pointing at a 404 — that check only works if the result pages are
+# already written to reports/ by the time the recap renders.
+source("09_reporting/render_game_results.R")
 source("09_reporting/render_recap.R")
 source("09_reporting/render_accuracy.R")
-source("09_reporting/render_game_results.R")
 source("09_reporting/render_deep_dives.R")
 source("09_reporting/render_series.R")
 source("push_to_web.R")

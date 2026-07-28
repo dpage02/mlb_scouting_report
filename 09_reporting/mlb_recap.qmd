@@ -185,5 +185,11 @@ cat(sprintf("# Yesterday's Results — %s\n\n", recap_label))
 
 ```{r recap-body}
 #| output: asis
+# knitr resets the working directory to the document's own folder before
+# each chunk in a non-project render (the setup chunk's setwd("..") above
+# doesn't persist here) — re-assert it since make_recap_html() now does
+# relative-path file I/O (team_ids.csv lookup, result_*.html existence
+# check) that setup's own source()/data-loading never needed before.
+if (basename(getwd()) == "09_reporting") setwd("..")
 cat(make_recap_html(recap_date), "\n\n")
 ```

@@ -526,7 +526,7 @@ make_game_narrative_html <- function(game, bs, sc) {
 # Build HTML card for one game
 # ------------------------------------------------------------
 
-make_game_recap_card <- function(game) {
+make_game_recap_card <- function(game, recap_date = NULL, team_ids_lookup = NULL) {
   tryCatch({
     status <- game$status$detailedState
     is_final <- grepl("Final|Completed", status, ignore.case = TRUE)
@@ -541,6 +541,31 @@ make_game_recap_card <- function(game) {
     abbr <- function(nm) {
       parts <- strsplit(nm, " ")[[1]]
       tail(parts, 1)
+    }
+
+    # result_*.html filenames use the same short team_abbr (e.g. "ATL", not
+    # "Braves") as every other report type — look it up by MLB team id
+    # rather than reusing the display-only abbr() above.
+    result_link_html <- ""
+    if (is_final && !is.null(recap_date) && !is.null(team_ids_lookup) && nrow(team_ids_lookup) > 0) {
+      away_id <- tryCatch(game$teams$away$team$id, error = function(e) NULL)
+      home_id <- tryCatch(game$teams$home$team$id, error = function(e) NULL)
+      file_away_abbr <- team_ids_lookup$team_abbr[team_ids_lookup$mlbam_team_id == away_id][1]
+      file_home_abbr <- team_ids_lookup$team_abbr[team_ids_lookup$mlbam_team_id == home_id][1]
+      if (!is.null(away_id) && !is.null(home_id) &&
+          !is.na(file_away_abbr) && !is.na(file_home_abbr)) {
+        result_file <- paste0("result_", format(recap_date, "%Y-%m-%d"), "_",
+                              file_away_abbr, "_", file_home_abbr, ".html")
+        # Only link if render_game_results.R actually produced this page —
+        # backfilling an actual score can fail for an individual game (API
+        # hiccup, unusual game_pk), so don't point at a 404.
+        if (file.exists(file.path("reports", result_file))) {
+          result_link_html <- sprintf(
+            '<a href="%s" style="display:inline-block;background:#1a73e8;color:white;font-size:0.75rem;font-weight:600;padding:2px 9px;border-radius:4px;text-decoration:none;margin-left:8px;vertical-align:middle;">Full Breakdown →</a>',
+            result_file
+          )
+        }
+      }
     }
 
     # Fetch boxscore (SP lines + top performers) and Statcast pitch data
@@ -736,13 +761,14 @@ make_game_recap_card <- function(game) {
     is_walkoff <- isTRUE(home_win) && isTRUE(n_innings >= 9)
 
     score_html <- sprintf(
-      '<div class="rc-matchup">%s <span class="rc-score %s">%s</span> @ <span class="rc-score %s">%s</span> %s</div>',
+      '<div class="rc-matchup">%s <span class="rc-score %s">%s</span> @ <span class="rc-score %s">%s</span> %s%s</div>',
       away_name,
       if (isTRUE(away_win)) "rc-winner" else "",
       if (is_final) as.character(dplyr::coalesce(away_score, 0)) else "\u2013",
       if (isTRUE(home_win)) "rc-winner" else "",
       if (is_final) as.character(dplyr::coalesce(home_score, 0)) else "\u2013",
-      home_name
+      home_name,
+      result_link_html
     )
 
     badges <- c()
@@ -785,6 +811,16 @@ make_recap_html <- function(recap_date = Sys.Date() - 1) {
     ))
   }
 
-  cards <- vapply(games, make_game_recap_card, character(1))
+  # This qmd renders standalone (no pipeline_cache.rds load), so team_ids
+  # isn't in the environment the way it is for other reports — read the
+  # same small standalone CSV render_game_results.R already uses for the
+  # identical lookup.
+  team_ids_lookup <- tryCatch(
+    readr::read_csv("data/ids/team_ids.csv", show_col_types = FALSE),
+    error = function(e) dplyr::tibble(mlbam_team_id = integer(), team_abbr = character())
+  )
+
+  cards <- vapply(games, function(g) make_game_recap_card(g, recap_date, team_ids_lookup),
+                  character(1))
   paste0('<div class="recap-grid">', paste(cards, collapse = "\n"), '</div>')
 }
