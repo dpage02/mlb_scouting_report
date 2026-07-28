@@ -267,10 +267,6 @@ slices.*
 
 ::: {.panel-tabset}
 
-### Pitching
-
-*Coming soon — will absorb the Starting Pitchers and Pitch Arsenal sections below.*
-
 ### Lineup
 
 ::: {.panel-tabset}
@@ -344,6 +340,10 @@ slices.*
 :::
 
 :::
+
+### Pitching
+
+*Coming soon — will absorb the Starting Pitchers and Pitch Arsenal sections below.*
 
 ### Team Context
 

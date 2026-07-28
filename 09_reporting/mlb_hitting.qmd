@@ -82,6 +82,7 @@ away_abbr_str <- if (length(away_abbr_str) == 0 || is.na(away_abbr_str)) "AWAY" 
 home_abbr_str <- if (length(home_abbr_str) == 0 || is.na(home_abbr_str)) "HOME" else home_abbr_str
 
 deepdive_file   <- paste0("deepdive_",   params$game_date, "_", away_abbr_str, "_", home_abbr_str, ".html")
+breakdown_file  <- paste0("breakdown_",  params$game_date, "_", away_abbr_str, "_", home_abbr_str, ".html")
 matchup_file    <- paste0("matchup_",    params$game_date, "_", away_abbr_str, "_", home_abbr_str, ".html")
 prediction_file <- paste0("prediction_", params$game_date, "_", away_abbr_str, "_", home_abbr_str, ".html")
 
@@ -93,6 +94,9 @@ cat(paste0(
   '&nbsp;&nbsp;|&nbsp;&nbsp;',
   '<a href="', deepdive_file, '" style="color:#1a73e8; text-decoration:none; font-weight:600;">',
   'Deep Dive</a>',
+  '&nbsp;&nbsp;|&nbsp;&nbsp;',
+  '<a href="', breakdown_file, '" style="color:#1a73e8; text-decoration:none; font-weight:600;">',
+  '\U0001f4ca Full Breakdown</a>',
   '&nbsp;&nbsp;|&nbsp;&nbsp;',
   '<a href="', matchup_file, '" style="color:#1a73e8; text-decoration:none; font-weight:600;">',
   '\u26be Pitcher Matchup</a>',
@@ -116,67 +120,6 @@ overview_html <- tryCatch(make_lineup_overview_html(gpk), error = function(e) {
          conditionMessage(e), '</p>')
 })
 cat(overview_html, "\n\n")
-```
-
----
-
-## Batter Intelligence
-
-*Production, plate discipline, contact quality, and batted ball profile.*
-
-```{r batter-intel-helper, include=FALSE}
-# Helper: render Bootstrap pill tabs for batter intelligence tables
-.render_intelligence_tabs <- function(gpk, side, uid) {
-  tabs <- tryCatch(make_batter_intelligence_gt(gpk, side), error = function(e) list())
-  if (length(tabs) == 0) {
-    cat('<p style="color:#888; font-style:italic;">Batter intelligence data not available.</p>')
-    return(invisible(NULL))
-  }
-  tab_names <- names(tabs)
-  tab_ids   <- paste0("tab-", uid, "-", seq_along(tab_names))
-
-  # Nav pills
-  nav <- paste0(
-    '<ul class="nav nav-pills" style="margin-bottom:1rem; gap:6px;" role="tablist">',
-    paste(vapply(seq_along(tab_names), function(i) {
-      active <- if (i == 1) ' class="nav-link active"' else ' class="nav-link"'
-      paste0('<li class="nav-item"><a', active,
-             ' id="', tab_ids[i], '-tab"',
-             ' data-bs-toggle="pill" href="#', tab_ids[i], '" role="tab">',
-             tab_names[i], '</a></li>')
-    }, character(1)), collapse = ""),
-    '</ul>'
-  )
-
-  # Tab content
-  content <- paste0(
-    '<div class="tab-content">',
-    paste(vapply(seq_along(tab_names), function(i) {
-      active_cls <- if (i == 1) "show active" else ""
-      paste0('<div class="tab-pane fade ', active_cls,
-             '" id="', tab_ids[i], '" role="tabpanel">',
-             gt::as_raw_html(tabs[[i]]),
-             '</div>')
-    }, character(1)), collapse = ""),
-    '</div>'
-  )
-
-  cat(nav, content, sep = "\n")
-}
-```
-
-### `r away_team`
-
-```{r batter-intel-away}
-#| output: asis
-.render_intelligence_tabs(gpk, "away", "away")
-```
-
-### `r home_team`
-
-```{r batter-intel-home}
-#| output: asis
-.render_intelligence_tabs(gpk, "home", "home")
 ```
 
 ---
@@ -217,60 +160,20 @@ cat(gt::as_raw_html(vuln_home), "\n\n")
 
 ---
 
-## Sustainability
+## Full Batter Breakdown
 
-*Expected stats (Statcast xBA, xwOBA) vs actual performance — identifies over/underperformers.*
+*Batter Intelligence (production, plate discipline, contact quality, batted*
+*ball profile), Sustainability (expected vs. actual outcomes), and Baserunning*
+*for both lineups now live on the Full Breakdown page — one shared copy*
+*instead of duplicating the same tables here.*
 
-### `r away_team`
-
-```{r sustainability-away}
+```{r full-breakdown-link}
 #| output: asis
-sust_away <- tryCatch(make_sustainability_gt(gpk, "away"), error = function(e) NULL)
-if (!is.null(sust_away)) {
-  cat(gt::as_raw_html(sust_away))
-} else {
-  cat(paste0('*Sustainability data not available for ', away_team, '.*\n\n'))
-}
-```
-
-### `r home_team`
-
-```{r sustainability-home}
-#| output: asis
-sust_home <- tryCatch(make_sustainability_gt(gpk, "home"), error = function(e) NULL)
-if (!is.null(sust_home)) {
-  cat(gt::as_raw_html(sust_home))
-} else {
-  cat(paste0('*Sustainability data not available for ', home_team, '.*\n\n'))
-}
-```
-
----
-
-## Baserunning
-
-*Speed, stolen base efficiency, and extra-base advancement value.*
-
-### `r away_team`
-
-```{r baserunning-away}
-#| output: asis
-br_away <- tryCatch(make_baserunning_gt(gpk, "away"), error = function(e) NULL)
-if (!is.null(br_away)) {
-  cat(gt::as_raw_html(br_away))
-} else {
-  cat(paste0('*Baserunning data not available for ', away_team, '.*\n\n'))
-}
-```
-
-### `r home_team`
-
-```{r baserunning-home}
-#| output: asis
-br_home <- tryCatch(make_baserunning_gt(gpk, "home"), error = function(e) NULL)
-if (!is.null(br_home)) {
-  cat(gt::as_raw_html(br_home))
-} else {
-  cat(paste0('*Baserunning data not available for ', home_team, '.*\n\n'))
-}
+cat(sprintf(
+  '<a href="%s" style="display:inline-block;background:#1a73e8;color:white;font-weight:600;padding:8px 16px;border-radius:6px;text-decoration:none;">📊 Open Full Breakdown →</a>',
+  breakdown_file
+), "\n\n")
+cat('<p style="color:#888;font-size:0.85rem;margin-top:8px;">Opens on the Lineup tab, ',
+    away_team, ' Offense sub-tab shown first — switch tabs there for ',
+    home_team, ', Baserunning, Defense, or Catcher.</p>\n\n', sep = "")
 ```
