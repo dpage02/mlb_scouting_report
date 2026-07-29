@@ -6,6 +6,7 @@ params:
   game_date: null
   away_abbr: null
   home_abbr: null
+  file_suffix: ""
 format:
   html:
     self-contained: true
@@ -369,9 +370,10 @@ cat(paste0(
 
 ```{r nav-links}
 #| output: asis
-dd_file     <- paste0("deepdive_",   game_date, "_", away_abbr, "_", home_abbr, ".html")
-matchup_file <- paste0("matchup_",   game_date, "_", away_abbr, "_", home_abbr, ".html")
-pred_file   <- paste0("prediction_", game_date, "_", away_abbr, "_", home_abbr, ".html")
+file_suffix_str <- dplyr::coalesce(params$file_suffix, "")
+dd_file     <- paste0("deepdive_",   game_date, "_", away_abbr, "_", home_abbr, file_suffix_str, ".html")
+matchup_file <- paste0("matchup_",   game_date, "_", away_abbr, "_", home_abbr, file_suffix_str, ".html")
+pred_file   <- paste0("prediction_", game_date, "_", away_abbr, "_", home_abbr, file_suffix_str, ".html")
 
 cat(paste0(
   '<div style="margin-top:2rem;padding:14px 18px;background:#f0f4ff;',

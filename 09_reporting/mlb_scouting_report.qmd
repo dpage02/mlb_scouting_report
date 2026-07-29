@@ -119,12 +119,13 @@ summary_rows <- game_context %>%
   dplyr::mutate(
     away_abbr     = dplyr::coalesce(away_abbr, as.character(away_team_id)),
     home_abbr     = dplyr::coalesce(home_abbr, as.character(home_team_id)),
+    file_suffix   = dplyr::coalesce(file_suffix, ""),
     deepdive_file = paste0("deepdive_", summary_date_str, "_",
-                           away_abbr, "_", home_abbr, ".html"),
+                           away_abbr, "_", home_abbr, file_suffix, ".html"),
     hitting_file  = paste0("hitting_",  summary_date_str, "_",
-                           away_abbr, "_", home_abbr, ".html"),
-    away_team_file = paste0("team_", summary_date_str, "_", away_abbr, ".html"),
-    home_team_file = paste0("team_", summary_date_str, "_", home_abbr, ".html"),
+                           away_abbr, "_", home_abbr, file_suffix, ".html"),
+    away_team_file = paste0("team_", summary_date_str, "_", away_abbr, file_suffix, ".html"),
+    home_team_file = paste0("team_", summary_date_str, "_", home_abbr, file_suffix, ".html"),
     away_sp       = dplyr::coalesce(away_pitcher_name, "TBD"),
     home_sp       = dplyr::coalesce(home_pitcher_name, "TBD"),
     time_flag     = dplyr::case_when(
@@ -136,6 +137,13 @@ summary_rows <- game_context %>%
       isTRUE(is_division_game) ~ " &middot; <em>Div</em>",
       isTRUE(is_interleague)   ~ " &middot; <em>IL</em>",
       TRUE                     ~ ""
+    ),
+    # Doubleheader label so two rows for the same matchup are
+    # distinguishable at a glance, not just by probable-pitcher name.
+    dh_label      = dplyr::if_else(
+      file_suffix != "",
+      paste0(" &middot; <strong>Game ", gsub("[^0-9]", "", file_suffix), "</strong>"),
+      ""
     )
   )
 
@@ -148,7 +156,7 @@ rows_html <- paste0(
       '<td style="white-space:nowrap; font-weight:600; padding:5px 10px;">',
         '<a href="', r$deepdive_file, '" style="color:#1a3c6e; text-decoration:none;">',
         r$away_team_name, ' <span style="color:#888;">@</span> ', r$home_team_name,
-        '</a>', r$game_flag,
+        '</a>', r$game_flag, r$dh_label,
       '</td>',
       '<td style="white-space:nowrap; color:#555; font-size:13px; padding:5px 10px;">',
         r$away_sp, ' <span style="color:#bbb;">vs</span> ', r$home_sp,
@@ -247,8 +255,9 @@ game_links <- game_context %>%
   dplyr::mutate(
     away_abbr   = dplyr::coalesce(away_abbr, as.character(away_team_id)),
     home_abbr   = dplyr::coalesce(home_abbr, as.character(home_team_id)),
+    file_suffix = dplyr::coalesce(file_suffix, ""),
     deepdive_file = paste0("deepdive_", report_date_str, "_",
-                           away_abbr, "_", home_abbr, ".html")
+                           away_abbr, "_", home_abbr, file_suffix, ".html")
   )
 
 # knit_child() ensures each ## heading is processed as a top-level

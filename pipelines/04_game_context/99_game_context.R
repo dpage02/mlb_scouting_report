@@ -62,6 +62,24 @@ game_context <- game_context %>%
 game_context <- game_context[, !duplicated(names(game_context))]
 
 # ------------------------------------------------------------
+# Doubleheader file-name disambiguator
+#   Every downstream report filename is built as
+#   "<type>_<date>_<AWAY>_<HOME>.html" with no game_pk in it, so two
+#   games between the same two teams on the same date (a doubleheader)
+#   silently overwrite each other's report files. Compute a single
+#   suffix here — "" for a normal single game, "_G1"/"_G2" when a
+#   date+matchup has more than one game_pk — and have every render
+#   script and qmd's cross-page nav links append it before ".html".
+# ------------------------------------------------------------
+
+game_context <- game_context %>%
+  dplyr::group_by(game_date, home_team_id, away_team_id) %>%
+  dplyr::mutate(
+    file_suffix = if (dplyr::n() > 1) paste0("_G", game_number) else ""
+  ) %>%
+  dplyr::ungroup()
+
+# ------------------------------------------------------------
 # Integrity Check
 # ------------------------------------------------------------
 

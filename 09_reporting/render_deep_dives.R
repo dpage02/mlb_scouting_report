@@ -78,8 +78,9 @@ game_files <- game_context %>%
   dplyr::mutate(
     away_abbr    = dplyr::coalesce(away_abbr, as.character(away_team_id)),
     home_abbr    = dplyr::coalesce(home_abbr, as.character(home_team_id)),
+    file_suffix  = dplyr::coalesce(file_suffix, ""),
     output_file  = paste0("deepdive_", report_date, "_",
-                          away_abbr, "_", home_abbr, ".html"),
+                          away_abbr, "_", home_abbr, file_suffix, ".html"),
     final_path   = file.path("reports", output_file)
   )
 
@@ -134,7 +135,7 @@ for (i in seq_len(nrow(game_files))) {
   gpk      <- row$game_pk
   matchup  <- sprintf("%s @ %s", row$away_team_name, row$home_team_name)
   out_file <- paste0("breakdown_", report_date, "_",
-                     row$away_abbr, "_", row$home_abbr, ".html")
+                     row$away_abbr, "_", row$home_abbr, row$file_suffix, ".html")
   final_path <- file.path("reports", out_file)
 
   message(sprintf("  [%d/%d] %s...", i, nrow(game_files), matchup))
@@ -173,7 +174,7 @@ for (i in seq_len(nrow(game_files))) {
   for (side in c("away", "home")) {
     abbr      <- if (side == "away") row$away_abbr else row$home_abbr
     team_name <- if (side == "away") row$away_team_name else row$home_team_name
-    out_file  <- paste0("team_", report_date, "_", abbr, ".html")
+    out_file  <- paste0("team_", report_date, "_", abbr, row$file_suffix, ".html")
     final_path <- file.path("reports", out_file)
 
     message(sprintf("  %s — %s...", abbr, team_name))
@@ -209,7 +210,7 @@ for (i in seq_len(nrow(game_files))) {
   row      <- game_files[i, ]
   gpk      <- row$game_pk
   matchup  <- sprintf("%s @ %s", row$away_team_name, row$home_team_name)
-  out_file <- paste0("matchup_", report_date, "_", row$away_abbr, "_", row$home_abbr, ".html")
+  out_file <- paste0("matchup_", report_date, "_", row$away_abbr, "_", row$home_abbr, row$file_suffix, ".html")
   final_path <- file.path("reports", out_file)
 
   message(sprintf("  [%d/%d] %s...", i, nrow(game_files), matchup))
@@ -244,7 +245,7 @@ for (i in seq_len(nrow(game_files))) {
   row      <- game_files[i, ]
   gpk      <- row$game_pk
   matchup  <- sprintf("%s @ %s", row$away_team_name, row$home_team_name)
-  out_file <- paste0("prediction_", report_date, "_", row$away_abbr, "_", row$home_abbr, ".html")
+  out_file <- paste0("prediction_", report_date, "_", row$away_abbr, "_", row$home_abbr, row$file_suffix, ".html")
   final_path <- file.path("reports", out_file)
 
   message(sprintf("  [%d/%d] %s...", i, nrow(game_files), matchup))
@@ -279,7 +280,7 @@ for (i in seq_len(nrow(game_files))) {
   row      <- game_files[i, ]
   gpk      <- row$game_pk
   matchup  <- sprintf("%s @ %s", row$away_team_name, row$home_team_name)
-  out_file <- paste0("hitting_", report_date, "_", row$away_abbr, "_", row$home_abbr, ".html")
+  out_file <- paste0("hitting_", report_date, "_", row$away_abbr, "_", row$home_abbr, row$file_suffix, ".html")
   final_path <- file.path("reports", out_file)
 
   message(sprintf("  [%d/%d] %s...", i, nrow(game_files), matchup))
@@ -314,7 +315,7 @@ for (i in seq_len(nrow(game_files))) {
   row      <- game_files[i, ]
   gpk      <- row$game_pk
   matchup  <- sprintf("%s @ %s", row$away_team_name, row$home_team_name)
-  out_file <- paste0("print_", report_date, "_", row$away_abbr, "_", row$home_abbr, ".html")
+  out_file <- paste0("print_", report_date, "_", row$away_abbr, "_", row$home_abbr, row$file_suffix, ".html")
   final_path <- file.path("reports", out_file)
 
   message(sprintf("  [%d/%d] %s...", i, nrow(game_files), matchup))

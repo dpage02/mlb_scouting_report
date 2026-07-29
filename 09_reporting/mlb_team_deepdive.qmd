@@ -115,7 +115,10 @@ home_abbr_nav <- tryCatch({
 away_abbr_nav <- dplyr::coalesce(away_abbr_nav, as.character(game$away_team_id))
 home_abbr_nav <- dplyr::coalesce(home_abbr_nav, as.character(game$home_team_id))
 
-game_file     <- paste0("deepdive_", report_date, "_", away_abbr_nav, "_", home_abbr_nav, ".html")
+# "" for a normal single game, "_G1"/"_G2" on a doubleheader day.
+suffix_str <- dplyr::coalesce(game$file_suffix[1], "")
+
+game_file     <- paste0("deepdive_", report_date, "_", away_abbr_nav, "_", home_abbr_nav, suffix_str, ".html")
 scouting_file <- paste0("scouting_", report_date, ".html")
 ```
 

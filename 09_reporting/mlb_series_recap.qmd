@@ -175,7 +175,14 @@ home_abbr_str <- if (is.na(home_abbr_str) || length(home_abbr_str) == 0) "HOME" 
 
 links <- purrr::map_chr(seq_along(cs$game_pks), function(i) {
   gdate <- format(cs$game_dates[i], "%Y-%m-%d")
-  fname <- paste0("deepdive_", gdate, "_", away_abbr_str, "_", home_abbr_str, ".html")
+  # Best-effort: game_context only covers the current run's target date,
+  # so this resolves correctly when the recap covers today's finale but
+  # falls back to "" (matching prior behavior) for older series games.
+  gpk_suffix <- if (exists("game_context")) {
+    s <- game_context$file_suffix[game_context$game_pk == cs$game_pks[i]]
+    if (length(s) > 0) dplyr::coalesce(s[1], "") else ""
+  } else ""
+  fname <- paste0("deepdive_", gdate, "_", away_abbr_str, "_", home_abbr_str, gpk_suffix, ".html")
   paste0(
     '<a href="', fname, '" style="display:inline-block;background:#1a73e8;color:white;',
     'padding:6px 14px;border-radius:4px;text-decoration:none;font-weight:600;margin:4px;">',

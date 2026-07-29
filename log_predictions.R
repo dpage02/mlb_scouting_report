@@ -45,7 +45,12 @@ log_schema <- dplyr::tibble(
   actual_away_runs = integer(),
   actual_home_runs = integer(),
   actual_winner    = character(),
-  correct_winner   = logical()
+  correct_winner   = logical(),
+  # "" for a normal single game, "_G1"/"_G2" for a doubleheader —
+  # see game_context$file_suffix (99_game_context.R). Captured here at
+  # log time since game_context only covers the current run's target
+  # date, but this log accumulates rows across many past days.
+  file_suffix      = character()
 )
 
 # ------------------------------------------------------------
@@ -66,11 +71,16 @@ log_df <- if (file.exists(LOG_PATH)) {
       actual_away_runs = readr::col_integer(),
       actual_home_runs = readr::col_integer(),
       actual_winner    = readr::col_character(),
-      correct_winner   = readr::col_logical()
+      correct_winner   = readr::col_logical(),
+      file_suffix      = readr::col_character()
     )),
     error = function(e) { message("  log read failed: ", e$message); log_schema }
   )
 } else log_schema
+
+# Rows written before file_suffix existed have no such column — add it.
+if (!"file_suffix" %in% names(log_df)) log_df$file_suffix <- NA_character_
+log_df$file_suffix <- dplyr::coalesce(log_df$file_suffix, "")
 
 # ------------------------------------------------------------
 # Step 1: Log predictions for today's new games
@@ -98,7 +108,8 @@ if (length(new_gpks) > 0) {
         actual_away_runs = NA_integer_,
         actual_home_runs = NA_integer_,
         actual_winner    = NA_character_,
-        correct_winner   = NA
+        correct_winner   = NA,
+        file_suffix      = dplyr::coalesce(game$file_suffix[1], "")
       )
     }, error = function(e) {
       message("  Prediction log failed for gpk ", gpk, ": ", e$message)

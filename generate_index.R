@@ -32,14 +32,14 @@ parse_report_file <- function(f) {
 
   if (f == "stat_reference.html") {
     return(data.frame(type="reference", date=NA_character_,
-                      away=NA_character_, home=NA_character_,
+                      away=NA_character_, home=NA_character_, suffix="",
                       file=f, stringsAsFactors=FALSE))
   }
 
   if (grepl("^recap_\\d{4}-\\d{2}-\\d{2}\\.html$", f)) {
     dm <- regmatches(f, regexpr("\\d{4}-\\d{2}-\\d{2}", f))
     return(data.frame(type="recap", date=dm,
-                      away=NA_character_, home=NA_character_,
+                      away=NA_character_, home=NA_character_, suffix="",
                       file=f, stringsAsFactors=FALSE))
   }
 
@@ -49,7 +49,7 @@ parse_report_file <- function(f) {
     n <- length(parts)
     return(data.frame(type="series_preview", date=dm,
                       away=if(n>=5) parts[n-1] else NA_character_,
-                      home=if(n>=5) parts[n]   else NA_character_,
+                      home=if(n>=5) parts[n]   else NA_character_, suffix="",
                       file=f, stringsAsFactors=FALSE))
   }
 
@@ -59,12 +59,14 @@ parse_report_file <- function(f) {
     n <- length(parts)
     return(data.frame(type="series_recap", date=dm,
                       away=if(n>=5) parts[n-1] else NA_character_,
-                      home=if(n>=5) parts[n]   else NA_character_,
+                      home=if(n>=5) parts[n]   else NA_character_, suffix="",
                       file=f, stringsAsFactors=FALSE))
   }
 
+  # Trailing _G1/_G2 disambiguates doubleheader games that share a
+  # date+matchup (see game_context$file_suffix, 99_game_context.R).
   m <- regmatches(f, regexec(
-    "^(scouting|deepdive|breakdown|print|team|matchup|prediction|hitting|result)_(\\d{4}-\\d{2}-\\d{2})(?:_([A-Z0-9]+)(?:_([A-Z0-9]+))?)?\\.html$",
+    "^(scouting|deepdive|breakdown|print|team|matchup|prediction|hitting|result)_(\\d{4}-\\d{2}-\\d{2})(?:_([A-Z0-9]+)(?:_([A-Z0-9]+))?)?(_G\\d+)?\\.html$",
     f
   ))[[1]]
 
@@ -75,6 +77,7 @@ parse_report_file <- function(f) {
     date = m[3],
     away = if (nchar(m[4]) > 0) m[4] else NA_character_,
     home = if (nchar(m[5]) > 0) m[5] else NA_character_,
+    suffix = m[6],
     file = f,
     stringsAsFactors = FALSE
   )
@@ -92,7 +95,7 @@ if (is.null(file_df) || nrow(file_df) == 0) {
 # Build game cards for a given date
 # ------------------------------------------------------------
 
-build_game_card <- function(date_str, away, home, files_for_game) {
+build_game_card <- function(date_str, away, home, files_for_game, dh_label = "") {
   link_btn <- function(label, file, color = "#1a73e8") {
     if (is.na(file) || !file %in% all_files) return("")
     sprintf(
@@ -117,7 +120,8 @@ build_game_card <- function(date_str, away, home, files_for_game) {
   )
 
   title <- if (!is.na(away) && !is.na(home)) {
-    sprintf("%s <span style='color:#999;font-weight:400'>@</span> %s", away, home)
+    sprintf("%s <span style='color:#999;font-weight:400'>@</span> %s%s",
+            away, home, dh_label)
   } else {
     "Full Slate"
   }
@@ -137,8 +141,10 @@ today_games <- file_df[!is.na(file_df$date) & file_df$date == today_str &
                           file_df$type %in% c("deepdive", "print", "matchup",
                                                "prediction", "hitting"), ]
 
-# Get unique matchups for today
-today_matchups <- unique(today_games[, c("away", "home")])
+# Get unique matchups for today — includes suffix so a doubleheader's
+# two games (same away/home, different _G1/_G2) get two separate cards
+# instead of colliding into one.
+today_matchups <- unique(today_games[, c("away", "home", "suffix")])
 today_matchups <- today_matchups[!is.na(today_matchups$away), ]
 
 today_cards <- ""
@@ -146,10 +152,15 @@ if (nrow(today_matchups) > 0) {
   for (i in seq_len(nrow(today_matchups))) {
     aw <- today_matchups$away[i]
     hm <- today_matchups$home[i]
+    sf <- today_matchups$suffix[i]
     files_m <- today_games[
       (is.na(today_games$away) | today_games$away == aw) &
-      (is.na(today_games$home) | today_games$home == hm), ]
-    today_cards <- paste0(today_cards, build_game_card(today_str, aw, hm, files_m))
+      (is.na(today_games$home) | today_games$home == hm) &
+      today_games$suffix == sf, ]
+    dh_label <- if (nchar(sf) > 0) {
+      sprintf(" &middot; <strong>Game %s</strong>", gsub("[^0-9]", "", sf))
+    } else ""
+    today_cards <- paste0(today_cards, build_game_card(today_str, aw, hm, files_m, dh_label))
   }
 } else {
   today_cards <- '<p style="color:#888;padding:16px;">No game reports found for today yet. Check back after the 10 AM run.</p>'
@@ -171,36 +182,43 @@ past_dates <- all_dates[all_dates < today_str]
 past_rows <- ""
 for (d in past_dates) {
   scouting_f <- file_df$file[file_df$type == "scouting" & !is.na(file_df$date) & file_df$date == d]
+  # Includes suffix so a doubleheader's two games get two archive links
+  # instead of colliding into one.
   games_on_date <- unique(file_df[
     !is.na(file_df$date) & file_df$date == d &
-    file_df$type == "deepdive", c("away", "home")])
+    file_df$type == "deepdive", c("away", "home", "suffix")])
   games_on_date <- games_on_date[!is.na(games_on_date$away), ]
 
   game_links <- ""
   for (j in seq_len(nrow(games_on_date))) {
     aw <- games_on_date$away[j]
     hm <- games_on_date$home[j]
+    sf <- games_on_date$suffix[j]
 
     dd_file <- file_df$file[
       file_df$type == "deepdive" &
       !is.na(file_df$date) & file_df$date == d &
       !is.na(file_df$away) & file_df$away == aw &
-      !is.na(file_df$home) & file_df$home == hm]
+      !is.na(file_df$home) & file_df$home == hm &
+      file_df$suffix == sf]
     res_file <- file_df$file[
       file_df$type == "result" &
       !is.na(file_df$date) & file_df$date == d &
       !is.na(file_df$away) & file_df$away == aw &
-      !is.na(file_df$home) & file_df$home == hm]
+      !is.na(file_df$home) & file_df$home == hm &
+      file_df$suffix == sf]
 
     # Prefer the post-game result page (final score, prediction accuracy,
     # box score highlights) over the pre-game deep dive once the game is
     # actually over — that's what a past game should link to.
     link_file <- if (length(res_file) > 0) res_file[1] else if (length(dd_file) > 0) dd_file[1] else NA_character_
 
+    dh_label <- if (nchar(sf) > 0) paste0(" G", gsub("[^0-9]", "", sf)) else ""
+
     if (!is.na(link_file)) {
       game_links <- paste0(game_links, sprintf(
-        '<a href="%s" class="past-game-link">%s @ %s</a>',
-        link_file, aw, hm
+        '<a href="%s" class="past-game-link">%s @ %s%s</a>',
+        link_file, aw, hm, dh_label
       ))
     }
   }

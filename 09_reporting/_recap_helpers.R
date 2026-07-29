@@ -554,8 +554,14 @@ make_game_recap_card <- function(game, recap_date = NULL, team_ids_lookup = NULL
       file_home_abbr <- team_ids_lookup$team_abbr[team_ids_lookup$mlbam_team_id == home_id][1]
       if (!is.null(away_id) && !is.null(home_id) &&
           !is.na(file_away_abbr) && !is.na(file_home_abbr)) {
+        # Mirror game_context$file_suffix (99_game_context.R): "" for a
+        # normal single game, "_G1"/"_G2" when the schedule API flags this
+        # game_pk as part of a same-day doubleheader.
+        dh_flag     <- tryCatch(game$doubleHeader, error = function(e) "N")
+        game_num    <- tryCatch(game$gameNumber, error = function(e) 1)
+        result_suffix <- if (!is.null(dh_flag) && dh_flag != "N") paste0("_G", game_num) else ""
         result_file <- paste0("result_", format(recap_date, "%Y-%m-%d"), "_",
-                              file_away_abbr, "_", file_home_abbr, ".html")
+                              file_away_abbr, "_", file_home_abbr, result_suffix, ".html")
         # Only link if render_game_results.R actually produced this page —
         # backfilling an actual score can fail for an individual game (API
         # hiccup, unusual game_pk), so don't point at a 404.

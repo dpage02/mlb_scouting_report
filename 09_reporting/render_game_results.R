@@ -30,6 +30,11 @@ if (!file.exists(log_path)) {
       NULL
     }
   )
+  # Rows logged before file_suffix existed have no such column.
+  if (!is.null(log_df) && !"file_suffix" %in% names(log_df)) {
+    log_df$file_suffix <- NA_character_
+  }
+  if (!is.null(log_df)) log_df$file_suffix <- dplyr::coalesce(log_df$file_suffix, "")
   if (is.null(log_df) || nrow(log_df) == 0) {
     message("No completed games in predictions log yet — skipping game results render.")
     log_df <- NULL
@@ -78,8 +83,9 @@ for (i in seq_len(nrow(log_df))) {
   gdate     <- as.character(row$game_date)
   away_abbr <- away_abbrs[i]
   home_abbr <- home_abbrs[i]
+  suffix    <- dplyr::coalesce(row$file_suffix, "")
   matchup   <- sprintf("%s @ %s", row$away_team, row$home_team)
-  out_file  <- paste0("result_", gdate, "_", away_abbr, "_", home_abbr, ".html")
+  out_file  <- paste0("result_", gdate, "_", away_abbr, "_", home_abbr, suffix, ".html")
   final_path <- file.path("reports", out_file)
 
   message(sprintf("  [%d/%d] %s (%s)...", i, nrow(log_df), matchup, gdate))
@@ -93,10 +99,11 @@ for (i in seq_len(nrow(log_df))) {
       quarto::quarto_render(
         input          = qmd_abs,
         execute_params = list(
-          game_pk   = gpk,
-          game_date = gdate,
-          away_abbr = away_abbr,
-          home_abbr = home_abbr
+          game_pk     = gpk,
+          game_date   = gdate,
+          away_abbr   = away_abbr,
+          home_abbr   = home_abbr,
+          file_suffix = suffix
         ),
         output_file = out_file
       )

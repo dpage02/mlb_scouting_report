@@ -114,6 +114,12 @@ cat(paste0(
 ```{r nav-bar}
 #| output: asis
 scouting_file <- paste0("scouting_", params$game_date, ".html")
+
+# "" for a normal single game, "_G1"/"_G2" on a doubleheader day — keeps
+# every cross-page link pointed at THIS game_pk's own report set instead
+# of whichever doubleheader game happened to render last.
+suffix_str <- dplyr::coalesce(game$file_suffix[1], "")
+
 deepdive_file <- paste0("deepdive_", params$game_date, "_",
                         {
                           a <- tryCatch(team_ids %>% dplyr::filter(mlbam_team_id == game$away_team_id) %>%
@@ -124,7 +130,7 @@ deepdive_file <- paste0("deepdive_", params$game_date, "_",
                           h <- tryCatch(team_ids %>% dplyr::filter(mlbam_team_id == game$home_team_id) %>%
                                           dplyr::pull(team_abbr) %>% dplyr::first(), error = function(e) "HOME")
                           if (length(h) == 0 || is.na(h)) "HOME" else h
-                        }, ".html")
+                        }, suffix_str, ".html")
 
 away_abbr_str <- tryCatch({
   team_ids %>% dplyr::filter(mlbam_team_id == game$away_team_id) %>%
@@ -139,13 +145,13 @@ home_abbr_str <- tryCatch({
 away_abbr_str <- if (length(away_abbr_str) == 0 || is.na(away_abbr_str)) "AWAY" else away_abbr_str
 home_abbr_str <- if (length(home_abbr_str) == 0 || is.na(home_abbr_str)) "HOME" else home_abbr_str
 
-away_team_file <- paste0("team_", params$game_date, "_", away_abbr_str, ".html")
-home_team_file <- paste0("team_", params$game_date, "_", home_abbr_str, ".html")
+away_team_file <- paste0("team_", params$game_date, "_", away_abbr_str, suffix_str, ".html")
+home_team_file <- paste0("team_", params$game_date, "_", home_abbr_str, suffix_str, ".html")
 
-matchup_file    <- paste0("matchup_",    params$game_date, "_", away_abbr_str, "_", home_abbr_str, ".html")
-prediction_file <- paste0("prediction_", params$game_date, "_", away_abbr_str, "_", home_abbr_str, ".html")
-hitting_file    <- paste0("hitting_",    params$game_date, "_", away_abbr_str, "_", home_abbr_str, ".html")
-print_file      <- paste0("print_",      params$game_date, "_", away_abbr_str, "_", home_abbr_str, ".html")
+matchup_file    <- paste0("matchup_",    params$game_date, "_", away_abbr_str, "_", home_abbr_str, suffix_str, ".html")
+prediction_file <- paste0("prediction_", params$game_date, "_", away_abbr_str, "_", home_abbr_str, suffix_str, ".html")
+hitting_file    <- paste0("hitting_",    params$game_date, "_", away_abbr_str, "_", home_abbr_str, suffix_str, ".html")
+print_file      <- paste0("print_",      params$game_date, "_", away_abbr_str, "_", home_abbr_str, suffix_str, ".html")
 
 nav_html <- paste0(
   '<div style="margin-bottom:1.5rem; padding:10px 14px; background:#f8f9fa; ',

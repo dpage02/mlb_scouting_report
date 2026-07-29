@@ -92,6 +92,21 @@ if (nrow(schedule_day) == 0) {
   stop("No MLB games found for date: ", target_date)
 }
 
+# ------------------------------------------------------------
+# 3b. De-duplicate game_pk
+#     Schedule quirk: when a postponed game's makeup gets folded into
+#     a same-day doubleheader, the API can still return a stale
+#     "Postponed" row for that same game_pk once its official_date
+#     shifts onto the makeup date, alongside the real rescheduled row.
+#     Keep the non-Postponed row when both exist for a game_pk.
+# ------------------------------------------------------------
+
+schedule_day <- schedule_day %>%
+  group_by(game_pk) %>%
+  arrange(desc(status_detailed_state != "Postponed"), .by_group = TRUE) %>%
+  slice(1) %>%
+  ungroup()
+
 message("Games on target date: ", nrow(schedule_day))
 
 # ------------------------------------------------------------
@@ -195,7 +210,8 @@ schedule_context <- schedule_day %>%
     series_desc      = series_description,
     series_game_num  = series_game_number,
     games_in_series  = games_in_series,
-    game_type        = game_type
+    game_type        = game_type,
+    game_number      = as.integer(dplyr::coalesce(game_number, 1L))
   ) %>%
   distinct(game_pk, .keep_all = TRUE)
 
