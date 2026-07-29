@@ -133,6 +133,18 @@ make_starter_gt <- function(gpk, compact = FALSE) {
     Team    = dplyr::coalesce(raw$team_name,    "—")
   )
 
+  # Flag career-fallback rows (stats_season carried through from
+  # 01_starter_matchup.R) so a pitcher returning from injury/minors
+  # doesn't display as if his stats are from the current season.
+  if ("stats_season" %in% names(raw) && exists("target_season")) {
+    is_fallback <- !is.na(raw$stats_season) & raw$stats_season != target_season
+    display$Pitcher <- dplyr::if_else(
+      is_fallback,
+      paste0(display$Pitcher, " (", raw$stats_season, " stats)"),
+      display$Pitcher
+    )
+  }
+
   # Volume
   if ("mlb_gs" %in% names(raw)) display$GS <- raw$mlb_gs
   if ("mlb_ip" %in% names(raw)) display$IP <- raw$mlb_ip

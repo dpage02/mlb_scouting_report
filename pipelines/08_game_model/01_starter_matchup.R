@@ -74,7 +74,10 @@ sp_stat_cols <- c(
 sp_stats <- pitching_master_season %>%
   dplyr::arrange(mlbam_id, dplyr::desc(dplyr::coalesce(mlb_ip, 0))) %>%
   dplyr::distinct(mlbam_id, .keep_all = TRUE) %>%
-  dplyr::select(mlbam_id, dplyr::any_of(sp_stat_cols))
+  dplyr::select(mlbam_id, dplyr::any_of(c("season", sp_stat_cols))) %>%
+  dplyr::rename(dplyr::any_of(c(stats_season = "season")))
+
+if (!"stats_season" %in% names(sp_stats)) sp_stats$stats_season <- NA_integer_
 
 # ------------------------------------------------------------
 # Career fallback: for starters not found in pitching_master_season
@@ -100,6 +103,10 @@ if (length(missing_from_season) > 0) {
     dplyr::distinct(mlbam_id, .keep_all = TRUE) %>%
     dplyr::transmute(
       mlbam_id,
+      # Carried through so display helpers can flag this row as
+      # not-current-season data instead of showing it indistinguishably
+      # from a pitcher with real innings this year.
+      stats_season = season,
       mlb_g    = hist_g,
       mlb_gs   = hist_gs,
       mlb_ip   = hist_ip,

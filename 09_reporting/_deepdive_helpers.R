@@ -967,9 +967,22 @@ make_pitcher_full_gt <- function(gpk) {
     paste0(" \u00b7 ", mlb_yr, " season")
 
   base_cols <- function() {
+    pitcher_col <- dplyr::coalesce(raw$pitcher_name, "TBD")
+
+    # Flag career-fallback rows (see make_starter_gt) so a pitcher
+    # returning from injury/minors doesn't read as current-season data.
+    if ("stats_season" %in% names(raw) && exists("target_season")) {
+      is_fallback <- !is.na(raw$stats_season) & raw$stats_season != target_season
+      pitcher_col <- dplyr::if_else(
+        is_fallback,
+        paste0(pitcher_col, " (", raw$stats_season, " stats)"),
+        pitcher_col
+      )
+    }
+
     dplyr::tibble(
       Side    = dplyr::if_else(raw$side == "away", "Away SP", "Home SP"),
-      Pitcher = dplyr::coalesce(raw$pitcher_name, "TBD"),
+      Pitcher = pitcher_col,
       Hand    = dplyr::coalesce(raw$pitch_hand, "\u2014")
     )
   }

@@ -100,12 +100,18 @@ if (is.null(braves_sched_raw) || nrow(braves_sched_raw) == 0) {
     dplyr::arrange(game_date)
 
   # ----------------------------------------------------------------
-  # 2. Detect: is today (or yesterday) a Braves series finale?
-  #    Check yesterday too so nightly runs (3 AM ET = next calendar
-  #    day) still catch finales from games that finished that evening.
+  # 2. Detect: was YESTERDAY a Braves series finale?
+  #    Deliberately never checks target_date itself — if today's
+  #    game_date matches "series_game_num == games_in_series", that
+  #    finale game may not have been played yet when a run executes
+  #    before/during it, producing a recap page with "Game results
+  #    not yet available." Only look back, matching mlb_recap.qmd's
+  #    own target_date - 1 pattern, which guarantees the games are
+  #    actually over. 3 AM ET nightly runs are already the primary
+  #    catch for a finale that finished the evening before.
   # ----------------------------------------------------------------
 
-  check_dates <- unique(c(target_date, target_date - 1))
+  check_dates <- target_date - 1
 
   finale_today <- braves_sched %>%
     dplyr::filter(
@@ -121,7 +127,7 @@ if (is.null(braves_sched_raw) || nrow(braves_sched_raw) == 0) {
   if (braves_series_context$is_finale_today) {
 
     cur          <- finale_today[1, ]
-    finale_date  <- cur$game_date   # may be yesterday if nightly run
+    finale_date  <- cur$game_date   # always yesterday — see check_dates above
 
     # ----------------------------------------------------------------
     # 3. Current series game_pks (for recap)
@@ -170,8 +176,8 @@ if (is.null(braves_sched_raw) || nrow(braves_sched_raw) == 0) {
     )
 
     message(sprintf(
-      "08_braves_series: current series — %s vs %s, %d games ending today",
-      cur$away_team_name, cur$home_team_name, length(current_pks)
+      "08_braves_series: current series — %s vs %s, %d games (finale %s)",
+      cur$away_team_name, cur$home_team_name, length(current_pks), format(finale_date)
     ))
 
     # ----------------------------------------------------------------
