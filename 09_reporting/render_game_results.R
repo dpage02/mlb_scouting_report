@@ -30,11 +30,15 @@ if (!file.exists(log_path)) {
       NULL
     }
   )
-  # Rows logged before file_suffix existed have no such column.
-  if (!is.null(log_df) && !"file_suffix" %in% names(log_df)) {
-    log_df$file_suffix <- NA_character_
+  # Rows logged before file_suffix existed have no such column. Also,
+  # readr type-guesses column classes from a data sample — a column
+  # that's blank for every row today (no doubleheader in today's slate)
+  # gets guessed as logical instead of character, which coalesce() then
+  # can't combine with "". Force character before coalescing.
+  if (!is.null(log_df)) {
+    if (!"file_suffix" %in% names(log_df)) log_df$file_suffix <- NA_character_
+    log_df$file_suffix <- dplyr::coalesce(as.character(log_df$file_suffix), "")
   }
-  if (!is.null(log_df)) log_df$file_suffix <- dplyr::coalesce(log_df$file_suffix, "")
   if (is.null(log_df) || nrow(log_df) == 0) {
     message("No completed games in predictions log yet — skipping game results render.")
     log_df <- NULL
