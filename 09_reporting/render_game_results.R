@@ -55,14 +55,16 @@ if (!exists("team_ids") || nrow(team_ids) == 0) {
   }
 }
 
-abbr_for <- function(team_name) {
+# Param can't be named team_name — team_ids$team_name would shadow it
+# inside dplyr::filter()'s data-masking and match every row.
+abbr_for <- function(full_name) {
   m <- team_ids %>%
-    dplyr::filter(stringr::str_detect(tolower(team_name_full),
-                                       tolower(team_name))) %>%
+    dplyr::filter(stringr::str_detect(tolower(team_name),
+                                       tolower(full_name))) %>%
     dplyr::pull(team_abbr) %>% dplyr::first()
   if (is.na(m) || length(m) == 0) {
     # Fallback: use first 3 chars of last word
-    toupper(substr(rev(strsplit(trimws(team_name), " ")[[1]])[1], 1, 3))
+    toupper(substr(rev(strsplit(trimws(full_name), " ")[[1]])[1], 1, 3))
   } else m
 }
 

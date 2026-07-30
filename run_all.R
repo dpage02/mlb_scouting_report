@@ -54,6 +54,17 @@ if (needs_base_rebuild) {
 
 source("run_pipeline_daily.R")
 
+# log_predictions.R logs today's predictions to predictions_log.csv and
+# backfills actual scores for past pending games. Must run after
+# run_pipeline_daily.R (needs game_context, starter_matchup,
+# lineup_context, bullpen_grid) and before render_game_results.R
+# (reads predictions_log.csv to know which games to render). This used
+# to run from run_pipeline_phase01.R, which run_all.R stopped calling
+# once the pipeline split into run_pipeline_base.R / run_pipeline_daily.R
+# — log_predictions.R never got moved over, so predictions_log.csv never
+# accumulated history and render_game_results.R always rendered nothing.
+source("log_predictions.R")
+
 # ------------------------------------------------------------
 # Render reports
 # ------------------------------------------------------------
